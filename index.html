@@ -896,7 +896,52 @@ function autoSyncAtr(){
     .catch(function(e){ console.log('ATR auto-sync skipped:', e.message); });
 }
 
-// ─── SETTINGS / GITHUB UPLOAD ─────────────────────────────────────────────────
+// Push all localStorage ATR entries to sheet (on load + after each save)
+function pushLocalAtrToSheet(){
+  var url = getScriptUrl(); if(!url) return;
+  var localSm  = {}; try{ localSm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
+  var localDef = {}; try{ localDef = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+  if(!Object.keys(localSm).length && !Object.keys(localDef).length) return;
+  // Bulk push: send all local entries
+  Object.keys(localSm).forEach(function(acct){
+    var e = localSm[acct];
+    syncAtrToSheet({ type:'sm', acct:acct,
+      atr:     typeof e==='object'?e.atr:e,
+      comment: typeof e==='object'?(e.comment||''):'',
+      ts:      typeof e==='object'?(e.ts||''):''
+    });
+  });
+  Object.keys(localDef).forEach(function(acct){
+    var e = localDef[acct];
+    syncAtrToSheet({ type:'defaulter', acct:acct,
+      atr:     typeof e==='object'?e.atr:e,
+      comment: typeof e==='object'?(e.comment||''):'',
+      ts:      typeof e==='object'?(e.ts||''):''
+    });
+  });
+  console.log('Pushed local ATR to sheet:', Object.keys(localSm).length, 'SM +', Object.keys(localDef).length, 'Def');
+}
+
+// Start periodic ATR sync — pull from sheet every 5 min, push local on load
+(function startAtrAutoSync(){
+  // Wait for script URL to be available (set from localStorage on init)
+  setTimeout(function(){
+    var url = getScriptUrl();
+    if(url){
+      autoSyncAtr();       // pull on load
+      pushLocalAtrToSheet(); // push local on load
+    }
+    // Repeat every 5 minutes
+    setInterval(function(){
+      if(getScriptUrl()){
+        autoSyncAtr();
+        pushLocalAtrToSheet();
+      }
+    }, 5 * 60 * 1000);
+  }, 3000); // wait 3s for page init
+})();
+
+
 var CSV_COLS=['ACCT_ID','MOBILE_NO','NAME','ADDRESS','CATEGORY','LOAD','LAT','LON','SUBSTATION','FEEDER','LP DATE','LP AMT','TOTAL OUTSTANDING'];
 function getGhPat(){ return localStorage.getItem('gh_pat')||''; }
 
@@ -2721,6 +2766,13 @@ function buildDefAllFromPayData() {
 function runDefaulterFilter(){
   if(!gel('def-tbody')){buildDefaulterPanel();return;}
   if(!DEF_ALL.length) buildDefAll();
+
+  // Rebuild dropdowns if supply options are still empty (data just loaded)
+  if(DEF_ALL.length && gel('def-supply-opts') && !gel('def-supply-opts').children.length){
+    buildMsOptions('sub',    getAllSubValues());
+    buildMsOptions('feed',   getAllFeedValues());
+    buildMsOptions('supply', getAllSupplyValues());
+  }
 
   var minOut = parseFloat(gel('def-min') ? gel('def-min').value : 5000) || 5000;
   var sub    = _defSelSubs;
