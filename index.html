@@ -2312,15 +2312,16 @@ function refreshFeedOptions(){
 
 // ─── DEFAULTERS ───────────────────────────────────────────────────────────────
 function loadDefaulters(){
-  // Panel HTML is static - always in DOM
   if(DEF_ALL.length > 0){
     buildDefaulterPanel();
+    runDefaulterFilter();
     return;
   }
-  // Show loading message
+  // Trigger build
+  buildDefAll();
+  // Show loading
   var msg = gel('def-loading-msg');
-  if(msg) msg.style.display='block';
-  // Poll until background fetch completes
+  if(msg){msg.style.display='block';msg.innerHTML='⏳ Loading defaulters…';}
   var attempts=0;
   var poll=setInterval(function(){
     attempts++;
