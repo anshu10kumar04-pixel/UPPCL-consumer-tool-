@@ -2567,11 +2567,28 @@ var TARIFF_MAP = {
   '1':'LMV-1','2':'LMV-2','3':'LMV-3','4':'LMV-4','5':'LMV-5',
   '6':'LMV-6','7':'LMV-7','8':'LMV-8','9':'LMV-9','11':'LMV-11'
 };
+
+// ST → Tariff: remove last digit from ST code → tariff number
+// e.g. ST=10 → tariff=1 (LMV-1), ST=100 → tariff=10 (LMV-10), ST=200 → tariff=20 (HV-2)
+function stToTariff(st){
+  var s = String(st||'').trim();
+  if(!s || isNaN(s)) return s; // already a label like 'LMV1', return as-is
+  var tariffNum = s.slice(0, -1); // remove last digit
+  if(!tariffNum) return s;
+  // Map tariff number to label
+  var labels = {
+    '1':'LMV-1','2':'LMV-2','3':'LMV-3','4':'LMV-4','5':'LMV-5',
+    '6':'LMV-6','7':'LMV-7','8':'LMV-8','9':'LMV-9','10':'LMV-10',
+    '11':'LMV-11','12':'LMV-12','20':'HV-2','21':'HV-2A','22':'HV-3','40':'EHV-1'
+  };
+  return labels[tariffNum] || ('LMV-'+tariffNum);
+}
 function tariffLabel(code){
-  return TARIFF_MAP[String(code)] || String(code);
+  return stToTariff(code);
 }
 function getAllSupplyValues(){
-  return [...new Set(DEF_ALL.map(function(r){return r.SUPPLY_TYPE;}).filter(Boolean))].sort();
+  var vals = [...new Set(DEF_ALL.map(function(r){return r.SUPPLY_TYPE;}).filter(Boolean))];
+  return vals.sort(function(a,b){ return a.localeCompare(b, undefined, {numeric:true}); });
 }
 
 function refreshFeedOptions(){
@@ -2674,7 +2691,7 @@ function parseDefaulterText(text){
     DEF_ALL.push({
       ACCT_ID:acct, NAME:(v[iName]||'').replace(/"/g,''),
       MOBILE:(v[iMob]||'').replace(/"/g,''), ADDRESS:(v[iAddr]||'').replace(/"/g,''),
-      SUPPLY_TYPE:(v[iCat]||'').replace(/"/g,''), OUTSTANDING:out,
+      SUPPLY_TYPE:stToTariff((v[iCat]||'').replace(/"/g,'')), OUTSTANDING:out,
       PAY_AMT:lpAmt,
       PAY_DATE:lpDate, STATUS:'INSERVICE',
       SUBSTATION:(v[iSub]||'').replace(/"/g,''), FEEDER:(v[iFeed]||'').replace(/"/g,''),
@@ -2715,7 +2732,8 @@ function parseDefFile(text){
   var iAcct=hdrs.indexOf('ACCT_ID'), iName=hdrs.indexOf('NAME'),
       iMob=hdrs.indexOf('MOBILE_NO'), iAddr=hdrs.indexOf('ADDRESS'),
       iSub=hdrs.indexOf('SUBSTATION'), iFeed=hdrs.indexOf('FEEDER'),
-      iCat=hdrs.indexOf('SUPPLY_TYPE'), iLoad=hdrs.indexOf('SANCTION_LOAD'),
+      iCat=hdrs.indexOf('SUPPLY_TYPE')>=0?hdrs.indexOf('SUPPLY_TYPE'):hdrs.indexOf('ST'),
+      iLoad=hdrs.indexOf('SANCTION_LOAD'),
       iOut=hdrs.indexOf('OUTSTANDING')||hdrs.indexOf('AMOUNT_PAYABLE'), iOut2=hdrs.indexOf('AMOUNT_PAYABLE'), iPayAmt=hdrs.indexOf('LAST_PAYMENT_AMOUNT'),
       iPayDate=hdrs.indexOf('LAST_PAY_DATE'), iLat=hdrs.indexOf('LATITUDE'),
       iLon=hdrs.indexOf('LONGITUDE'), iMeter=hdrs.indexOf('METER_SERIAL_NBR');
@@ -2738,7 +2756,7 @@ function parseDefFile(text){
       NAME:(v[iName]||'').replace(/"/g,''),
       MOBILE:(v[iMob]||'').replace(/"/g,''),
       ADDRESS:(v[iAddr]||'').replace(/"/g,''),
-      SUPPLY_TYPE:(v[iCat]||'').replace(/"/g,''),
+      SUPPLY_TYPE:stToTariff((v[iCat]||'').replace(/"/g,'')),
       LOAD:parseFloat(v[iLoad]||0)||0,
       OUTSTANDING:out,
       PAY_AMT:parseFloat(v[iPayAmt]||0)||0,
@@ -2826,11 +2844,14 @@ function runDefaulterFilter(){
   if(!gel('def-tbody')){buildDefaulterPanel();return;}
   if(!DEF_ALL.length) buildDefAll();
 
-  // Rebuild dropdowns if supply options are still empty (data just loaded)
-  if(DEF_ALL.length && gel('def-supply-opts') && !gel('def-supply-opts').children.length){
-    buildMsOptions('sub',    getAllSubValues());
-    buildMsOptions('feed',   getAllFeedValues());
-    buildMsOptions('supply', getAllSupplyValues());
+  // Rebuild dropdowns every time DEF_ALL has data (options may be stale)
+  if(DEF_ALL.length){
+    var supplyOpts = gel('def-supply-opts');
+    if(supplyOpts && !supplyOpts.querySelectorAll('.ms-option').length){
+      buildMsOptions('sub',    getAllSubValues());
+      buildMsOptions('feed',   getAllFeedValues());
+      buildMsOptions('supply', getAllSupplyValues());
+    }
   }
 
   var minOut = parseFloat(gel('def-min') ? gel('def-min').value : 5000) || 5000;
@@ -2994,11 +3015,16 @@ function openDefaulterModal(acctId){
     '<div class="modal-field"><div class="lbl">METER NO</div><div class="val" style="font-family:var(--fh);color:#1D4ED8;font-weight:700;">'+meterNo+'</div></div>'+
     '<div class="modal-field"><div class="lbl">TARIFF / CATEGORY</div><div class="val">'+catBadge(defRec.SUPPLY_TYPE)+'</div></div>'+
     '<div class="modal-field"><div class="lbl">LOAD</div><div class="val" style="font-weight:700;">'+(defRec.LOAD||r&&r.LOAD||'-')+' kW</div></div>'+
-    '<div class="modal-field"><div class="lbl">SUBSTATION</div><div class="val" style="font-weight:600;">'+( defRec.SUBSTATION||'-')+'</div></div>'+
-    '<div class="modal-field"><div class="lbl">FEEDER</div><div class="val">'+( defRec.FEEDER||'-')+'</div></div>'+
-    '<div class="modal-field"><div class="lbl">LP DATE</div><div class="val">'+( defRec.PAY_DATE||'-')+'</div></div>'+
-    '<div class="modal-field" style="grid-column:span 2"><div class="lbl">ADDRESS</div><div class="val">'+( defRec.ADDRESS||'-')+'</div></div>'+
-    (lat&&lon ? '<div class="modal-field"><div class="lbl">LATITUDE</div><div class="val">'+lat+'</div></div><div class="modal-field"><div class="lbl">LONGITUDE</div><div class="val">'+lon+'</div></div>' : '');
+    '<div class="modal-field"><div class="lbl">CONSUMER STATUS</div><div class="val">'+(r?(r.SOURCE==='billed'?'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#D1FAE5;color:#065F46;">✅ BILLED</span>':'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#FEF3C7;color:#92400E;">⚠ UNBILLED</span>'):'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#F3F4F6;color:#374151;">— UNKNOWN</span>')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">CA (CURR ARREAR)</div><div class="val" style="font-weight:700;color:#DC2626;">'+(r&&r.CA?'\u20b9'+Math.round(parseFloat(r.CA)||0).toLocaleString():'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">BILLED UNITS</div><div class="val" style="font-weight:700;color:#0369A1;">'+(r&&r.BILLED_UNITS?r.BILLED_UNITS+' U':'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">BILL DATE</div><div class="val">'+(r&&r.BILL_DATE||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">DUE DATE</div><div class="val" style="color:#F43F5E;font-weight:600;">'+(r&&r.DUE_DATE||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">SUBSTATION</div><div class="val" style="font-weight:600;">'+(defRec.SUBSTATION||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">FEEDER</div><div class="val">'+(defRec.FEEDER||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">LP DATE</div><div class="val">'+(defRec.PAY_DATE||'-')+'</div></div>'+
+    '<div class="modal-field" style="grid-column:span 2"><div class="lbl">ADDRESS</div><div class="val">'+(defRec.ADDRESS||'-')+'</div></div>'+
+    (lat&&lon?'<div class="modal-field"><div class="lbl">LATITUDE</div><div class="val">'+lat+'</div></div><div class="modal-field"><div class="lbl">LONGITUDE</div><div class="val">'+lon+'</div></div>':'');
 
   // Payment section
   gel('modal-pay-section').style.display = 'block';
