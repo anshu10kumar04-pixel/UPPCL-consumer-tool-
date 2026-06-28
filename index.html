@@ -857,7 +857,7 @@ function _pgJump(el){
 function autoSyncAtr(){
   var url = getScriptUrl();
   if(!url) return;
-  fetch(url, {mode:'cors'})
+  fetch(url + '?action=get', {mode:'cors'})
     .then(function(r){ return r.json(); })
     .then(function(data){
       var smAtr  = data['SM_ATR']       || {};
@@ -901,25 +901,33 @@ function pushLocalAtrToSheet(){
   var url = getScriptUrl(); if(!url) return;
   var localSm  = {}; try{ localSm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
   var localDef = {}; try{ localDef = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
-  if(!Object.keys(localSm).length && !Object.keys(localDef).length) return;
-  // Bulk push: send all local entries
+
+  // Only push non-PENDING entries (PENDING = not actioned, no point syncing)
+  var smEntries = {}, defEntries = {};
   Object.keys(localSm).forEach(function(acct){
     var e = localSm[acct];
-    syncAtrToSheet({ type:'sm', acct:acct,
-      atr:     typeof e==='object'?e.atr:e,
-      comment: typeof e==='object'?(e.comment||''):'',
-      ts:      typeof e==='object'?(e.ts||''):''
-    });
+    var status = typeof e==='object'?e.atr:e;
+    if(status && status !== 'PENDING') smEntries[acct] = e;
   });
   Object.keys(localDef).forEach(function(acct){
     var e = localDef[acct];
-    syncAtrToSheet({ type:'defaulter', acct:acct,
-      atr:     typeof e==='object'?e.atr:e,
-      comment: typeof e==='object'?(e.comment||''):'',
-      ts:      typeof e==='object'?(e.ts||''):''
-    });
+    var status = typeof e==='object'?e.atr:e;
+    if(status && status !== 'PENDING') defEntries[acct] = e;
   });
-  console.log('Pushed local ATR to sheet:', Object.keys(localSm).length, 'SM +', Object.keys(localDef).length, 'Def');
+
+  if(!Object.keys(smEntries).length && !Object.keys(defEntries).length) return;
+
+  // Single batch POST — not 853 individual requests
+  fetch(url, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ type:'batch', sm: smEntries, defaulter: defEntries })
+  }).then(function(){
+    console.log('Batch ATR pushed:', Object.keys(smEntries).length, 'SM +', Object.keys(defEntries).length, 'Def');
+    localStorage.setItem('atr_last_push', new Date().toLocaleString('en-IN'));
+    updateAtrLocalCounts();
+  }).catch(function(e){ console.warn('Batch push error:', e); });
 }
 
 // Start periodic ATR sync — pull from sheet every 5 min, push local on load
@@ -1056,11 +1064,14 @@ function buildSettingsPanel(){
           '<button class="btn" style="background:#059669;color:#fff;flex:1;min-width:120px;" onclick="saveAtrUrl()">💾 SAVE URL</button>'+
           '<button class="btn" style="background:#0EA5E9;color:#fff;flex:1;min-width:120px;" onclick="syncAtrFromSheet()">🔄 PULL FROM SHEET</button>'+
           '<button class="btn" style="background:#7C3AED;color:#fff;flex:1;min-width:140px;" onclick="downloadAtrFromSheet()">⬇ DOWNLOAD ATR XLSX</button>'+
+          '<button class="btn" style="background:#F59E0B;color:#000;flex:1;min-width:120px;" onclick="manualPushAtr()">⬆ PUSH TO SHEET NOW</button>'+
         '</div>'+
         '<div id="atr-url-status" style="margin-top:10px;font-size:12px;font-family:var(--fh);font-weight:600;color:#059669;"></div>'+
-        '<div style="margin-top:14px;padding:10px 14px;background:#fff;border-radius:8px;border:1px solid #BBF7D0;font-size:12px;color:#374151;line-height:1.8;">'+
+        '<div style="margin-top:10px;padding:10px 14px;background:#fff;border-radius:8px;border:1px solid #BBF7D0;font-size:12px;color:#374151;line-height:2;">'+
           '<b>SM ATR (localStorage):</b> <span id="atr-local-count" style="color:#4F46E5;font-weight:700;">–</span>&emsp;'+
-          '<b>Defaulter ATR (localStorage):</b> <span id="atr-def-local-count" style="color:#F43F5E;font-weight:700;">–</span>'+
+          '<b>Defaulter ATR (localStorage):</b> <span id="atr-def-local-count" style="color:#F43F5E;font-weight:700;">–</span><br>'+
+          '<b>Last pushed to sheet:</b> <span id="atr-last-push" style="color:#6B7280;font-weight:600;">–</span>&emsp;'+
+          '<button onclick="clearPendingAtr()" style="background:#FEE2E2;border:1px solid #FECACA;border-radius:6px;padding:3px 10px;font-size:11px;font-family:var(--fh);font-weight:700;color:#DC2626;cursor:pointer;">🗑 CLEAR PENDING-ONLY RECORDS</button>'+
         '</div>'+
       '</div>'+
 
@@ -2296,17 +2307,55 @@ function saveAtrUrl(){
   ATR_SCRIPT_URL=val;
   localStorage.setItem('atr_script_url',val);
   var st=gel('atr-url-status');
-  if(st) st.innerHTML=val?'✅ URL saved! ATR will sync to Google Sheet.':'⚠ URL cleared — ATR will save locally only.';
+  if(st) st.innerHTML=val?'✅ URL saved! ATR will auto-sync every 5 min.':'⚠ URL cleared — ATR will save locally only.';
   updateAtrLocalCounts();
+}
+
+function manualPushAtr(){
+  var url = getScriptUrl();
+  if(!url){ alert('No Sheet URL configured. Paste and save URL first.'); return; }
+  var btn = event.target;
+  btn.textContent='⏳ PUSHING…'; btn.disabled=true;
+  pushLocalAtrToSheet();
+  setTimeout(function(){
+    localStorage.setItem('atr_last_push', new Date().toLocaleString('en-IN'));
+    updateAtrLocalCounts();
+    btn.textContent='✅ PUSHED'; btn.disabled=false;
+    setTimeout(function(){ btn.textContent='⬆ PUSH TO SHEET NOW'; },2000);
+  }, 2000);
+}
+
+function clearPendingAtr(){
+  if(!confirm('This will remove all PENDING (unactioned) ATR records from localStorage.\nActioned records (PAID/LOCK/THEFT/etc) will be kept.\n\nProceed?')) return;
+  var sm  = {}; try{ sm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
+  var def = {}; try{ def = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+  var smKept=0, defKept=0, smRemoved=0, defRemoved=0;
+  var newSm={}, newDef={};
+  Object.keys(sm).forEach(function(a){
+    var e=sm[a]; var s=typeof e==='object'?e.atr:e;
+    if(s && s!=='PENDING'){ newSm[a]=e; smKept++; } else smRemoved++;
+  });
+  Object.keys(def).forEach(function(a){
+    var e=def[a]; var s=typeof e==='object'?e.atr:e;
+    if(s && s!=='PENDING'){ newDef[a]=e; defKept++; } else defRemoved++;
+  });
+  localStorage.setItem('atr_data', JSON.stringify(newSm));
+  localStorage.setItem('def_atr_data', JSON.stringify(newDef));
+  updateAtrLocalCounts();
+  alert('✅ Cleared '+smRemoved+' SM + '+defRemoved+' Defaulter PENDING records.\nKept: '+smKept+' SM + '+defKept+' Defaulter actioned records.');
 }
 
 function updateAtrLocalCounts(){
   try{
-    var sm  = Object.keys(JSON.parse(localStorage.getItem('atr_data')||'{}')).length;
-    var def = Object.keys(JSON.parse(localStorage.getItem('def_atr_data')||'{}')).length;
-    var el1 = gel('atr-local-count'),    el2 = gel('atr-def-local-count');
-    if(el1) el1.textContent = sm  + ' records';
-    if(el2) el2.textContent = def + ' records';
+    var sm  = JSON.parse(localStorage.getItem('atr_data')||'{}');
+    var def = JSON.parse(localStorage.getItem('def_atr_data')||'{}');
+    var smTotal=Object.keys(sm).length, defTotal=Object.keys(def).length;
+    var smActioned=Object.keys(sm).filter(function(a){ var e=sm[a]; return (typeof e==='object'?e.atr:e)!=='PENDING'; }).length;
+    var defActioned=Object.keys(def).filter(function(a){ var e=def[a]; return (typeof e==='object'?e.atr:e)!=='PENDING'; }).length;
+    var el1=gel('atr-local-count'), el2=gel('atr-def-local-count'), el3=gel('atr-last-push');
+    if(el1) el1.textContent = smTotal+' ('+smActioned+' actioned)';
+    if(el2) el2.textContent = defTotal+' ('+defActioned+' actioned)';
+    if(el3) el3.textContent = localStorage.getItem('atr_last_push')||'never';
   }catch(e){}
 }
 
