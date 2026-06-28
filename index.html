@@ -1154,7 +1154,7 @@ function processAndUpload(){
       var iMob  = findCol(hdrs, ['MOBILE_NO', 'MOBILE']);
       var iName = findCol(hdrs, ['NAME', 'CONSUMER_NAME']);
       var iAddr = findCol(hdrs, ['ADDRESS', 'ADDRES']);
-      var iCat  = findCol(hdrs, ['CATEGORY', 'TARIFF_TYPE', 'SUPPLY_TYPE', 'TARIFF']);
+      var iCat  = findCol(hdrs, ['TARIFF_TYPE', 'CATEGORY', 'SUPPLY_TYPE', 'TARIFF']);
       var iLoad = findCol(hdrs, ['LOAD', 'SANCTION_LOAD', 'SANCT_LOAD']);
       var iLat  = findCol(hdrs, ['LAT', 'LATITUDE']);
       var iLon  = findCol(hdrs, ['LON', 'LONGITUDE', 'LONG']);
@@ -1660,7 +1660,7 @@ function parseFileInto(text, type){
   var iName = findCol(hdrs, ['NAME', 'CONSUMER_NAME']);
   var iFath = findCol(hdrs, ['FATHER_NAME']);
   var iAddr = findCol(hdrs, ['ADDRESS', 'ADDRES']);
-  var iCat  = findCol(hdrs, ['CATEGORY', 'TARIFF_TYPE', 'SUPPLY_TYPE', 'TARIFF']);
+  var iCat  = findCol(hdrs, ['TARIFF_TYPE', 'CATEGORY', 'SUPPLY_TYPE', 'TARIFF']);
   var iLoad = findCol(hdrs, ['LOAD', 'SANCTION_LOAD', 'SANCT_LOAD']);
   var iLat  = findCol(hdrs, ['LAT', 'LATITUDE']);
   var iLon  = findCol(hdrs, ['LON', 'LONGITUDE', 'LONG']);
@@ -1729,7 +1729,7 @@ function parseFileInto(text, type){
       NAME:(v[iName]||''),
       FATHER_NAME:iFath>=0?(v[iFath]||''):'',
       ADDRESS:(v[iAddr]||''),
-      CATEGORY:(v[iCat]||''),
+      CATEGORY:stToTariff(v[iCat]||''),
       LOAD:(v[iLoad]||''),
       LAT:lat, LON:lon,
       SUBSTATION:(v[iSub]||''),
@@ -2572,16 +2572,27 @@ var TARIFF_MAP = {
 // e.g. ST=10 → tariff=1 (LMV-1), ST=100 → tariff=10 (LMV-10), ST=200 → tariff=20 (HV-2)
 function stToTariff(st){
   var s = String(st||'').trim();
-  if(!s || isNaN(s)) return s; // already a label like 'LMV1', return as-is
-  var tariffNum = s.slice(0, -1); // remove last digit
-  if(!tariffNum) return s;
-  // Map tariff number to label
-  var labels = {
-    '1':'LMV-1','2':'LMV-2','3':'LMV-3','4':'LMV-4','5':'LMV-5',
-    '6':'LMV-6','7':'LMV-7','8':'LMV-8','9':'LMV-9','10':'LMV-10',
-    '11':'LMV-11','12':'LMV-12','20':'HV-2','21':'HV-2A','22':'HV-3','40':'EHV-1'
+  if(!s) return '-';
+  if(isNaN(s)) return s; // already a string label, return as-is
+  // ST code → Tariff: remove last digit → tariff number
+  // ST=10→LMV1, ST=20→LMV2, ST=60→LMV6, ST=90→LMV9, ST=92→LMV9A,
+  // ST=100→LMV10, ST=110→LMV11, ST=200→HV2, ST=210→HV2A, ST=220→HV3, ST=400→EHV1
+  var exact = {
+    '10':'LMV1','20':'LMV2','30':'LMV3','40':'LMV4','50':'LMV5',
+    '60':'LMV6','70':'LMV7','80':'LMV8','90':'LMV9','92':'LMV9A',
+    '100':'LMV10','110':'LMV11','120':'LMV12',
+    '200':'HV2','210':'HV2A','220':'HV3','400':'EHV1'
   };
-  return labels[tariffNum] || ('LMV-'+tariffNum);
+  if(exact[s]) return exact[s];
+  // Fallback: remove last digit
+  var tariffNum = s.slice(0,-1);
+  if(!tariffNum) return s;
+  var labels = {
+    '1':'LMV1','2':'LMV2','3':'LMV3','4':'LMV4','5':'LMV5',
+    '6':'LMV6','7':'LMV7','8':'LMV8','9':'LMV9','10':'LMV10',
+    '11':'LMV11','12':'LMV12','20':'HV2','21':'HV2A','22':'HV3','40':'EHV1'
+  };
+  return labels[tariffNum] || s;
 }
 function tariffLabel(code){
   return stToTariff(code);
@@ -2735,7 +2746,7 @@ function parseDefFile(text){
       iAddr   = hdrs.indexOf('ADDRESS'),
       iSub    = hdrs.indexOf('SUBSTATION'),
       iFeed   = hdrs.indexOf('FEEDER'),
-      iCat    = hdrs.indexOf('SUPPLY_TYPE')>=0 ? hdrs.indexOf('SUPPLY_TYPE') : hdrs.indexOf('ST'),
+      iCat    = hdrs.indexOf('TARIFF_TYPE')>=0 ? hdrs.indexOf('TARIFF_TYPE') : hdrs.indexOf('SUPPLY_TYPE')>=0 ? hdrs.indexOf('SUPPLY_TYPE') : hdrs.indexOf('ST'),
       iLoad   = hdrs.indexOf('SANCTION_LOAD'),
       iOut    = hdrs.indexOf('OUTSTANDING')>=0 ? hdrs.indexOf('OUTSTANDING') : hdrs.indexOf('AMOUNT_PAYABLE'),
       iPayAmt = hdrs.indexOf('LAST_PAYMENT_AMOUNT'),
@@ -2748,6 +2759,7 @@ function parseDefFile(text){
       iBDate  = hdrs.indexOf('BILL_DATE'),
       iDDate  = hdrs.indexOf('DUE_DATE'),
       iSrc    = hdrs.indexOf('SOURCE');
+  if(iOut<0) iOut=8; // fallback to col index if not found
   var defSaved={};
   try{defSaved=JSON.parse(localStorage.getItem('def_atr_data')||'{}');}catch(e){}
   var lines=text.substring(nl+1).split('\n');
@@ -2762,12 +2774,13 @@ function parseDefFile(text){
     if(lat>50){var t=lat;lat=lon;lon=t;}
     if((!lat||lat<20)&&LOCATION_MAP[acct]){lat=LOCATION_MAP[acct].lat;lon=LOCATION_MAP[acct].lon;}
     var ae=defSaved[acct]||{};
+    var rawST=(v[iCat]||'').replace(/"/g,'').trim();
     DEF_ALL.push({
       ACCT_ID:   acct,
       NAME:      (v[iName]||'').replace(/"/g,''),
       MOBILE:    (v[iMob]||'').replace(/"/g,''),
       ADDRESS:   (v[iAddr]||'').replace(/"/g,''),
-      SUPPLY_TYPE:(v[iCat]||'').replace(/"/g,'').trim(),
+      SUPPLY_TYPE: stToTariff(rawST),
       LOAD:      parseFloat(v[iLoad]||0)||0,
       OUTSTANDING:out,
       PAY_AMT:   parseFloat(v[iPayAmt]||0)||0,
@@ -2776,10 +2789,10 @@ function parseDefFile(text){
       FEEDER:    (v[iFeed]||'').replace(/"/g,''),
       LAT:lat, LON:lon,
       METER_NO:  (v[iMeter]||'').replace(/"/g,''),
-      CA:        iCA>=0    ? (v[iCA]||'').replace(/"/g,'')     : '',
+      CA:        iCA>=0    ? (v[iCA]||'').replace(/"/g,'')          : '',
       BILLED_UNITS: iBUnits>=0 ? (v[iBUnits]||'').replace(/"/g,'') : '',
-      BILL_DATE: iBDate>=0 ? (v[iBDate]||'').replace(/"/g,'')  : '',
-      DUE_DATE:  iDDate>=0 ? (v[iDDate]||'').replace(/"/g,'')  : '',
+      BILL_DATE: iBDate>=0 ? (v[iBDate]||'').replace(/"/g,'')       : '',
+      DUE_DATE:  iDDate>=0 ? (v[iDDate]||'').replace(/"/g,'')       : '',
       SOURCE:    iSrc>=0   ? (v[iSrc]||'billed').replace(/"/g,'').trim() : 'billed',
       ATR_STATUS:typeof ae==='object'?(ae.atr||'PENDING'):ae,
       ATR_COMMENT:typeof ae==='object'?(ae.comment||''):''
