@@ -689,7 +689,7 @@ function doSync(types, force, btn, logEl){
 
 // ─── GLOBALS ─────────────────────────────────────────────────────────────────
 let D = [], PAY_DATA = {}, FD = [], METER_DATA = {}, BILLED_LOC = {};
-var D_PRI = {}, MASTER_MAP = {}, GEO_MAP = {}; // acct_id -> meter_no
+var D_PRI = {}, MASTER_MAP = {}, GEO_MAP = {}, LOCATION_MAP = {}; // acct_id -> meter_no
 let MASTER_CUTOFF = null; // Date object for last day of master month
 let DC = [], DC_FD = [], ATR_DATA = {}, ATR_SCRIPT_URL = '';
 let DEF_DATA = [];
@@ -1479,6 +1479,8 @@ function parseFileInto(text, type){
   var iSub  = findCol(hdrs, ['SUBSTATION', 'SUB_STATION']);
   var iFeed = findCol(hdrs, ['FEEDER']);
   var iSerl = findCol(hdrs, ['SERIAL_NBR', 'METER_SERIAL_NBR', 'MTR_SRL_NO', 'METER_NO']);
+  var iCA=hdrs.indexOf('CA'), iBUnits=hdrs.indexOf('BILLED_UNITS'),
+      iBillDate=hdrs.indexOf('BILL_DATE'), iDueDate=hdrs.indexOf('DUE_DATE');
   var iPayAmt  = findCol(hdrs, ['PAY_AMT', 'LP AMT', 'LAST_PAY_AMT', 'LAST_PAYMENT_AMOUNT']);
   var iPayDate = findCol(hdrs, ['PAY_DATE', 'LP DATE', 'LAST_PAY_DATE']);
   var iTotOut  = findCol(hdrs, ['TOTAL_OUTSTANDING', 'TOTAL OUTSTANDING', 'AMOUNT_PAYABLE', 'OUTSTANDING']);
@@ -1589,6 +1591,30 @@ function parseFileInto(text, type){
 }
 
 // ─── INIT APP ─────────────────────────────────────────────────────────────────
+function loadLocationXlsx(){
+  fetch(RAW_BASE+'location.xlsx')
+    .then(function(r){return r.ok?r.arrayBuffer():null;})
+    .then(function(buf){
+      if(!buf) return;
+      var wb=XLSX.read(buf,{type:'array'});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      var hi=rows[0]||[];
+      var iA=hi.indexOf('ACCT_ID'),iLa=hi.indexOf('LAT'),iLo=hi.indexOf('LON');
+      if(iA<0||iLa<0||iLo<0){
+        // Try first 3 cols
+        iA=0;iLa=1;iLo=2;
+      }
+      for(var i=1;i<rows.length;i++){
+        var r=rows[i];
+        var acct=String(r[iA]||'').trim();
+        var lat=parseFloat(r[iLa]), lon=parseFloat(r[iLo]);
+        if(acct&&lat>20&&lat<30&&lon>70) LOCATION_MAP[acct]={lat:lat,lon:lon};
+      }
+      console.log('location.xlsx loaded:',Object.keys(LOCATION_MAP).length,'entries');
+    }).catch(function(){});
+}
+
 function ia(){
   var subSet=new Set(),feedSet=new Set(),catSet=new Set();
   fetch(RAW_BASE+'geo_mapping.json').then(r=>r.ok?r.json():{}).then(function(map){
@@ -1613,6 +1639,8 @@ function ia(){
       gel('upload-screen').style.display='none';
       FD=D.slice();
       setTimeout(autoSyncAtr,1500);
+    // Load location.xlsx for GPS fallback
+    if(!Object.keys(LOCATION_MAP).length) loadLocationXlsx();
     }
     chunk();
   }
@@ -1676,7 +1704,12 @@ function buildConsumerCard(r, q){
 
   var lat = parseFloat(r.LAT), lon = parseFloat(r.LON);
   if(lat > 50){ var t = lat; lat = lon; lon = t; }
-  var mapBtn = lat && lon ? '<a class="mb" href="https://www.google.com/maps?q='+lat+','+lon+'&z=17" target="_blank">📍 OPEN IN GOOGLE MAPS</a>' : '';
+  // Fallback to LOCATION_MAP if no lat/lon in row
+  if((!lat||!lon||lat<20)&&LOCATION_MAP){
+    var lx=LOCATION_MAP[String(r.ACCT_ID)];
+    if(lx){lat=lx.lat;lon=lx.lon;}
+  }
+  var mapBtn = (lat>20&&lat<30&&lon>70) ? '<a class="mb" href="https://www.google.com/maps?q='+lat+','+lon+'&z=17" target="_blank">📍 OPEN IN GOOGLE MAPS</a>' : '';
   
   function hl(t){ if(!q || !t) return t; var i = String(t).toLowerCase().indexOf(q.toLowerCase()); if(i < 0) return t; return t.slice(0,i)+'<mark>'+t.slice(i,i+q.length)+'</mark>'+t.slice(i+q.length); }
   
