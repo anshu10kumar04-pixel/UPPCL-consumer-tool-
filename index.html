@@ -2449,7 +2449,7 @@ function parseDefFile(text){
       iMob=hdrs.indexOf('MOBILE_NO'), iAddr=hdrs.indexOf('ADDRESS'),
       iSub=hdrs.indexOf('SUBSTATION'), iFeed=hdrs.indexOf('FEEDER'),
       iCat=hdrs.indexOf('SUPPLY_TYPE'), iLoad=hdrs.indexOf('SANCTION_LOAD'),
-      iOut=hdrs.indexOf('AMOUNT_PAYABLE'), iPayAmt=hdrs.indexOf('LAST_PAYMENT_AMOUNT'),
+      iOut=hdrs.indexOf('OUTSTANDING')||hdrs.indexOf('AMOUNT_PAYABLE'), iOut2=hdrs.indexOf('AMOUNT_PAYABLE'), iPayAmt=hdrs.indexOf('LAST_PAYMENT_AMOUNT'),
       iPayDate=hdrs.indexOf('LAST_PAY_DATE'), iLat=hdrs.indexOf('LATITUDE'),
       iLon=hdrs.indexOf('LONGITUDE'), iMeter=hdrs.indexOf('METER_SERIAL_NBR');
   var defSaved={};
