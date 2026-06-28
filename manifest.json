@@ -97,21 +97,14 @@
       "unbilled_date": "28062026"
     }
   },
-  "updated": "2026-06-28T12:31:11.111117Z",
+  "updated": "2026-06-28T13:20:19.521686Z",
   "defaulters_eudd1": [
     "defaulters/def_eudd1a.csv",
-    "defaulters/def_eudd1b.csv",
-    "defaulters/def_eudd1c.csv",
-    "defaulters/def_eudd1d.csv",
-    "defaulters/def_eudd1e.csv",
-    "defaulters/def_eudd1f.csv"
+    "defaulters/def_eudd1b.csv"
   ],
   "defaulters_eudd2": [
     "defaulters/def_eudd2a.csv",
     "defaulters/def_eudd2b.csv",
-    "defaulters/def_eudd2c.csv",
-    "defaulters/def_eudd2d.csv",
-    "defaulters/def_eudd2e.csv",
-    "defaulters/def_eudd2f.csv"
+    "defaulters/def_eudd2c.csv"
   ]
 }
