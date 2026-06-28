@@ -395,7 +395,7 @@ select option{background:#fff;color:#1E1B4B;}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
       <div>
         <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#F43F5E;">⚠️ TOP DEFAULTERS</div>
-        <div style="font-size:12px;color:var(--muted);">Consumers with Outstanding &gt; ₹5,000</div>
+        <div style="font-size:12px;color:var(--muted);">Consumers with Outstanding &gt; ₹2,000 (configurable)</div>
       </div>
     </div>
     <div class="fg" style="margin-bottom:12px;">
@@ -435,7 +435,7 @@ select option{background:#fff;color:#1E1B4B;}
         </div>
       </div>
       <div><div class="lbl">SORT</div><div class="sw"><select id="def-sort" onchange="runDefaulterFilter()">
-        <option value="desc">Highest First</option><option value="asc">Lowest First</option>
+        <option value="desc">Highest Outstanding</option><option value="asc">Lowest Outstanding</option><option value="load_desc">Highest Load</option><option value="load_asc">Lowest Load</option><option value="sm_first">SM First</option><option value="nonsm_first">Non-SM First</option>
       </select></div></div>
     </div>
     <div class="btn-group" style="margin-bottom:12px;">
@@ -2498,12 +2498,24 @@ function runDefaulterFilter(){
   var sortDir= gel('def-sort') ? gel('def-sort').value : 'desc';
   var q      = gel('def-search') ? gel('def-search').value.trim().toLowerCase() : '';
 
+  var loadRange = gel('def-load') ? gel('def-load').value : 'all';
+  var smFilter  = gel('def-sm')   ? gel('def-sm').value   : 'all';
+
   // Fast filter on pre-built array
   var all = DEF_ALL.filter(function(r){
     if(r.OUTSTANDING < minOut) return false;
     if(sub.length    && sub.indexOf(r.SUBSTATION)<0)    return false;
     if(feed.length   && feed.indexOf(r.FEEDER)<0)        return false;
     if(supply.length && supply.indexOf(r.SUPPLY_TYPE)<0) return false;
+    // Load filter
+    if(loadRange!=='all'){
+      var parts=loadRange.split('-');
+      var lo=parseFloat(parts[0]),hi=parseFloat(parts[1]);
+      if(r.LOAD<lo||r.LOAD>hi) return false;
+    }
+    // SM filter
+    if(smFilter==='sm'    && !String(r.METER_NO||'').toUpperCase().startsWith('GE')) return false;
+    if(smFilter==='nonsm' &&  String(r.METER_NO||'').toUpperCase().startsWith('GE')) return false;
     if(q){
       var meter = METER_DATA[String(r.ACCT_ID)] || r.METER_NO || '';
       if(!String(r.ACCT_ID).includes(q) &&
