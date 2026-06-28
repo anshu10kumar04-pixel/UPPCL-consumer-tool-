@@ -2691,7 +2691,7 @@ function parseDefaulterText(text){
     DEF_ALL.push({
       ACCT_ID:acct, NAME:(v[iName]||'').replace(/"/g,''),
       MOBILE:(v[iMob]||'').replace(/"/g,''), ADDRESS:(v[iAddr]||'').replace(/"/g,''),
-      SUPPLY_TYPE:stToTariff((v[iCat]||'').replace(/"/g,'')), OUTSTANDING:out,
+      SUPPLY_TYPE:(v[iCat]||'').replace(/"/g,'').trim(), OUTSTANDING:out,
       PAY_AMT:lpAmt,
       PAY_DATE:lpDate, STATUS:'INSERVICE',
       SUBSTATION:(v[iSub]||'').replace(/"/g,''), FEEDER:(v[iFeed]||'').replace(/"/g,''),
@@ -2756,7 +2756,7 @@ function parseDefFile(text){
       NAME:(v[iName]||'').replace(/"/g,''),
       MOBILE:(v[iMob]||'').replace(/"/g,''),
       ADDRESS:(v[iAddr]||'').replace(/"/g,''),
-      SUPPLY_TYPE:stToTariff((v[iCat]||'').replace(/"/g,'')),
+      SUPPLY_TYPE:(v[iCat]||'').replace(/"/g,'').trim(),
       LOAD:parseFloat(v[iLoad]||0)||0,
       OUTSTANDING:out,
       PAY_AMT:parseFloat(v[iPayAmt]||0)||0,
