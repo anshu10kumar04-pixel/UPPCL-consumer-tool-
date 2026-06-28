@@ -434,6 +434,31 @@ select option{background:#fff;color:#1E1B4B;}
           </div>
         </div>
       </div>
+      <div><div class="lbl">LOAD RANGE (kW)</div>
+        <div class="ms-wrap" id="def-load-wrap">
+          <button class="ms-btn" id="def-load-btn" onclick="toggleMs('def-load-dd')">ALL LOAD</button>
+          <div class="ms-dropdown" id="def-load-dd">
+            <label class="ms-opt"><input type="checkbox" value="1-2" onchange="runDefaulterFilter()"> 1-2 kW</label>
+            <label class="ms-opt"><input type="checkbox" value="3-4" onchange="runDefaulterFilter()"> 3-4 kW</label>
+            <label class="ms-opt"><input type="checkbox" value="5-9" onchange="runDefaulterFilter()"> 5-9 kW</label>
+            <label class="ms-opt"><input type="checkbox" value="10-24" onchange="runDefaulterFilter()"> 10-24 kW</label>
+            <label class="ms-opt"><input type="checkbox" value="25-75" onchange="runDefaulterFilter()"> 25-75 kW</label>
+            <label class="ms-opt"><input type="checkbox" value="75-9999" onchange="runDefaulterFilter()"> 75+ kW</label>
+            <div class="ms-clear" onclick="clearLoadFilter()">Clear</div>
+          </div>
+        </div>
+      </div>
+      <div><div class="lbl">METER TYPE</div>
+        <div class="ms-wrap" id="def-sm-wrap">
+          <button class="ms-btn" id="def-sm-btn" onclick="toggleMs('def-sm-dd')">ALL METERS</button>
+          <div class="ms-dropdown" id="def-sm-dd">
+            <label class="ms-opt"><input type="checkbox" value="sm" onchange="runDefaulterFilter()"> Smart Meter (GE)</label>
+            <label class="ms-opt"><input type="checkbox" value="nonsm" onchange="runDefaulterFilter()"> Non-SM</label>
+            <div class="ms-clear" onclick="clearSmFilter()">Clear</div>
+          </div>
+        </div>
+      </div>
+      
       <div><div class="lbl">SORT</div><div class="sw"><select id="def-sort" onchange="runDefaulterFilter()">
         <option value="desc">Highest Outstanding</option><option value="asc">Lowest Outstanding</option><option value="load_desc">Highest Load</option><option value="load_asc">Lowest Load</option><option value="sm_first">SM First</option><option value="nonsm_first">Non-SM First</option>
       </select></div></div>
@@ -2285,6 +2310,26 @@ function updateMsBtn(type){
   btn.textContent = sel.length===0 ? allLabel : sel.length===1 ? sel[0] : sel.length+' selected';
 }
 
+function getSelectedLoadRanges(){
+  var dd=gel('def-load-dd'); if(!dd) return [];
+  return Array.from(dd.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
+}
+function clearLoadFilter(){
+  var dd=gel('def-load-dd'); if(!dd) return;
+  dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){cb.checked=false;});
+  gel('def-load-btn').textContent='ALL LOAD';
+  runDefaulterFilter();
+}
+function getSelectedSmTypes(){
+  var dd=gel('def-sm-dd'); if(!dd) return [];
+  return Array.from(dd.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
+}
+function clearSmFilter(){
+  var dd=gel('def-sm-dd'); if(!dd) return;
+  dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){cb.checked=false;});
+  gel('def-sm-btn').textContent='ALL METERS';
+  runDefaulterFilter();
+}
 function clearMs(type){
   if(type==='sub'){ _defSelSubs=[]; buildMsOptions('sub', getAllSubValues()); }
   else if(type==='feed'){ _defSelFeeds=[]; buildMsOptions('feed', getAllFeedValues()); }
@@ -2603,6 +2648,15 @@ function runDefaulterFilter(){
   setText('def-count',   all.length.toLocaleString());
   setText('def-total-out','₹'+Math.round(totalOut).toLocaleString());
   setText('def-avg-out',  all.length?'₹'+Math.round(totalOut/all.length).toLocaleString():'₹0');
+  // Update filter button labels
+  if(gel('def-load-btn')){
+    var lc=selLoads.length;
+    gel('def-load-btn').textContent=lc?lc+' LOAD RANGE'+(lc>1?'S':''):'ALL LOAD';
+  }
+  if(gel('def-sm-btn')){
+    var sc=selSm.length;
+    gel('def-sm-btn').textContent=sc?(selSm.indexOf('sm')>=0&&selSm.indexOf('nonsm')>=0?'SM + NON-SM':selSm.indexOf('sm')>=0?'SMART METER':'NON-SM'):'ALL METERS';
+  }
   renderDefaulters(1);
 }
 
