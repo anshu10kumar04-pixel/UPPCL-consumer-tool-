@@ -1241,9 +1241,14 @@ function expDefaulterAtr(){
       ACCT_ID:     r.ACCT_ID,
       NAME:        r.NAME,
       MOBILE:      r.MOBILE||r.MOBILE_NO||'',
+      ADDRESS:     r.ADDRESS||'',
       METER_NO:    METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'',
+      TARIFF:      r.SUPPLY_TYPE||'',
+      LOAD_KW:     r.LOAD||0,
       SUBSTATION:  r.SUBSTATION,
       FEEDER:      r.FEEDER,
+      LP_DATE:     r.PAY_DATE||'',
+      LP_AMT:      Math.round(r.PAY_AMT||0),
       OUTSTANDING: Math.round(r.OUTSTANDING||0),
       ATR_STATUS:  typeof e==='object'?(e.atr||r.ATR_STATUS||'PENDING'):(e||r.ATR_STATUS||'PENDING'),
       COMMENT:     typeof e==='object'?(e.comment||r.ATR_COMMENT||''):'',
@@ -1296,9 +1301,14 @@ function downloadAtrFromSheet(){
         ACCT_ID:    acct,
         NAME:       dr?dr.NAME:'',
         MOBILE:     dr?(dr.MOBILE_NO||dr.MOBILE||''):'',
+        ADDRESS:    dr?dr.ADDRESS:'',
         METER_NO:   dr?(METER_DATA[acct]||dr.METER_NO||''):'',
+        TARIFF:     dr?dr.SUPPLY_TYPE:'',
+        LOAD_KW:    dr?dr.LOAD:0,
         SUBSTATION: dr?dr.SUBSTATION:'',
         FEEDER:     dr?dr.FEEDER:'',
+        LP_DATE:    dr?dr.PAY_DATE:'',
+        LP_AMT:     dr?Math.round(dr.PAY_AMT||0):0,
         OUTSTANDING:dr?Math.round(dr.OUTSTANDING||0):0,
         ATR_STATUS: typeof e==='object'?e.atr:e,
         COMMENT:    typeof e==='object'?(e.comment||''):'',
@@ -2974,17 +2984,23 @@ function openDefaulterModal(acctId){
   if(lat>50){var t=lat;lat=lon;lon=t;}
   var meterNo = METER_DATA[String(acctId)] || (r?r.SERIAL_NBR:'') || defRec.METER_NO || '-';
 
-  gel('modal-title').textContent = defRec.NAME || 'Consumer Details';
+  // Source badge — show which dataset this came from
+  var srcBadge = '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:#FEF3C7;color:#92400E;">DEFAULTER</span>';
+
+  gel('modal-title').innerHTML = (defRec.NAME||'Consumer Details') + '&nbsp;&nbsp;' + srcBadge;
   gel('modal-grid').innerHTML =
+    '<div class="modal-field"><div class="lbl">ACCT ID</div><div class="val" style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+defRec.ACCT_ID+'</div></div>'+
     '<div class="modal-field"><div class="lbl">MOBILE</div><div class="val">'+(defRec.MOBILE||defRec.MOBILE_NO||'-')+'</div></div>'+
     '<div class="modal-field"><div class="lbl">METER NO</div><div class="val" style="font-family:var(--fh);color:#1D4ED8;font-weight:700;">'+meterNo+'</div></div>'+
-    '<div class="modal-field"><div class="lbl">SUPPLY TYPE</div><div class="val">'+catBadge(defRec.SUPPLY_TYPE)+'</div></div>'+
-    '<div class="modal-field"><div class="lbl">LOAD</div><div class="val">'+(r?r.LOAD:'-')+' kW</div></div>'+
-    '<div class="modal-field"><div class="lbl">SUBSTATION</div><div class="val">'+(defRec.SUBSTATION||'-')+'</div></div>'+
-    '<div class="modal-field"><div class="lbl">FEEDER</div><div class="val">'+(defRec.FEEDER||'-')+'</div></div>'+
-    '<div class="modal-field" style="grid-column:span 2"><div class="lbl">ADDRESS</div><div class="val">'+(defRec.ADDRESS||'-')+'</div></div>';
+    '<div class="modal-field"><div class="lbl">TARIFF / CATEGORY</div><div class="val">'+catBadge(defRec.SUPPLY_TYPE)+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">LOAD</div><div class="val" style="font-weight:700;">'+(defRec.LOAD||r&&r.LOAD||'-')+' kW</div></div>'+
+    '<div class="modal-field"><div class="lbl">SUBSTATION</div><div class="val" style="font-weight:600;">'+( defRec.SUBSTATION||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">FEEDER</div><div class="val">'+( defRec.FEEDER||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">LP DATE</div><div class="val">'+( defRec.PAY_DATE||'-')+'</div></div>'+
+    '<div class="modal-field" style="grid-column:span 2"><div class="lbl">ADDRESS</div><div class="val">'+( defRec.ADDRESS||'-')+'</div></div>'+
+    (lat&&lon ? '<div class="modal-field"><div class="lbl">LATITUDE</div><div class="val">'+lat+'</div></div><div class="modal-field"><div class="lbl">LONGITUDE</div><div class="val">'+lon+'</div></div>' : '');
 
-  // Payment from DEF_ALL (always latest)
+  // Payment section
   gel('modal-pay-section').style.display = 'block';
   gel('modal-pay-grid').innerHTML =
     '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">LAST PAID AMT</div>'+
