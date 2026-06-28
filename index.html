@@ -398,12 +398,19 @@ select option{background:#fff;color:#1E1B4B;}
         <div style="font-size:12px;color:var(--muted);">Consumers with Outstanding &gt; ₹2,000 (configurable)</div>
       </div>
     </div>
-    <div class="fg" style="margin-bottom:12px;">
+    <div class="fg" style="margin-bottom:12px;flex-wrap:wrap;">
+
+      <!-- MIN OUTSTANDING -->
       <div><div class="lbl">MIN OUTSTANDING</div><div class="sw"><select id="def-min" onchange="runDefaulterFilter()">
-        <option value="5000">₹5,000+</option><option value="10000">₹10,000+</option>
-        <option value="25000">₹25,000+</option><option value="50000">₹50,000+</option>
+        <option value="2000" selected>₹2,000+</option>
+        <option value="5000">₹5,000+</option>
+        <option value="10000">₹10,000+</option>
+        <option value="25000">₹25,000+</option>
+        <option value="50000">₹50,000+</option>
         <option value="100000">₹1,00,000+</option>
       </select></div></div>
+
+      <!-- SUBSTATION -->
       <div><div class="lbl">SUBSTATION</div>
         <div class="ms-wrap" id="def-sub-wrap">
           <button class="ms-btn" id="def-sub-btn" onclick="toggleMs('def-sub-dd')">ALL SUBSTATIONS</button>
@@ -414,6 +421,8 @@ select option{background:#fff;color:#1E1B4B;}
           </div>
         </div>
       </div>
+
+      <!-- FEEDER -->
       <div><div class="lbl">FEEDER</div>
         <div class="ms-wrap" id="def-feed-wrap">
           <button class="ms-btn" id="def-feed-btn" onclick="toggleMs('def-feed-dd')">ALL FEEDERS</button>
@@ -424,9 +433,11 @@ select option{background:#fff;color:#1E1B4B;}
           </div>
         </div>
       </div>
-      <div><div class="lbl">SUPPLY TYPE</div>
+
+      <!-- TARIFF TYPE (from billed SUPPLY_TYPE) -->
+      <div><div class="lbl">TARIFF TYPE</div>
         <div class="ms-wrap" id="def-supply-wrap">
-          <button class="ms-btn" id="def-supply-btn" onclick="toggleMs('def-supply-dd')">ALL SUPPLY TYPES</button>
+          <button class="ms-btn" id="def-supply-btn" onclick="toggleMs('def-supply-dd')">ALL TARIFF</button>
           <div class="ms-dropdown" id="def-supply-dd">
             <div class="ms-search"><input type="text" placeholder="Search…" oninput="filterMsOptions('def-supply-dd',this.value)"/></div>
             <div id="def-supply-opts"></div>
@@ -434,6 +445,8 @@ select option{background:#fff;color:#1E1B4B;}
           </div>
         </div>
       </div>
+
+      <!-- LOAD RANGE -->
       <div><div class="lbl">LOAD RANGE (kW)</div>
         <div class="ms-wrap" id="def-load-wrap">
           <button class="ms-btn" id="def-load-btn" onclick="toggleMs('def-load-dd')">ALL LOAD</button>
@@ -444,24 +457,35 @@ select option{background:#fff;color:#1E1B4B;}
             <label class="ms-opt"><input type="checkbox" value="10-24" onchange="runDefaulterFilter()"> 10-24 kW</label>
             <label class="ms-opt"><input type="checkbox" value="25-75" onchange="runDefaulterFilter()"> 25-75 kW</label>
             <label class="ms-opt"><input type="checkbox" value="75-9999" onchange="runDefaulterFilter()"> 75+ kW</label>
-            <div class="ms-clear" onclick="clearLoadFilter()">Clear</div>
+            <div class="ms-clear" onclick="clearLoadFilter()">Clear All</div>
           </div>
         </div>
       </div>
+
+      <!-- METER TYPE -->
       <div><div class="lbl">METER TYPE</div>
         <div class="ms-wrap" id="def-sm-wrap">
           <button class="ms-btn" id="def-sm-btn" onclick="toggleMs('def-sm-dd')">ALL METERS</button>
           <div class="ms-dropdown" id="def-sm-dd">
             <label class="ms-opt"><input type="checkbox" value="sm" onchange="runDefaulterFilter()"> Smart Meter (GE)</label>
             <label class="ms-opt"><input type="checkbox" value="nonsm" onchange="runDefaulterFilter()"> Non-SM</label>
-            <div class="ms-clear" onclick="clearSmFilter()">Clear</div>
+            <div class="ms-clear" onclick="clearSmFilter()">Clear All</div>
           </div>
         </div>
       </div>
-      
+
+      <!-- SORT -->
       <div><div class="lbl">SORT</div><div class="sw"><select id="def-sort" onchange="runDefaulterFilter()">
-        <option value="desc">Highest Outstanding</option><option value="asc">Lowest Outstanding</option><option value="load_desc">Highest Load</option><option value="load_asc">Lowest Load</option><option value="sm_first">SM First</option><option value="nonsm_first">Non-SM First</option>
+        <option value="desc">Highest Outstanding</option>
+        <option value="asc">Lowest Outstanding</option>
+        <option value="load_desc">Highest Load</option>
+        <option value="load_asc">Lowest Load</option>
+        <option value="sm_first">SM First</option>
+        <option value="nonsm_first">Non-SM First</option>
+        <option value="tariff_asc">Tariff Type</option>
+        <option value="proximity">📍 Proximity</option>
       </select></div></div>
+
     </div>
     <div class="btn-group" style="margin-bottom:12px;">
       <div id="def-summary" style="font-family:var(--fh);font-size:13px;font-weight:600;color:var(--muted);flex:1;"></div>
@@ -489,6 +513,7 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:120px;cursor:pointer" onclick="defSort(&#39;NAME&#39;)">NAME <span id="dsrt-NAME">⇅</span></th>
         <th style="width:100px">MOBILE</th>
         <th style="width:85px">METER NO</th>
+        <th style="width:55px;cursor:pointer" onclick="defSort('LOAD')">LOAD <span id="dsrt-LOAD">⇅</span></th>
         <th style="width:75px;cursor:pointer" onclick="defSort(&#39;SUPPLY_TYPE&#39;)">SUPPLY <span id="dsrt-SUPPLY_TYPE">⇅</span></th>
         <th style="min-width:150px;cursor:pointer" onclick="defSort(&#39;ADDRESS&#39;)">ADDRESS <span id="dsrt-ADDRESS">⇅</span></th>
         <th style="width:110px;cursor:pointer" onclick="defSort(&#39;OUTSTANDING&#39;)">OUTSTANDING <span id="dsrt-OUTSTANDING">⇅</span></th>
@@ -496,7 +521,7 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="display:none">LP AMT <span id="dsrt-PAY_AMT">⇅</span></th>
         <th style="width:70px;cursor:pointer" onclick="defSort(&#39;ATR_STATUS&#39;)" class="mob-hide">ATR <span id="dsrt-ATR_STATUS">⇅</span></th>
         <th style="width:90px;cursor:pointer" onclick="defSort(&#39;SUBSTATION&#39;)">SUBSTATION <span id="dsrt-SUBSTATION">⇅</span></th>
-        <th style="width:95px;cursor:pointer" onclick="defSort(&#39;FEEDER&#39;)">FEEDER <span id="dsrt-FEEDER">⇅</span></th>
+        <th style="display:none">FEEDER</th>
         <th style="width:45px">MAP</th>
       </tr></thead>
       <tbody id="def-tbody"></tbody>
@@ -1945,7 +1970,7 @@ function renderDcTable(page){
       '<td style="font-family:var(--fh);color:#059669;font-weight:700;">'+(r.LP_AMT>0?'₹'+Math.round(r.LP_AMT).toLocaleString():'-')+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';">₹'+out.toLocaleString()+'</td>'+
       '<td>'+r.SUBSTATION+'</td>'+
-      '<td>'+r.FEEDER+'</td>'+
+      '<td style="display:none">'+r.FEEDER+'</td>'+
       '<td>'+(mapUrl?'<a class="ml" href="'+mapUrl+'" target="_blank">📍</a>':'')+'</td>'+
     '</tr>';
   }).join('');
@@ -2348,6 +2373,17 @@ function getAllFeedValues(){
     return !subs.length || subs.indexOf(r.SUBSTATION)>=0;
   }).map(function(r){return r.FEEDER;}).filter(Boolean))].sort();
 }
+var TARIFF_MAP = {
+  '10':'LMV-1 (Dom)','11':'LMV-1B','20':'LMV-2 (Com)','40':'LMV-4',
+  '50':'LMV-5','60':'LMV-6 (Ind)','70':'LMV-7','80':'LMV-8',
+  '90':'LMV-9 (Agri)','92':'LMV-9A','100':'LMV-10','110':'LMV-11 (Muni)',
+  '120':'LMV-12','200':'HV-2','210':'HV-2A','220':'HV-3','400':'EHV-1',
+  '1':'LMV-1','2':'LMV-2','3':'LMV-3','4':'LMV-4','5':'LMV-5',
+  '6':'LMV-6','7':'LMV-7','8':'LMV-8','9':'LMV-9','11':'LMV-11'
+};
+function tariffLabel(code){
+  return TARIFF_MAP[String(code)] || String(code);
+}
 function getAllSupplyValues(){
   return [...new Set(DEF_ALL.map(function(r){return r.SUPPLY_TYPE;}).filter(Boolean))].sort();
 }
@@ -2704,6 +2740,7 @@ function renderDefaulters(page){
       '<td style="font-weight:700;">'+r.NAME+'</td>'+
       '<td>'+r.MOBILE+'</td>'+
       '<td style="font-family:var(--fh);font-size:11px;color:#1D4ED8;font-weight:700;">'+meterNo+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD?r.LOAD+' kW':'-')+'</td>'+
       '<td><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:#EEF2FF;color:#4338CA;">'+r.SUPPLY_TYPE+'</span></td>'+
       '<td style="font-size:11px;color:#374151;" title="'+r.ADDRESS+'">'+r.ADDRESS+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';font-size:13px;">₹'+out.toLocaleString()+'</td>'+
@@ -2711,7 +2748,7 @@ function renderDefaulters(page){
       '<td style="display:none">'+(paid>0?'₹'+paid.toLocaleString():'-')+'</td>'+
       '<td class="mob-hide"><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:'+(atrBgs[atr]||'#F9FAFB')+';color:'+(atrColors[atr]||'#9CA3AF')+';">'+atr+'</span></td>'+
       '<td>'+r.SUBSTATION+'</td>'+
-      '<td>'+r.FEEDER+'</td>'+
+      '<td style="display:none">'+r.FEEDER+'</td>'+
       '<td>'+(mapUrl?'<a class="ml" href="#" data-id="'+r.ACCT_ID+'" onclick="event.preventDefault();openDefaulterMap(this.dataset.id)">📍</a>':'')+'</td>'+
     '</tr>';
   }).join('');
@@ -3179,7 +3216,7 @@ function renderDfpTable(page){
       '<td>'+r.MOBILE_NO+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
       '<td>'+r.SUBSTATION+'</td>'+
-      '<td>'+r.FEEDER+'</td>'+
+      '<td style="display:none">'+r.FEEDER+'</td>'+
       '<td>'+(r.LAT?'<a class="ml" href="https://www.google.com/maps?q='+r.LAT+','+r.LON+'" target="_blank">📍</a>':'')+'</td>'+
     '</tr>';
   }).join('');
