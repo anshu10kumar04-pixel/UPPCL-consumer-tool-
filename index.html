@@ -1319,7 +1319,7 @@ function st(name){
 function resolveFiles(){
   return fetch(MANIFEST_URL).then(function(r){return r.ok?r.json():null;})
     .then(function(m){
-      if(m){ window._manifest_cache=m;
+      if(m){ window._manifest_cache=m; console.log('Manifest loaded:',Object.keys(m));
         if(m.substation_division) SUB_DIVISION_MAP=m.substation_division;
         
         // Parse Master Cutoff Date
@@ -1360,16 +1360,19 @@ function resolveFiles(){
     }).catch(function(){})
     .then(function(){
       // Load order: billed > unbilled > master
+      // Use manifest cache directly - FILES_EUDD1/EUDD2 may be empty
       var mc=window._manifest_cache;
       FILES=[];
       if(mc){
-        (mc.billed_eudd1||[]).concat(mc.billed_eudd2||[]).forEach(function(f){FILES.push({url:RAW_BASE+f,type:'billed'});});
-        (mc.unbilled_eudd1||[]).concat(mc.unbilled_eudd2||[]).forEach(function(f){FILES.push({url:RAW_BASE+f,type:'unbilled'});});
-        var mf=DIVISION==='EUDD1'?FILES_EUDD1.slice():DIVISION==='EUDD2'?FILES_EUDD2.slice():FILES_EUDD1.concat(FILES_EUDD2);
-        mf.forEach(function(f){FILES.push({url:typeof f==='string'?f:f,type:'master'});});
-      } else {
-        var mf=DIVISION==='EUDD1'?FILES_EUDD1.slice():DIVISION==='EUDD2'?FILES_EUDD2.slice():FILES_EUDD1.concat(FILES_EUDD2);
-        mf.forEach(function(f){FILES.push({url:typeof f==='string'?f:f,type:'master'});});
+        // Billed first (priority 3)
+        (mc.billed_eudd1||[]).concat(mc.billed_eudd2||[])
+          .forEach(function(f){FILES.push({url:RAW_BASE+f,type:'billed'});});
+        // Unbilled second (priority 2)
+        (mc.unbilled_eudd1||[]).concat(mc.unbilled_eudd2||[])
+          .forEach(function(f){FILES.push({url:RAW_BASE+f,type:'unbilled'});});
+        // Master last (priority 1) - from manifest eudd1/eudd2 keys
+        var mf=(mc.eudd1||[]).concat(mc.eudd2||[]);
+        mf.forEach(function(f){FILES.push({url:RAW_BASE+f,type:'master'});});
       }
     });
 }
