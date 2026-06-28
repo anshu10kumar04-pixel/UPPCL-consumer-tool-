@@ -1547,7 +1547,14 @@ function parseFileInto(text, type){
       SUBSTATION:(v[iSub]||''),
       FEEDER:(v[iFeed]||''),
       SERIAL_NBR:iSerl>=0?(v[iSerl]||''):'',
-      SOURCE: type,
+      SOURCE:type,
+      CA:                 iCA>=0       ?(v[iCA]||'')         :'',
+      BILLED_UNITS:       iBUnits>=0   ?(v[iBUnits]||'')     :'',
+      BILL_DATE:          iBillDate>=0 ?(v[iBillDate]||'')   :'',
+      DUE_DATE:           iDueDate>=0  ?(v[iDueDate]||'')    :'',
+      AMOUNT_PAYABLE:     iTotOut>=0   ?(v[iTotOut]||'')     :'',
+      LAST_PAYMENT_AMOUNT:iPayAmt>=0   ?(v[iPayAmt]||'')     :'',
+      LAST_PAY_DATE:      iPayDate>=0  ?(v[iPayDate]||'')    :'',
       Google_Map_Link:(lat&&lon)?'https://www.google.com/maps?q='+lat+','+lon:''
     };
     
