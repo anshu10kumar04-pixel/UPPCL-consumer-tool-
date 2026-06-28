@@ -2414,57 +2414,121 @@ function parseDefaulterText(text){
 }
 
 function buildDefAll() {
-  if (_defFileLoaded) return;
-  _defFileLoaded = true;
-  fetch(DEFAULTER_FILE)
-    .then(function(r){ return r.ok ? r.text() : Promise.reject('defaulter.csv not found'); })
-    .then(function(text){
-      DEF_ALL = [];
-      var nl = text.indexOf('\n'); if(nl<0) return;
-      var hdrs = text.substring(0,nl).replace(/\r/,'').split(',').map(function(h){return h.replace(/"/g,'').trim();});
-      var iAcct=hdrs.indexOf('ACCT_ID'), iMob=hdrs.indexOf('MOBILE_NO'),
-          iName=hdrs.indexOf('NAME'), iAddr=hdrs.indexOf('ADDRESS'),
-          iCat=hdrs.indexOf('CATEGORY'), iLoad=hdrs.indexOf('LOAD'),
-          iLat=hdrs.indexOf('LAT'), iLon=hdrs.indexOf('LON'),
-          iSub=hdrs.indexOf('SUBSTATION'), iFeed=hdrs.indexOf('FEEDER'),
-          iDate=hdrs.indexOf('LP DATE'), iAmt=hdrs.indexOf('LP AMT'),
-          iOut=hdrs.indexOf('TOTAL OUTSTANDING');
-      var pos=nl+1, len=text.length;
-      while(pos<len){
-        var end=text.indexOf('\n',pos); if(end<0)end=len;
-        var line=text.substring(pos,end); pos=end+1;
-        if(!line||line==='\r') continue;
-        var v=line.split(',');
-        var acct=(v[iAcct]||'').replace(/"/g,'').trim(); if(!acct) continue;
-        var lat=(v[iLat]||'').replace(/"/g,'');
-        var lon=(v[iLon]||'').replace(/"/g,'');
-        var out=parseFloat((v[iOut]||'').replace(/"/g,''))||0;
-        if(out<1) continue;
-        DEF_ALL.push({
-          ACCT_ID: acct,
-          NAME: (v[iName]||'').replace(/"/g,''),
-          MOBILE: (v[iMob]||'').replace(/"/g,''),
-          ADDRESS: (v[iAddr]||'').replace(/"/g,''),
-          SUPPLY_TYPE: (v[iCat]||'').replace(/"/g,''),
-          OUTSTANDING: out,
-          PAY_AMT: parseFloat((v[iAmt]||'').replace(/"/g,''))||0,
-          PAY_DATE: (v[iDate]||'').replace(/"/g,''),
-          STATUS: 'INSERVICE',
-          SUBSTATION: (v[iSub]||'').replace(/"/g,''),
-          FEEDER: (v[iFeed]||'').replace(/"/g,''),
-          LAT: lat, LON: lon
+  if(!window._manifest_cache){setTimeout(buildDefAll,500);return;}
+  var mc=window._manifest_cache;
+  var defFiles=(mc.defaulters_eudd1||[]).concat(mc.defaulters_eudd2||[]);
+  if(!defFiles.length){
+    // Fallback: build from D array if no defaulter files
+    buildDefAllFromD(); return;
+  }
+
+  DEF_ALL=[];
+  var loaded=0, total=defFiles.length;
+  defFiles.forEach(function(f){
+    fetch(RAW_BASE+f)
+      .then(function(r){return r.ok?r.text():'';})
+      .then(function(text){
+        if(text) parseDefFile(text);
+        loaded++;
+        if(loaded===total){
+          console.log('DEF_ALL from files:',DEF_ALL.length);
+          if(gel('def-tbody')) runDefaulterFilter();
+        }
+      }).catch(function(){loaded++;if(loaded===total&&gel('def-tbody'))runDefaulterFilter();});
+  });
+}
+
+function parseDefFile(text){
+  var nl=text.indexOf('\n'); if(nl<0) return;
+  var hdrs=text.substring(0,nl).replace(/\r/,'').split(',').map(function(h){return h.replace(/"/g,'').trim().toUpperCase();});
+  var iAcct=hdrs.indexOf('ACCT_ID'), iName=hdrs.indexOf('NAME'),
+      iMob=hdrs.indexOf('MOBILE_NO'), iAddr=hdrs.indexOf('ADDRESS'),
+      iSub=hdrs.indexOf('SUBSTATION'), iFeed=hdrs.indexOf('FEEDER'),
+      iCat=hdrs.indexOf('SUPPLY_TYPE'), iLoad=hdrs.indexOf('SANCTION_LOAD'),
+      iOut=hdrs.indexOf('AMOUNT_PAYABLE'), iPayAmt=hdrs.indexOf('LAST_PAYMENT_AMOUNT'),
+      iPayDate=hdrs.indexOf('LAST_PAY_DATE'), iLat=hdrs.indexOf('LATITUDE'),
+      iLon=hdrs.indexOf('LONGITUDE'), iMeter=hdrs.indexOf('METER_SERIAL_NBR');
+  var defSaved={};
+  try{defSaved=JSON.parse(localStorage.getItem('def_atr_data')||'{}');}catch(e){}
+  var lines=text.substring(nl+1).split('\n');
+  lines.forEach(function(line){
+    if(!line.trim()) return;
+    var v=line.split(',');
+    var acct=String(v[iAcct]||'').replace(/"/g,'').trim();
+    if(!acct) return;
+    var out=parseFloat(v[iOut]||0)||0;
+    if(out<2000) return;
+    var lat=parseFloat(v[iLat]||0), lon=parseFloat(v[iLon]||0);
+    if(lat>50){var t=lat;lat=lon;lon=t;}
+    if((!lat||lat<20)&&LOCATION_MAP[acct]){lat=LOCATION_MAP[acct].lat;lon=LOCATION_MAP[acct].lon;}
+    var ae=defSaved[acct]||{};
+    DEF_ALL.push({
+      ACCT_ID:acct,
+      NAME:(v[iName]||'').replace(/"/g,''),
+      MOBILE:(v[iMob]||'').replace(/"/g,''),
+      ADDRESS:(v[iAddr]||'').replace(/"/g,''),
+      SUPPLY_TYPE:(v[iCat]||'').replace(/"/g,''),
+      LOAD:parseFloat(v[iLoad]||0)||0,
+      OUTSTANDING:out,
+      PAY_AMT:parseFloat(v[iPayAmt]||0)||0,
+      PAY_DATE:(v[iPayDate]||'-').replace(/"/g,''),
+      SUBSTATION:(v[iSub]||'').replace(/"/g,''),
+      FEEDER:(v[iFeed]||'').replace(/"/g,''),
+      LAT:lat, LON:lon,
+      METER_NO:(v[iMeter]||'').replace(/"/g,''),
+      DATA_SOURCE:'billed',
+      ATR_STATUS:typeof ae==='object'?(ae.atr||'PENDING'):ae,
+      ATR_COMMENT:typeof ae==='object'?(ae.comment||''):''
+    });
+  });
+}
+
+function buildDefAllFromD() {
+  if(!D.length){setTimeout(buildDefAllFromD,1000);return;}
+  var pri={billed:3,unbilled:2,master:1}, bestRow={}, i=0;
+  function step1(){
+    var end=Math.min(i+5000,D.length);
+    for(;i<end;i++){
+      var row=D[i],a=String(row.ACCT_ID),rp=pri[row.SOURCE]||0;
+      if(!bestRow[a]||(pri[bestRow[a].SOURCE]||0)<rp) bestRow[a]=row;
+    }
+    if(i<D.length){setTimeout(step1,0);return;}
+    step2();
+  }
+  function step2(){
+    var newDef=[],keys=Object.keys(bestRow),j=0;
+    function chunk(){
+      var end=Math.min(j+5000,keys.length);
+      for(;j<end;j++){
+        var acct=keys[j],row=bestRow[acct],pay=PAY_DATA[acct];
+        var out=row.SOURCE==='billed'?parseFloat(row.AMOUNT_PAYABLE)||0:parseFloat((pay||{}).TOTAL_OUTSTANDING)||0;
+        if(out<2000) continue;
+        var lat=parseFloat(row.LAT),lon=parseFloat(row.LON);
+        if(lat>50){var t=lat;lat=lon;lon=t;}
+        if((!lat||lat<20)&&LOCATION_MAP[acct]){lat=LOCATION_MAP[acct].lat;lon=LOCATION_MAP[acct].lon;}
+        var ae=(localStorage.getItem('def_atr_data')?JSON.parse(localStorage.getItem('def_atr_data')):{})[acct]||{};
+        newDef.push({
+          ACCT_ID:acct,NAME:row.NAME||'-',MOBILE:row.MOBILE_NO||'-',
+          ADDRESS:row.ADDRESS||'-',SUPPLY_TYPE:row.CATEGORY||'-',
+          LOAD:parseFloat(row.LOAD||row.SANCTION_LOAD)||0,OUTSTANDING:out,
+          PAY_AMT:row.SOURCE==='billed'?parseFloat(row.LAST_PAYMENT_AMOUNT)||0:parseFloat((pay||{}).PAY_AMT)||0,
+          PAY_DATE:row.SOURCE==='billed'?(row.LAST_PAY_DATE||'-'):((pay||{}).PAY_DATE||'-'),
+          SUBSTATION:row.SUBSTATION||'-',FEEDER:row.FEEDER||'-',
+          LAT:lat,LON:lon,METER_NO:row.SERIAL_NBR||'-',DATA_SOURCE:row.SOURCE||'master',
+          ATR_STATUS:typeof ae==='object'?(ae.atr||'PENDING'):ae,
+          ATR_COMMENT:typeof ae==='object'?(ae.comment||''):''
         });
       }
-      console.log('Defaulter file loaded:', DEF_ALL.length, 'records');
-      // Render
+      if(j<keys.length){setTimeout(chunk,0);return;}
+      DEF_ALL=newDef;
+      console.log('DEF_ALL from D:',DEF_ALL.length);
       if(gel('def-tbody')) runDefaulterFilter();
-    })
-    .catch(function(e){
-      console.warn('Defaulter file failed, using PAY_DATA:', e);
-      _defFileLoaded = false; // allow retry via PAY_DATA fallback
-      buildDefAllFromPayData();
-    });
+    }
+    chunk();
+  }
+  step1();
 }
+
 
 function buildDefAllFromPayData() {
   DEF_ALL = [];
