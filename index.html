@@ -451,12 +451,12 @@ select option{background:#fff;color:#1E1B4B;}
         <div class="ms-wrap" id="def-load-wrap">
           <button class="ms-btn" id="def-load-btn" onclick="toggleMs('def-load-dd')">ALL LOAD</button>
           <div class="ms-dropdown" id="def-load-dd">
-            <label class="ms-opt"><input type="checkbox" value="1-2" onchange="runDefaulterFilter()"> 1-2 kW</label>
-            <label class="ms-opt"><input type="checkbox" value="3-4" onchange="runDefaulterFilter()"> 3-4 kW</label>
-            <label class="ms-opt"><input type="checkbox" value="5-9" onchange="runDefaulterFilter()"> 5-9 kW</label>
-            <label class="ms-opt"><input type="checkbox" value="10-24" onchange="runDefaulterFilter()"> 10-24 kW</label>
-            <label class="ms-opt"><input type="checkbox" value="25-75" onchange="runDefaulterFilter()"> 25-75 kW</label>
-            <label class="ms-opt"><input type="checkbox" value="75-9999" onchange="runDefaulterFilter()"> 75+ kW</label>
+            <label class="ms-option"><input type="checkbox" value="1-2" onchange="runDefaulterFilter()"> 1-2 kW</label>
+            <label class="ms-option"><input type="checkbox" value="3-4" onchange="runDefaulterFilter()"> 3-4 kW</label>
+            <label class="ms-option"><input type="checkbox" value="5-9" onchange="runDefaulterFilter()"> 5-9 kW</label>
+            <label class="ms-option"><input type="checkbox" value="10-24" onchange="runDefaulterFilter()"> 10-24 kW</label>
+            <label class="ms-option"><input type="checkbox" value="25-75" onchange="runDefaulterFilter()"> 25-75 kW</label>
+            <label class="ms-option"><input type="checkbox" value="75-9999" onchange="runDefaulterFilter()"> 75+ kW</label>
             <div class="ms-clear" onclick="clearLoadFilter()">Clear All</div>
           </div>
         </div>
@@ -467,8 +467,8 @@ select option{background:#fff;color:#1E1B4B;}
         <div class="ms-wrap" id="def-sm-wrap">
           <button class="ms-btn" id="def-sm-btn" onclick="toggleMs('def-sm-dd')">ALL METERS</button>
           <div class="ms-dropdown" id="def-sm-dd">
-            <label class="ms-opt"><input type="checkbox" value="sm" onchange="runDefaulterFilter()"> Smart Meter (GE)</label>
-            <label class="ms-opt"><input type="checkbox" value="nonsm" onchange="runDefaulterFilter()"> Non-SM</label>
+            <label class="ms-option"><input type="checkbox" value="sm" onchange="runDefaulterFilter()"> Smart Meter (GE)</label>
+            <label class="ms-option"><input type="checkbox" value="nonsm" onchange="runDefaulterFilter()"> Non-SM</label>
             <div class="ms-clear" onclick="clearSmFilter()">Clear All</div>
           </div>
         </div>
@@ -518,7 +518,7 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="min-width:150px;cursor:pointer" onclick="defSort(&#39;ADDRESS&#39;)">ADDRESS <span id="dsrt-ADDRESS">⇅</span></th>
         <th style="width:110px;cursor:pointer" onclick="defSort(&#39;OUTSTANDING&#39;)">OUTSTANDING <span id="dsrt-OUTSTANDING">⇅</span></th>
         <th style="width:85px;cursor:pointer" onclick="defSort(&#39;PAY_DATE&#39;)">LP DATE <span id="dsrt-PAY_DATE">⇅</span></th>
-        <th style="display:none">LP AMT <span id="dsrt-PAY_AMT">⇅</span></th>
+        <th style="width:85px;cursor:pointer" onclick="defSort('PAY_AMT')">LP AMT <span id="dsrt-PAY_AMT">⇅</span></th>
         <th style="width:70px;cursor:pointer" onclick="defSort(&#39;ATR_STATUS&#39;)" class="mob-hide">ATR <span id="dsrt-ATR_STATUS">⇅</span></th>
         <th style="width:90px;cursor:pointer" onclick="defSort(&#39;SUBSTATION&#39;)">SUBSTATION <span id="dsrt-SUBSTATION">⇅</span></th>
         <th style="display:none">FEEDER</th>
@@ -2647,8 +2647,8 @@ function runDefaulterFilter(){
   var sortDir= gel('def-sort') ? gel('def-sort').value : 'desc';
   var q      = gel('def-search') ? gel('def-search').value.trim().toLowerCase() : '';
 
-  var loadRange = gel('def-load') ? gel('def-load').value : 'all';
-  var smFilter  = gel('def-sm')   ? gel('def-sm').value   : 'all';
+  var selLoads = getSelectedLoadRanges();
+  var selSm    = getSelectedSmTypes();
 
   // Fast filter on pre-built array
   var all = DEF_ALL.filter(function(r){
@@ -2656,15 +2656,22 @@ function runDefaulterFilter(){
     if(sub.length    && sub.indexOf(r.SUBSTATION)<0)    return false;
     if(feed.length   && feed.indexOf(r.FEEDER)<0)        return false;
     if(supply.length && supply.indexOf(r.SUPPLY_TYPE)<0) return false;
-    // Load filter
-    if(loadRange!=='all'){
-      var parts=loadRange.split('-');
-      var lo=parseFloat(parts[0]),hi=parseFloat(parts[1]);
-      if(r.LOAD<lo||r.LOAD>hi) return false;
+    // Load filter — multi-select ranges
+    if(selLoads.length){
+      var matched=selLoads.some(function(range){
+        var parts=range.split('-');
+        var lo=parseFloat(parts[0]),hi=parseFloat(parts[1]);
+        return r.LOAD>=lo && r.LOAD<=hi;
+      });
+      if(!matched) return false;
     }
-    // SM filter
-    if(smFilter==='sm'    && !String(r.METER_NO||'').toUpperCase().startsWith('GE')) return false;
-    if(smFilter==='nonsm' &&  String(r.METER_NO||'').toUpperCase().startsWith('GE')) return false;
+    // SM filter — multi-select
+    if(selSm.length){
+      var isSm=String(r.METER_NO||'').toUpperCase().startsWith('GE');
+      var wantSm=selSm.indexOf('sm')>=0, wantNon=selSm.indexOf('nonsm')>=0;
+      if(wantSm && !wantNon && !isSm) return false;
+      if(wantNon && !wantSm && isSm) return false;
+    }
     if(q){
       var meter = METER_DATA[String(r.ACCT_ID)] || r.METER_NO || '';
       if(!String(r.ACCT_ID).includes(q) &&
@@ -2677,7 +2684,23 @@ function runDefaulterFilter(){
     return true;
   });
 
-  all.sort(function(a,b){return sortDir==='desc'?b.OUTSTANDING-a.OUTSTANDING:a.OUTSTANDING-b.OUTSTANDING;});
+  all.sort(function(a,b){
+    if(sortDir==='asc')       return a.OUTSTANDING-b.OUTSTANDING;
+    if(sortDir==='load_desc') return (b.LOAD||0)-(a.LOAD||0);
+    if(sortDir==='load_asc')  return (a.LOAD||0)-(b.LOAD||0);
+    if(sortDir==='sm_first'){
+      var as=String(a.METER_NO||'').toUpperCase().startsWith('GE')?0:1;
+      var bs=String(b.METER_NO||'').toUpperCase().startsWith('GE')?0:1;
+      return as-bs || b.OUTSTANDING-a.OUTSTANDING;
+    }
+    if(sortDir==='nonsm_first'){
+      var an=String(a.METER_NO||'').toUpperCase().startsWith('GE')?1:0;
+      var bn=String(b.METER_NO||'').toUpperCase().startsWith('GE')?1:0;
+      return an-bn || b.OUTSTANDING-a.OUTSTANDING;
+    }
+    if(sortDir==='tariff_asc') return String(a.SUPPLY_TYPE||'').localeCompare(String(b.SUPPLY_TYPE||''));
+    return b.OUTSTANDING-a.OUTSTANDING; // default desc
+  });
   DEF_DATA = all;
 
   var totalOut = all.reduce(function(s,r){return s+r.OUTSTANDING;},0);
@@ -2745,7 +2768,7 @@ function renderDefaulters(page){
       '<td style="font-size:11px;color:#374151;" title="'+r.ADDRESS+'">'+r.ADDRESS+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';font-size:13px;">₹'+out.toLocaleString()+'</td>'+
       '<td style="font-size:11px;color:var(--muted);">'+r.PAY_DATE+'</td>'+
-      '<td style="display:none">'+(paid>0?'₹'+paid.toLocaleString():'-')+'</td>'+
+      '<td style="font-family:var(--fh);color:#059669;font-weight:700;">'+(paid>0?'₹'+paid.toLocaleString():'-')+'</td>'+
       '<td class="mob-hide"><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:'+(atrBgs[atr]||'#F9FAFB')+';color:'+(atrColors[atr]||'#9CA3AF')+';">'+atr+'</span></td>'+
       '<td>'+r.SUBSTATION+'</td>'+
       '<td style="display:none">'+r.FEEDER+'</td>'+
