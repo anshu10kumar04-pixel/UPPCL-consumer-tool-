@@ -395,15 +395,15 @@ select option{background:#fff;color:#1E1B4B;}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
       <div>
         <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#F43F5E;">⚠️ TOP DEFAULTERS</div>
-        <div style="font-size:12px;color:var(--muted);">Consumers with Outstanding &gt; ₹2,000 (configurable)</div>
+        <div style="font-size:12px;color:var(--muted);">Consumers with Outstanding &gt; ₹5,000 (configurable)</div>
       </div>
     </div>
     <div class="fg" style="margin-bottom:12px;flex-wrap:wrap;">
 
       <!-- MIN OUTSTANDING -->
       <div><div class="lbl">MIN OUTSTANDING</div><div class="sw"><select id="def-min" onchange="runDefaulterFilter()">
-        <option value="2000" selected>₹2,000+</option>
-        <option value="5000">₹5,000+</option>
+        <option value="2000">₹2,000+</option>
+        <option value="5000" selected>₹5,000+</option>
         <option value="10000">₹10,000+</option>
         <option value="25000">₹25,000+</option>
         <option value="50000">₹50,000+</option>
@@ -482,7 +482,7 @@ select option{background:#fff;color:#1E1B4B;}
         <option value="load_asc">Lowest Load</option>
         <option value="sm_first">SM First</option>
         <option value="nonsm_first">Non-SM First</option>
-        <option value="tariff_asc">Tariff Type</option>
+        <option value="tariff_asc" selected>Tariff Type</option>
         <option value="proximity">📍 Proximity</option>
       </select></div></div>
 
@@ -513,7 +513,7 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:120px;cursor:pointer" onclick="defSort(&#39;NAME&#39;)">NAME <span id="dsrt-NAME">⇅</span></th>
         <th style="width:100px">MOBILE</th>
         <th style="width:85px">METER NO</th>
-        <th style="width:55px;cursor:pointer" onclick="defSort('LOAD')">LOAD <span id="dsrt-LOAD">⇅</span></th>
+        <th style="width:80px;cursor:pointer" onclick="defSort('LOAD')">LOAD <span id="dsrt-LOAD">⇅</span></th>
         <th style="width:75px;cursor:pointer" onclick="defSort(&#39;SUPPLY_TYPE&#39;)">SUPPLY <span id="dsrt-SUPPLY_TYPE">⇅</span></th>
         <th style="min-width:150px;cursor:pointer" onclick="defSort(&#39;ADDRESS&#39;)">ADDRESS <span id="dsrt-ADDRESS">⇅</span></th>
         <th style="width:110px;cursor:pointer" onclick="defSort(&#39;OUTSTANDING&#39;)">OUTSTANDING <span id="dsrt-OUTSTANDING">⇅</span></th>
@@ -993,6 +993,32 @@ function buildSettingsPanel(){
         '<button class="btn" style="background:#EA580C;color:#fff;width:100%;padding:14px;" id="ftp-sync-btn" onclick="triggerFtpSync()">🔄 START SYNC PROCESS</button>'+
         '<pre id="ftp-sync-log" style="display:none;background:#0F172A;color:#A7F3D0;font-size:10px;font-family:monospace;padding:12px;border-radius:10px;max-height:180px;overflow-y:auto;margin-top:12px;"></pre>'+
       '</div>'+
+
+      /* ATR GOOGLE SHEET CARD */
+      '<div class="settings-card" style="background:#F0FDF4;border-color:#BBF7D0;">'+
+        '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:8px;color:#065F46;display:flex;align-items:center;gap:8px;">📋 ATR GOOGLE SHEET SYNC</div>'+
+        '<div style="font-size:12px;color:#374151;margin-bottom:14px;line-height:1.6;">'+
+          'Field staff ATR entries (PAID / LOCK / THEFT) save locally <b>and</b> sync to a Google Apps Script.<br>'+
+          'Paste your deployed Web App URL below. Without this, ATR stays on this device only.'+
+        '</div>'+
+        '<div style="margin-bottom:12px;">'+
+          '<div class="lbl" style="margin-bottom:6px;">APPS SCRIPT WEB APP URL</div>'+
+          '<input type="text" id="settings-atr-url" placeholder="https://script.google.com/macros/s/…/exec"'+
+            ' style="width:100%;border:1.5px solid #6EE7B7;border-radius:10px;padding:10px 14px;font-size:12px;font-family:var(--fb);outline:none;box-sizing:border-box;"'+
+            ' value=""/>'+
+        '</div>'+
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
+          '<button class="btn" style="background:#059669;color:#fff;flex:1;min-width:120px;" onclick="saveAtrUrl()">💾 SAVE URL</button>'+
+          '<button class="btn" style="background:#0EA5E9;color:#fff;flex:1;min-width:120px;" onclick="syncAtrFromSheet()">🔄 PULL FROM SHEET</button>'+
+          '<button class="btn" style="background:#7C3AED;color:#fff;flex:1;min-width:140px;" onclick="downloadAtrFromSheet()">⬇ DOWNLOAD ATR XLSX</button>'+
+        '</div>'+
+        '<div id="atr-url-status" style="margin-top:10px;font-size:12px;font-family:var(--fh);font-weight:600;color:#059669;"></div>'+
+        '<div style="margin-top:14px;padding:10px 14px;background:#fff;border-radius:8px;border:1px solid #BBF7D0;font-size:12px;color:#374151;line-height:1.8;">'+
+          '<b>SM ATR (localStorage):</b> <span id="atr-local-count" style="color:#4F46E5;font-weight:700;">–</span>&emsp;'+
+          '<b>Defaulter ATR (localStorage):</b> <span id="atr-def-local-count" style="color:#F43F5E;font-weight:700;">–</span>'+
+        '</div>'+
+      '</div>'+
+
     '</div>';
   checkSyncServer();
 }
@@ -1149,75 +1175,110 @@ function processAndUpload(){
   reader.readAsArrayBuffer(fEl.files[0]);
 }
 
+function expDefaulterAtr(){
+  // Local ATR report from localStorage + DEF_ALL
+  var saved = {};
+  try{ saved = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+  var rows = DEF_ALL.map(function(r){
+    var e = saved[String(r.ACCT_ID)] || {};
+    return {
+      ACCT_ID:     r.ACCT_ID,
+      NAME:        r.NAME,
+      MOBILE:      r.MOBILE||r.MOBILE_NO||'',
+      METER_NO:    METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'',
+      SUBSTATION:  r.SUBSTATION,
+      FEEDER:      r.FEEDER,
+      OUTSTANDING: Math.round(r.OUTSTANDING||0),
+      ATR_STATUS:  typeof e==='object'?(e.atr||r.ATR_STATUS||'PENDING'):(e||r.ATR_STATUS||'PENDING'),
+      COMMENT:     typeof e==='object'?(e.comment||r.ATR_COMMENT||''):'',
+      TIMESTAMP:   typeof e==='object'?(e.ts||''):''
+    };
+  });
+  if(!rows.length){ alert('No defaulter data loaded.'); return; }
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Defaulter_ATR');
+  var date = new Date().toLocaleDateString('en-IN').replace(/\//g,'-');
+  XLSX.writeFile(wb, 'Defaulter_ATR_Local_'+date+'.xlsx');
+}
+
 function downloadAtrFromSheet(){
+  // Always merge localStorage (latest) + sheet — local wins on conflict
+  var localSm  = {}; try{ localSm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
+  var localDef = {}; try{ localDef = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+
   var url = getScriptUrl();
-  if(!url){ alert('Sheet URL not configured'); return; }
   var btn = event ? event.target : null;
+
+  function buildAndDownload(sheetSm, sheetDef){
+    // Local overrides sheet (local is always newest)
+    var mergedSm  = Object.assign({}, sheetSm,  localSm);
+    var mergedDef = Object.assign({}, sheetDef, localDef);
+
+    var smRows = [], defRows = [];
+
+    Object.keys(mergedSm).forEach(function(acct){
+      var e = mergedSm[acct];
+      var dc = DC.find(function(r){ return String(r.ACCT_ID)===acct; });
+      smRows.push({
+        ACCT_ID:    acct,
+        NAME:       dc?dc.NAME:'',
+        MOBILE:     dc?dc.MOBILE_NO:'',
+        METER_NO:   dc?(dc.METER_NO||METER_DATA[acct]||''):'',
+        SUBSTATION: dc?dc.SUBSTATION:'',
+        FEEDER:     dc?dc.FEEDER:'',
+        OUTSTANDING:dc?Math.round(dc.OUTSTANDING||0):0,
+        ATR_STATUS: typeof e==='object'?e.atr:e,
+        COMMENT:    typeof e==='object'?(e.comment||''):'',
+        TIMESTAMP:  typeof e==='object'?(e.ts||''):''
+      });
+    });
+
+    Object.keys(mergedDef).forEach(function(acct){
+      var e = mergedDef[acct];
+      var dr = DEF_ALL.find(function(r){ return String(r.ACCT_ID)===acct; });
+      defRows.push({
+        ACCT_ID:    acct,
+        NAME:       dr?dr.NAME:'',
+        MOBILE:     dr?(dr.MOBILE_NO||dr.MOBILE||''):'',
+        METER_NO:   dr?(METER_DATA[acct]||dr.METER_NO||''):'',
+        SUBSTATION: dr?dr.SUBSTATION:'',
+        FEEDER:     dr?dr.FEEDER:'',
+        OUTSTANDING:dr?Math.round(dr.OUTSTANDING||0):0,
+        ATR_STATUS: typeof e==='object'?e.atr:e,
+        COMMENT:    typeof e==='object'?(e.comment||''):'',
+        TIMESTAMP:  typeof e==='object'?(e.ts||''):''
+      });
+    });
+
+    if(!smRows.length && !defRows.length){ alert('No ATR data found.'); return; }
+
+    var wb = XLSX.utils.book_new();
+    var summary = [
+      {TYPE:'SM Unrecharge', COUNT:smRows.length},
+      {TYPE:'Defaulters',    COUNT:defRows.length},
+      {TYPE:'TOTAL',         COUNT:smRows.length+defRows.length}
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
+    if(smRows.length)  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(smRows),  'SM_ATR');
+    if(defRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(defRows), 'Defaulter_ATR');
+
+    var date = new Date().toLocaleDateString('en-IN').replace(/\//g,'-');
+    XLSX.writeFile(wb, 'ATR_Full_Report_'+date+'.xlsx');
+    if(btn){ btn.textContent='✅ DOWNLOADED'; btn.disabled=false; setTimeout(function(){ btn.textContent='⬇ DOWNLOAD ATR XLSX'; },2000); }
+  }
+
+  if(!url){
+    buildAndDownload({}, {});
+    return;
+  }
+
   if(btn){ btn.textContent='⏳ FETCHING…'; btn.disabled=true; }
-  fetch(url, {mode:'cors'})
+  fetch(url + '?action=get', {mode:'cors'})
     .then(function(r){ return r.json(); })
-    .then(function(data){
-      var smRows = [], defRows = [];
-      var smAtr  = data['SM_ATR']       || {};
-      var defAtr = data['Defaulter_ATR'] || {};
-
-      // Build SM ATR rows with consumer details
-      Object.keys(smAtr).forEach(function(acct){
-        var e = smAtr[acct];
-        var dc = DC.find(function(r){ return String(r.ACCT_ID)===acct; });
-        smRows.push({
-          ACCT_ID:    acct,
-          NAME:       dc?dc.NAME:'',
-          MOBILE:     dc?dc.MOBILE_NO:'',
-          METER_NO:   dc?(dc.METER_NO||METER_DATA[acct]||''):'',
-          SUBSTATION: dc?dc.SUBSTATION:'',
-          FEEDER:     dc?dc.FEEDER:'',
-          OUTSTANDING:dc?Math.round(dc.OUTSTANDING||0):0,
-          ATR_STATUS: typeof e==='object'?e.atr:e,
-          COMMENT:    typeof e==='object'?(e.comment||''):'',
-          TIMESTAMP:  typeof e==='object'?(e.ts||''):''
-        });
-      });
-
-      // Build Defaulter ATR rows
-      Object.keys(defAtr).forEach(function(acct){
-        var e = defAtr[acct];
-        var dr = DEF_ALL.find(function(r){ return String(r.ACCT_ID)===acct; });
-        defRows.push({
-          ACCT_ID:    acct,
-          NAME:       dr?dr.NAME:'',
-          MOBILE:     dr?(dr.MOBILE_NO||dr.MOBILE||''):'',
-          METER_NO:   dr?(METER_DATA[acct]||dr.METER_NO||''):'',
-          SUBSTATION: dr?dr.SUBSTATION:'',
-          FEEDER:     dr?dr.FEEDER:'',
-          OUTSTANDING:dr?Math.round(dr.OUTSTANDING||0):0,
-          ATR_STATUS: typeof e==='object'?e.atr:e,
-          COMMENT:    typeof e==='object'?(e.comment||''):'',
-          TIMESTAMP:  typeof e==='object'?(e.ts||''):''
-        });
-      });
-
-      if(!smRows.length && !defRows.length){ alert('No ATR data in Google Sheet yet.'); return; }
-
-      var wb = XLSX.utils.book_new();
-      // Summary sheet
-      var summary = [
-        {TYPE:'SM Unrecharge', COUNT:smRows.length},
-        {TYPE:'Defaulters',    COUNT:defRows.length},
-        {TYPE:'TOTAL',         COUNT:smRows.length+defRows.length}
-      ];
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
-      if(smRows.length)  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(smRows),  'SM_ATR');
-      if(defRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(defRows), 'Defaulter_ATR');
-
-      var date = new Date().toLocaleDateString('en-IN').replace(/\//g,'-');
-      XLSX.writeFile(wb, 'ATR_Full_Report_'+date+'.xlsx');
-
-      if(btn){ btn.textContent='✅ DOWNLOADED'; setTimeout(function(){ btn.textContent='⬇ DOWNLOAD ATR XLSX'; btn.disabled=false; },2000); }
-    })
-    .catch(function(e){
+    .then(function(data){ buildAndDownload(data['SM_ATR']||{}, data['Defaulter_ATR']||{}); })
+    .catch(function(){
+      buildAndDownload({}, {});
       if(btn){ btn.textContent='⬇ DOWNLOAD ATR XLSX'; btn.disabled=false; }
-      alert('Failed: ' + e.message);
     });
 }
 
@@ -1361,7 +1422,15 @@ function st(name){
     if(name==='dc'&&!_dcLoaded) loadDC();
     if(name==='dfp'&&!_dfpLoaded) loadDfp();
     if(name==='defaulter') loadDefaulters();
-    if(name==='settings'&&!_settingsBuilt) buildSettingsPanel();
+    if(name==='settings'){
+      if(!_settingsBuilt) buildSettingsPanel();
+      // Populate ATR URL input and local counts every time settings opens
+      setTimeout(function(){
+        var inp = gel('settings-atr-url');
+        if(inp) inp.value = getScriptUrl() || '';
+        updateAtrLocalCounts();
+      }, 100);
+    }
   });
 }
 
@@ -2177,10 +2246,23 @@ function saveModalAtr(){
 }
 
 function saveAtrUrl(){
-  var inp=gel('atr-url-input'); if(!inp)return;
-  ATR_SCRIPT_URL=inp.value.trim();
-  localStorage.setItem('atr_script_url',ATR_SCRIPT_URL);
-  alert('✅ Connected!');
+  var inp=gel('settings-atr-url')||gel('atr-url-input'); if(!inp)return;
+  var val=inp.value.trim();
+  ATR_SCRIPT_URL=val;
+  localStorage.setItem('atr_script_url',val);
+  var st=gel('atr-url-status');
+  if(st) st.innerHTML=val?'✅ URL saved! ATR will sync to Google Sheet.':'⚠ URL cleared — ATR will save locally only.';
+  updateAtrLocalCounts();
+}
+
+function updateAtrLocalCounts(){
+  try{
+    var sm  = Object.keys(JSON.parse(localStorage.getItem('atr_data')||'{}')).length;
+    var def = Object.keys(JSON.parse(localStorage.getItem('def_atr_data')||'{}')).length;
+    var el1 = gel('atr-local-count'),    el2 = gel('atr-def-local-count');
+    if(el1) el1.textContent = sm  + ' records';
+    if(el2) el2.textContent = def + ' records';
+  }catch(e){}
 }
 
 function loadModalNearby(lat,lon){
