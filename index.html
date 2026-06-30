@@ -1047,11 +1047,18 @@ function buildDashboard(){
   var el = gel('panel-dashboard');
   if(!el) return;
 
-  // Wait for data
+  // Wait for data — auto-retry every 1s until data arrives (max 20 tries)
   if(!D.length && !DEF_ALL.length){
-    el.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⏳ Data loading… please wait and try again.</div>';
+    el.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⏳ Data loading… please wait.</div>';
+    _dashRetry = (_dashRetry||0) + 1;
+    if(_dashRetry <= 20){
+      setTimeout(buildDashboard, 1000);
+    } else {
+      el.innerHTML='<div style="padding:40px;text-align:center;color:#DC2626;font-family:var(--fh);">⚠ Data did not load. Go to Search tab once, then come back to Dashboard.</div>';
+    }
     return;
   }
+  _dashRetry = 0;
 
   var updInfo = '';
   try{ var m=JSON.parse(localStorage.getItem('uppcl_manifest')||'{}'); updInfo=m.updated||''; }catch(e){}
@@ -1094,6 +1101,80 @@ function buildDashboard(){
     defSsMap[ss].count++;
     defSsMap[ss].out += r.OUTSTANDING||0;
   });
+
+  // ── Feeder Recovery Score + Revenue Leakage Score ───────────────────
+  var feederMap = {};
+  D.forEach(function(r){
+    var fd = r.FEEDER || 'Unknown';
+    if(!feederMap[fd]) feederMap[fd] = {
+      ss: r.SUBSTATION||'-', total:0, billed:0, unbilled:0,
+      out:0, ca:0, defCount:0, defOut:0, recentPay:0
+    };
+    var f = feederMap[fd];
+    f.total++;
+    if(r.SOURCE==='billed') f.billed++; else f.unbilled++;
+    var rOut = parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    f.out += rOut;
+    f.ca  += parseFloat(r.CA||0)||0;
+    var pd = parseDate(r.LAST_PAY_DATE||r.PAY_DATE);
+    if(pd && (Date.now()-pd.getTime())/86400000 <= 90) f.recentPay++;
+  });
+  DEF_ALL.forEach(function(r){
+    var fd = r.FEEDER || 'Unknown';
+    if(!feederMap[fd]) feederMap[fd] = {ss:r.SUBSTATION||'-',total:0,billed:0,unbilled:0,out:0,ca:0,defCount:0,defOut:0,recentPay:0};
+    feederMap[fd].defCount++;
+    feederMap[fd].defOut += r.OUTSTANDING||0;
+  });
+
+  function feederRecoveryScore(f){
+    if(f.total===0) return 0;
+    var score = 50;
+    // Defaulter ratio — fewer defaulters relative to total = better recovery
+    var defRatio = f.defCount / f.total;
+    if(defRatio <= 0.05)      score += 30;
+    else if(defRatio <= 0.15) score += 15;
+    else if(defRatio <= 0.30) score += 0;
+    else if(defRatio <= 0.50) score -= 15;
+    else                      score -= 30;
+    // Recent payment activity — more recent payers = healthier feeder
+    var payRatio = f.recentPay / f.total;
+    if(payRatio >= 0.6)      score += 20;
+    else if(payRatio >= 0.3) score += 10;
+    else if(payRatio >= 0.1) score += 0;
+    else                     score -= 10;
+    return Math.max(0, Math.min(100, Math.round(score)));
+  }
+
+  function revenueLeakageScore(f){
+    if(f.total===0) return 100;
+    var score = 100;
+    // Unbilled ratio — higher unbilled = potential leakage (meter/billing issue)
+    var unbilledRatio = f.unbilled / f.total;
+    if(unbilledRatio > 0.30)      score -= 35;
+    else if(unbilledRatio > 0.15) score -= 20;
+    else if(unbilledRatio > 0.05) score -= 8;
+    // Outstanding-to-CA ratio — high accumulated dues vs recent billing = leakage risk
+    var ratio = f.ca>0 ? f.out/f.ca : 0;
+    if(ratio > 10)      score -= 30;
+    else if(ratio > 5)  score -= 18;
+    else if(ratio > 2)  score -= 8;
+    // Defaulter outstanding share of total feeder outstanding
+    var defShare = f.out>0 ? f.defOut/f.out : 0;
+    if(defShare > 0.6)      score -= 25;
+    else if(defShare > 0.3) score -= 12;
+    return Math.max(0, Math.min(100, Math.round(score)));
+  }
+
+  var feederList = Object.keys(feederMap).filter(function(f){return f && f!=='Unknown' && feederMap[f].total>0;});
+  var feederRows = feederList.map(function(fd){
+    var f = feederMap[fd];
+    return {
+      feeder: fd, ss: f.ss, total: f.total, defCount: f.defCount,
+      out: f.out, defOut: f.defOut,
+      recoveryScore: feederRecoveryScore(f),
+      leakageScore: revenueLeakageScore(f)
+    };
+  }).sort(function(a,b){ return a.leakageScore - b.leakageScore; }); // worst leakage first
 
   function cr(n){ return n>=10000000?'₹'+(n/10000000).toFixed(2)+' Cr':n>=100000?'₹'+(n/100000).toFixed(2)+' L':'₹'+Math.round(n).toLocaleString(); }
   function card(icon,label,val,sub,bg,tc){
@@ -1175,6 +1256,37 @@ function buildDashboard(){
     html += '<td style="padding:8px 10px;text-align:right;font-weight:600;">'+td.count.toLocaleString()+'</td>';
     html += '<td style="padding:8px 10px;text-align:right;color:#6B7280;">'+pct+'%</td>';
     html += '<td style="padding:8px 10px;text-align:right;color:#EA580C;font-weight:700;">'+cr(td.out)+'</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  // Feeder Recovery Score + Revenue Leakage Score table
+  function scoreBadge(sc, goodHigh){
+    var good = goodHigh ? sc>=70 : sc>=70;
+    var mid  = sc>=40 && sc<70;
+    var bg = good?'#D1FAE5':mid?'#FEF3C7':'#FEE2E2';
+    var tc = good?'#059669':mid?'#D97706':'#DC2626';
+    return '<span style="font-size:11px;font-weight:800;padding:3px 9px;border-radius:6px;background:'+bg+';color:'+tc+';">'+sc+'</span>';
+  }
+  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
+  html += '<div style="background:#7C2D12;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">⚡ FEEDER RECOVERY &amp; REVENUE LEAKAGE SCORE</div>';
+  html += '<div style="padding:10px 16px;font-size:11px;color:#6B7280;background:#FFF7ED;border-bottom:1px solid #FED7AA;">Recovery Score: higher = better collection health. Leakage Score: higher = lower revenue leakage risk. Sorted by worst leakage first.</div>';
+  html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<thead><tr style="background:#FFF7ED;">';
+  ['FEEDER','SUBSTATION','CONSUMERS','DEFAULTERS','OUTSTANDING','DEF OUTSTANDING','RECOVERY SCORE','LEAKAGE SCORE'].forEach(function(h){
+    html += '<th style="padding:8px 10px;text-align:'+(h==='FEEDER'||h==='SUBSTATION'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #FED7AA;white-space:nowrap;">'+h+'</th>';
+  });
+  html += '</tr></thead><tbody>';
+  feederRows.forEach(function(f,i){
+    html += '<tr style="background:'+(i%2?'#FFFBF5':'#fff')+'">';
+    html += '<td style="padding:8px 10px;font-weight:700;color:#7C2D12;font-family:var(--fh);white-space:nowrap;">'+f.feeder+'</td>';
+    html += '<td style="padding:8px 10px;color:#374151;white-space:nowrap;">'+f.ss+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;font-weight:600;">'+f.total.toLocaleString()+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#D97706;font-weight:700;">'+f.defCount.toLocaleString()+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#EA580C;font-weight:700;">'+cr(f.out)+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#F43F5E;font-weight:700;">'+cr(f.defOut)+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;">'+scoreBadge(f.recoveryScore,true)+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;">'+scoreBadge(f.leakageScore,true)+'</td>';
     html += '</tr>';
   });
   html += '</tbody></table></div></div>';
@@ -1437,6 +1549,7 @@ function expDefaulterAtr(){
   try{ saved = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
   var rows = DEF_ALL.map(function(r){
     var e = saved[String(r.ACCT_ID)] || {};
+    var sc = collectionProbability(r), lb = collectionLabel(sc);
     return {
       ACCT_ID:     r.ACCT_ID,
       NAME:        r.NAME,
@@ -1450,6 +1563,8 @@ function expDefaulterAtr(){
       LP_DATE:     r.PAY_DATE||'',
       LP_AMT:      Math.round(r.PAY_AMT||0),
       OUTSTANDING: Math.round(r.OUTSTANDING||0),
+      AI_COLLECTION_PROB: sc,
+      AI_LABEL:    lb.label,
       ATR_STATUS:  typeof e==='object'?(e.atr||r.ATR_STATUS||'PENDING'):(e||r.ATR_STATUS||'PENDING'),
       COMMENT:     typeof e==='object'?(e.comment||r.ATR_COMMENT||''):'',
       TIMESTAMP:   typeof e==='object'?(e.ts||''):''
@@ -1463,6 +1578,13 @@ function expDefaulterAtr(){
 }
 
 function downloadAtrFromSheet(){
+  // Ensure DEF_ALL is populated before building the report
+  if(!DEF_ALL.length){
+    buildDefAll();
+    setTimeout(downloadAtrFromSheet, 1200); // retry once data loads
+    return;
+  }
+
   // Always merge localStorage (latest) + sheet — local wins on conflict
   var localSm  = {}; try{ localSm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
   var localDef = {}; try{ localDef = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
@@ -1479,7 +1601,7 @@ function downloadAtrFromSheet(){
 
     Object.keys(mergedSm).forEach(function(acct){
       var e = mergedSm[acct];
-      var dc = DC.find(function(r){ return String(r.ACCT_ID)===acct; });
+      var dc = DC.find(function(r){ return String(r.ACCT_ID)===String(acct); });
       smRows.push({
         ACCT_ID:    acct,
         NAME:       dc?dc.NAME:'',
@@ -1496,7 +1618,8 @@ function downloadAtrFromSheet(){
 
     Object.keys(mergedDef).forEach(function(acct){
       var e = mergedDef[acct];
-      var dr = DEF_ALL.find(function(r){ return String(r.ACCT_ID)===acct; });
+      var dr = DEF_ALL.find(function(r){ return String(r.ACCT_ID)===String(acct); });
+      var sc = dr ? collectionProbability(dr) : '', lb = dr ? collectionLabel(sc) : {label:''};
       defRows.push({
         ACCT_ID:    acct,
         NAME:       dr?dr.NAME:'',
@@ -1510,6 +1633,8 @@ function downloadAtrFromSheet(){
         LP_DATE:    dr?dr.PAY_DATE:'',
         LP_AMT:     dr?Math.round(dr.PAY_AMT||0):0,
         OUTSTANDING:dr?Math.round(dr.OUTSTANDING||0):0,
+        AI_COLLECTION_PROB: sc,
+        AI_LABEL:   lb.label,
         ATR_STATUS: typeof e==='object'?e.atr:e,
         COMMENT:    typeof e==='object'?(e.comment||''):'',
         TIMESTAMP:  typeof e==='object'?(e.ts||''):''
@@ -3611,7 +3736,28 @@ function openMainDetail(acctId){
 
 function expDefaultersX(){
   if(!DEF_DATA.length)return alert('No data.');
-  var ws=XLSX.utils.json_to_sheet(DEF_DATA);
+  var rows = DEF_DATA.map(function(r){
+    var sc = collectionProbability(r), lb = collectionLabel(sc);
+    return {
+      ACCT_ID:     r.ACCT_ID,
+      NAME:        r.NAME,
+      MOBILE:      r.MOBILE,
+      METER_NO:    METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'',
+      TARIFF:      r.SUPPLY_TYPE,
+      LOAD_KW:     r.LOAD,
+      ADDRESS:     r.ADDRESS,
+      OUTSTANDING: Math.round(r.OUTSTANDING||0),
+      LP_DATE:     r.PAY_DATE,
+      LP_AMT:      Math.round(r.PAY_AMT||0),
+      CA:          r.CA||'',
+      AI_COLLECTION_PROB: sc,
+      AI_LABEL:    lb.label,
+      ATR_STATUS:  r.ATR_STATUS||'PENDING',
+      SUBSTATION:  r.SUBSTATION,
+      FEEDER:      r.FEEDER
+    };
+  });
+  var ws=XLSX.utils.json_to_sheet(rows);
   var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Defaulters');
   XLSX.writeFile(wb,'Defaulters_'+Date.now()+'.xlsx');
 }
