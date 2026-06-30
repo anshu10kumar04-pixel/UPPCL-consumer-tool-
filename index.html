@@ -330,6 +330,7 @@ select option{background:#fff;color:#1E1B4B;}
   <div class="tabs">
     <div class="tab active" onclick="st('lookup')" ontouchstart="st('lookup')">🔍 SEARCH</div>
     <div class="tab" onclick="st('defaulter')" ontouchstart="st('defaulter')">⚠️ DEFAULTERS</div>
+    <div class="tab" id="tab-dashboard" onclick="st('dashboard')" ontouchstart="st('dashboard')">📊 DASHBOARD</div>
     <div class="tab" id="tab-settings" onclick="st('settings')" ontouchstart="st('settings')" style="display:none">⚙️ SETTINGS</div>
   </div>
 
@@ -483,6 +484,8 @@ select option{background:#fff;color:#1E1B4B;}
         <option value="sm_first">SM First</option>
         <option value="nonsm_first">Non-SM First</option>
         <option value="tariff_asc" selected>Tariff Type</option>
+        <option value="ai_high">🤖 AI: Most Likely to Pay</option>
+        <option value="ai_low">🤖 AI: Least Likely to Pay</option>
         <option value="proximity">📍 Proximity</option>
       </select></div></div>
 
@@ -519,6 +522,7 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:110px;cursor:pointer" onclick="defSort(&#39;OUTSTANDING&#39;)">OUTSTANDING <span id="dsrt-OUTSTANDING">⇅</span></th>
         <th style="width:85px;cursor:pointer" onclick="defSort(&#39;PAY_DATE&#39;)">LP DATE <span id="dsrt-PAY_DATE">⇅</span></th>
         <th style="width:85px;cursor:pointer" onclick="defSort('PAY_AMT')">LP AMT <span id="dsrt-PAY_AMT">⇅</span></th>
+        <th style="width:75px;cursor:pointer" onclick="defSort('COLL_PROB')">AI % <span id="dsrt-COLL_PROB">⇅</span></th>
         <th style="width:70px;cursor:pointer" onclick="defSort(&#39;ATR_STATUS&#39;)" class="mob-hide">ATR <span id="dsrt-ATR_STATUS">⇅</span></th>
         <th style="width:90px;cursor:pointer" onclick="defSort(&#39;SUBSTATION&#39;)">SUBSTATION <span id="dsrt-SUBSTATION">⇅</span></th>
         <th style="display:none">FEEDER</th>
@@ -531,6 +535,7 @@ select option{background:#fff;color:#1E1B4B;}
 
   <!-- SETTINGS PANEL -->
   <div class="panel" id="panel-settings"></div>
+  <div class="panel" id="panel-dashboard"></div>
 
 </div><!-- end #app -->
 
@@ -786,6 +791,61 @@ function pf(v){
   return parseFloat(String(v).replace(/,/g,'')) || 0;
 }
 
+// AI Collection Probability Score (0-100)
+// Rule-based: recency of last payment, outstanding-to-CA ratio,
+// absolute outstanding amount, payment history, meter type.
+function collectionProbability(r){
+  var out = r.OUTSTANDING || 0;
+  var ca  = pf(r.CA) || 0;
+  var payAmt = r.PAY_AMT || 0;
+  var payDate = parseDate(r.PAY_DATE);
+
+  if(out<=0) return 100;
+
+  var score = 50;
+
+  if(payDate){
+    var daysSince = Math.floor((Date.now() - payDate.getTime()) / 86400000);
+    if(daysSince <= 30)       score += 35;
+    else if(daysSince <= 60)  score += 25;
+    else if(daysSince <= 90)  score += 15;
+    else if(daysSince <= 180) score += 5;
+    else if(daysSince <= 365) score -= 5;
+    else                      score -= 15;
+  } else {
+    score -= 10;
+  }
+
+  if(ca > 0){
+    var ratio = out / ca;
+    if(ratio <= 1.5)      score += 20;
+    else if(ratio <= 3)   score += 10;
+    else if(ratio <= 6)   score += 0;
+    else if(ratio <= 12)  score -= 10;
+    else                  score -= 20;
+  }
+
+  if(out <= 3000)       score += 15;
+  else if(out <= 10000) score += 8;
+  else if(out <= 25000) score += 0;
+  else if(out <= 50000) score -= 8;
+  else                  score -= 15;
+
+  if(payAmt > 0) score += 10;
+  else score -= 5;
+
+  var isSm = String(r.METER_NO||'').toUpperCase().startsWith('GE');
+  if(isSm) score += 5;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function collectionLabel(score){
+  if(score>=70) return {label:'HIGH', color:'#059669', bg:'#D1FAE5'};
+  if(score>=40) return {label:'MEDIUM', color:'#D97706', bg:'#FEF3C7'};
+  return {label:'LOW', color:'#DC2626', bg:'#FEE2E2'};
+}
+
 function ac(id){
   return String(id||'').replace(/^0+/,'').trim();
 }
@@ -981,6 +1041,146 @@ function rowsToCsv(rows){
 function settingsLog(msg){
   var l=gel('settings-log'); if(!l)return;
   l.innerHTML+='<div>'+msg+'</div>'; l.scrollTop=l.scrollHeight;
+}
+
+function buildDashboard(){
+  var el = gel('panel-dashboard');
+  if(!el) return;
+
+  // Wait for data
+  if(!D.length && !DEF_ALL.length){
+    el.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⏳ Data loading… please wait and try again.</div>';
+    return;
+  }
+
+  var updInfo = '';
+  try{ var m=JSON.parse(localStorage.getItem('uppcl_manifest')||'{}'); updInfo=m.updated||''; }catch(e){}
+
+  // ── Aggregate from D (billed/unbilled) ──────────────────────────────
+  var billed=[], unbilled=[], totalOut=0, totalCA=0;
+  D.forEach(function(r){
+    if(r.SOURCE==='billed') billed.push(r); else unbilled.push(r);
+    totalOut += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    totalCA  += parseFloat(r.CA||0)||0;
+  });
+
+  // Substation-wise
+  var ssMap={};
+  D.forEach(function(r){
+    var ss=r.SUBSTATION||'Unknown';
+    if(!ssMap[ss]) ssMap[ss]={billed:0,unbilled:0,out:0,ca:0};
+    if(r.SOURCE==='billed') ssMap[ss].billed++; else ssMap[ss].unbilled++;
+    ssMap[ss].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    ssMap[ss].ca  += parseFloat(r.CA||0)||0;
+  });
+  var ssList = Object.keys(ssMap).sort();
+
+  // Tariff-wise
+  var tarMap={};
+  D.forEach(function(r){
+    var t=r.CATEGORY||'Unknown';
+    if(!tarMap[t]) tarMap[t]={count:0,out:0};
+    tarMap[t].count++;
+    tarMap[t].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+  });
+  var tarList = Object.keys(tarMap).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+
+  // Defaulter stats
+  var defOut=0, defSsMap={};
+  DEF_ALL.forEach(function(r){
+    defOut += r.OUTSTANDING||0;
+    var ss=r.SUBSTATION||'Unknown';
+    if(!defSsMap[ss]) defSsMap[ss]={count:0,out:0};
+    defSsMap[ss].count++;
+    defSsMap[ss].out += r.OUTSTANDING||0;
+  });
+
+  function cr(n){ return n>=10000000?'₹'+(n/10000000).toFixed(2)+' Cr':n>=100000?'₹'+(n/100000).toFixed(2)+' L':'₹'+Math.round(n).toLocaleString(); }
+  function card(icon,label,val,sub,bg,tc){
+    return '<div style="background:'+bg+';border-radius:14px;padding:16px 18px;flex:1;min-width:140px;">'+
+      '<div style="font-size:22px;">'+icon+'</div>'+
+      '<div style="font-size:22px;font-weight:800;color:'+tc+';font-family:var(--fh);">'+val+'</div>'+
+      '<div style="font-size:11px;font-weight:700;color:#374151;font-family:var(--fh);">'+label+'</div>'+
+      (sub?'<div style="font-size:10px;color:#6B7280;margin-top:2px;">'+sub+'</div>':'')+'</div>';
+  }
+
+  // ── Build HTML ───────────────────────────────────────────────────────
+  var html = '<div style="padding:16px;max-width:900px;margin:0 auto;">';
+
+  // Header
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">';
+  html += '<div style="font-family:var(--fh);font-size:20px;font-weight:800;color:#1E3A5F;">📊 DIVISION DASHBOARD</div>';
+  html += '<div style="display:flex;gap:8px;">';
+  html += '<span style="font-size:11px;background:#EEF2FF;color:#4338CA;padding:4px 10px;border-radius:6px;font-family:var(--fh);font-weight:700;">DATA: '+(updInfo||'Latest')+'</span>';
+  html += '<button onclick="buildDashboard()" style="font-size:11px;background:#1E3A5F;color:#fff;border:none;padding:4px 12px;border-radius:6px;font-family:var(--fh);font-weight:700;cursor:pointer;">🔄 REFRESH</button>';
+  html += '</div></div>';
+
+  // KPI cards
+  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">';
+  html += card('👥','TOTAL CONSUMERS',D.length.toLocaleString(),'Billed: '+billed.length+' | Unbilled: '+unbilled.length,'#EFF6FF','#1D4ED8');
+  html += card('💰','TOTAL OUTSTANDING',cr(totalOut),'All consumers','#FFF7ED','#EA580C');
+  html += card('📋','TOTAL CA',cr(totalCA),'Current arrear','#FEF2F2','#DC2626');
+  html += card('⚠️','DEFAULTERS',DEF_ALL.length.toLocaleString(),'Outstanding > ₹5,000','#FEF3C7','#D97706');
+  html += card('🔴','DEF OUTSTANDING',cr(defOut),'Total recoverable','#FFF1F2','#F43F5E');
+  html += '</div>';
+
+  // Substation-wise table
+  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
+  html += '<div style="background:#1E3A5F;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">🏛 SUBSTATION-WISE SUMMARY</div>';
+  html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<thead><tr style="background:#F8FAFC;">';
+  ['SUBSTATION','BILLED','UNBILLED','TOTAL','OUTSTANDING','CA','DEFAULTERS','DEF OUTSTANDING'].forEach(function(h){
+    html += '<th style="padding:8px 10px;text-align:'+(h==='SUBSTATION'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;white-space:nowrap;">'+h+'</th>';
+  });
+  html += '</tr></thead><tbody>';
+  ssList.forEach(function(ss,i){
+    var s=ssMap[ss], ds=defSsMap[ss]||{count:0,out:0};
+    html += '<tr style="background:'+(i%2?'#F9FAFB':'#fff')+'">';
+    html += '<td style="padding:8px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+ss+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#059669;font-weight:600;">'+s.billed.toLocaleString()+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#F59E0B;font-weight:600;">'+s.unbilled.toLocaleString()+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;font-weight:700;">'+(s.billed+s.unbilled).toLocaleString()+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#EA580C;font-weight:700;">'+cr(s.out)+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#DC2626;">'+cr(s.ca)+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#D97706;font-weight:700;">'+ds.count.toLocaleString()+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#F43F5E;font-weight:700;">'+cr(ds.out)+'</td>';
+    html += '</tr>';
+  });
+  // Totals row
+  var tDef=DEF_ALL.length;
+  html += '<tr style="background:#EEF2FF;border-top:2px solid #C7D2FE;">';
+  html += '<td style="padding:8px 10px;font-weight:800;font-family:var(--fh);color:#4338CA;">TOTAL</td>';
+  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#059669;">'+billed.length.toLocaleString()+'</td>';
+  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#F59E0B;">'+unbilled.length.toLocaleString()+'</td>';
+  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;">'+D.length.toLocaleString()+'</td>';
+  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#EA580C;">'+cr(totalOut)+'</td>';
+  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#DC2626;">'+cr(totalCA)+'</td>';
+  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#D97706;">'+tDef.toLocaleString()+'</td>';
+  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#F43F5E;">'+cr(defOut)+'</td>';
+  html += '</tr></tbody></table></div></div>';
+
+  // Tariff-wise table
+  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;overflow:hidden;">';
+  html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">📋 TARIFF-WISE BREAKUP</div>';
+  html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<thead><tr style="background:#F0FDF4;">';
+  ['TARIFF','CONSUMERS','% SHARE','OUTSTANDING'].forEach(function(h){
+    html += '<th style="padding:8px 10px;text-align:'+(h==='TARIFF'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">'+h+'</th>';
+  });
+  html += '</tr></thead><tbody>';
+  tarList.forEach(function(t,i){
+    var td=tarMap[t], pct=(td.count/D.length*100).toFixed(1);
+    html += '<tr style="background:'+(i%2?'#F9FAFB':'#fff')+'">';
+    html += '<td style="padding:8px 10px;font-weight:700;color:#065F46;font-family:var(--fh);">'+t+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;font-weight:600;">'+td.count.toLocaleString()+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#6B7280;">'+pct+'%</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#EA580C;font-weight:700;">'+cr(td.out)+'</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  html += '</div>'; // end container
+  el.innerHTML = html;
 }
 
 function buildSettingsPanel(){
@@ -1488,9 +1688,9 @@ function st(name){
     if(name==='dc'&&!_dcLoaded) loadDC();
     if(name==='dfp'&&!_dfpLoaded) loadDfp();
     if(name==='defaulter') loadDefaulters();
+    if(name==='dashboard') buildDashboard();
     if(name==='settings'){
       if(!_settingsBuilt) buildSettingsPanel();
-      // Populate ATR URL input and local counts every time settings opens
       setTimeout(function(){
         var inp = gel('settings-atr-url');
         if(inp) inp.value = getScriptUrl() || '';
@@ -2941,6 +3141,8 @@ function runDefaulterFilter(){
       return an-bn || b.OUTSTANDING-a.OUTSTANDING;
     }
     if(sortDir==='tariff_asc') return String(a.SUPPLY_TYPE||'').localeCompare(String(b.SUPPLY_TYPE||''));
+    if(sortDir==='ai_high') return collectionProbability(b)-collectionProbability(a);
+    if(sortDir==='ai_low')  return collectionProbability(a)-collectionProbability(b);
     return b.OUTSTANDING-a.OUTSTANDING; // default desc
   });
   DEF_DATA = all;
@@ -2967,6 +3169,10 @@ function defSort(col){
   var ic=gel('dsrt-'+col); if(ic)ic.textContent=_defSortAsc?'↑':'↓';
   var numCols=['OUTSTANDING','PAY_AMT'];
   DEF_DATA.sort(function(a,b){
+    if(col==='COLL_PROB'){
+      var av=collectionProbability(a), bv=collectionProbability(b);
+      if(av<bv)return _defSortAsc?-1:1; if(av>bv)return _defSortAsc?1:-1; return 0;
+    }
     var av=numCols.indexOf(col)>=0?(parseFloat(a[col])||0):String(a[col]||'').toLowerCase();
     var bv=numCols.indexOf(col)>=0?(parseFloat(b[col])||0):String(b[col]||'').toLowerCase();
     if(av<bv)return _defSortAsc?-1:1; if(av>bv)return _defSortAsc?1:-1; return 0;
@@ -3011,6 +3217,7 @@ function renderDefaulters(page){
       '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';font-size:13px;">₹'+out.toLocaleString()+'</td>'+
       '<td style="font-size:11px;color:var(--muted);">'+r.PAY_DATE+'</td>'+
       '<td style="font-family:var(--fh);color:#059669;font-weight:700;">'+(paid>0?'₹'+paid.toLocaleString():'-')+'</td>'+
+      '<td>'+(function(){var sc=collectionProbability(r),lb=collectionLabel(sc);return '<span style="font-size:11px;font-weight:800;padding:2px 7px;border-radius:5px;background:'+lb.bg+';color:'+lb.color+';">'+sc+'%</span>';})()+'</td>'+
       '<td class="mob-hide"><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:'+(atrBgs[atr]||'#F9FAFB')+';color:'+(atrColors[atr]||'#9CA3AF')+';">'+atr+'</span></td>'+
       '<td>'+r.SUBSTATION+'</td>'+
       '<td style="display:none">'+r.FEEDER+'</td>'+
@@ -3051,6 +3258,7 @@ function openDefaulterModal(acctId){
     '<div class="modal-field"><div class="lbl">SUBSTATION</div><div class="val" style="font-weight:600;">'+(defRec.SUBSTATION||'-')+'</div></div>'+
     '<div class="modal-field"><div class="lbl">FEEDER</div><div class="val">'+(defRec.FEEDER||'-')+'</div></div>'+
     '<div class="modal-field"><div class="lbl">LP DATE</div><div class="val">'+(defRec.PAY_DATE||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">🤖 AI COLLECTION PROB.</div><div class="val">'+(function(){var sc=collectionProbability(defRec),lb=collectionLabel(sc);return '<span style="font-size:13px;font-weight:800;padding:3px 10px;border-radius:6px;background:'+lb.bg+';color:'+lb.color+';">'+sc+'% — '+lb.label+'</span>';})()+'</div></div>'+
     '<div class="modal-field" style="grid-column:span 2"><div class="lbl">ADDRESS</div><div class="val">'+(defRec.ADDRESS||'-')+'</div></div>'+
     (lat&&lon?'<div class="modal-field"><div class="lbl">LATITUDE</div><div class="val">'+lat+'</div></div><div class="modal-field"><div class="lbl">LONGITUDE</div><div class="val">'+lon+'</div></div>':'');
 
