@@ -330,7 +330,7 @@ select option{background:#fff;color:#1E1B4B;}
   <div class="tabs">
     <div class="tab active" onclick="st('lookup')" ontouchstart="st('lookup')">🔍 SEARCH</div>
     <div class="tab" onclick="st('defaulter')" ontouchstart="st('defaulter')">⚠️ DEFAULTERS</div>
-    <div class="tab" id="tab-dashboard" onclick="st('dashboard')" ontouchstart="st('dashboard')">📊 DASHBOARD</div>
+    <div class="tab mob-hide" id="tab-dashboard" onclick="st('dashboard')" ontouchstart="st('dashboard')">📊 DASHBOARD</div>
     <div class="tab" id="tab-settings" onclick="st('settings')" ontouchstart="st('settings')" style="display:none">⚙️ SETTINGS</div>
   </div>
 
@@ -471,6 +471,20 @@ select option{background:#fff;color:#1E1B4B;}
             <label class="ms-option"><input type="checkbox" value="sm" onchange="runDefaulterFilter()"> Smart Meter (GE)</label>
             <label class="ms-option"><input type="checkbox" value="nonsm" onchange="runDefaulterFilter()"> Non-SM</label>
             <div class="ms-clear" onclick="clearSmFilter()">Clear All</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BILL BASIS -->
+      <div><div class="lbl">BILL BASIS</div>
+        <div class="ms-wrap" id="def-basis-wrap">
+          <button class="ms-btn" id="def-basis-btn" onclick="toggleMs('def-basis-dd')">ALL BASIS</button>
+          <div class="ms-dropdown" id="def-basis-dd">
+            <label class="ms-option"><input type="checkbox" value="MU" onchange="runDefaulterFilter()"> Actual (MU)</label>
+            <label class="ms-option"><input type="checkbox" value="ASS" onchange="runDefaulterFilter()"> Assessed</label>
+            <label class="ms-option"><input type="checkbox" value="PROV" onchange="runDefaulterFilter()"> Provisional</label>
+            <label class="ms-option"><input type="checkbox" value="CEIL" onchange="runDefaulterFilter()"> Ceiling</label>
+            <div class="ms-clear" onclick="clearBasisFilter()">Clear All</div>
           </div>
         </div>
       </div>
@@ -846,6 +860,18 @@ function collectionLabel(score){
   return {label:'LOW', color:'#DC2626', bg:'#FEE2E2'};
 }
 
+// Bill Basis code -> readable label (UPPCL billing system codes)
+var BILL_BASIS_MAP = {
+  'MU':   {label:'Actual (MU)',      color:'#059669', bg:'#D1FAE5'},
+  'ASS':  {label:'Assessed',         color:'#D97706', bg:'#FEF3C7'},
+  'PROV': {label:'Provisional',      color:'#7C3AED', bg:'#EDE9FE'},
+  'CEIL': {label:'Ceiling',          color:'#DC2626', bg:'#FEE2E2'}
+};
+function billBasisInfo(code){
+  var c = String(code||'').trim().toUpperCase();
+  return BILL_BASIS_MAP[c] || {label:c||'-', color:'#6B7280', bg:'#F3F4F6'};
+}
+
 function ac(id){
   return String(id||'').replace(/^0+/,'').trim();
 }
@@ -1047,8 +1073,8 @@ function buildDashboard(){
   var el = gel('panel-dashboard');
   if(!el) return;
 
-  // Wait for data — auto-retry every 1s until data arrives (max 20 tries)
-  if(!D.length && !DEF_ALL.length){
+  // Wait for D (billed/unbilled) to load
+  if(!D.length){
     el.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⏳ Data loading… please wait.</div>';
     _dashRetry = (_dashRetry||0) + 1;
     if(_dashRetry <= 20){
@@ -1058,7 +1084,19 @@ function buildDashboard(){
     }
     return;
   }
-  _dashRetry = 0;
+
+  // Ensure defaulter data is also loaded — buildDefAll() does nothing if already loaded
+  if(!DEF_ALL.length){
+    buildDefAll();
+    _dashDefRetry = (_dashDefRetry||0) + 1;
+    if(_dashDefRetry <= 15){
+      el.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⏳ Loading defaulter data…</div>';
+      setTimeout(buildDashboard, 1000);
+      return;
+    }
+    // proceed anyway after retries exhausted (maybe genuinely 0 defaulters)
+  }
+  _dashRetry = 0; _dashDefRetry = 0;
 
   var updInfo = '';
   try{ var m=JSON.parse(localStorage.getItem('uppcl_manifest')||'{}'); updInfo=m.updated||''; }catch(e){}
@@ -1081,6 +1119,7 @@ function buildDashboard(){
     ssMap[ss].ca  += parseFloat(r.CA||0)||0;
   });
   var ssList = Object.keys(ssMap).sort();
+  var ssListTop16 = ssList.slice().sort(function(a,b){ return ssMap[b].out - ssMap[a].out; }).slice(0,16);
 
   // Tariff-wise
   var tarMap={};
@@ -1091,6 +1130,28 @@ function buildDashboard(){
     tarMap[t].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
   });
   var tarList = Object.keys(tarMap).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+
+  // Bill Basis-wise (only applies to billed consumers; MU/ASS/PROV/CEIL)
+  var basisMap={};
+  D.filter(function(r){return r.SOURCE==='billed';}).forEach(function(r){
+    var b=String(r.BILL_BASIS||'').trim().toUpperCase()||'UNKNOWN';
+    if(!basisMap[b]) basisMap[b]={count:0,out:0,defCount:0,defOut:0};
+    basisMap[b].count++;
+    basisMap[b].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+  });
+  DEF_ALL.forEach(function(r){
+    var b=String(r.BILL_BASIS||'').trim().toUpperCase()||'UNKNOWN';
+    if(!basisMap[b]) basisMap[b]={count:0,out:0,defCount:0,defOut:0};
+    basisMap[b].defCount++;
+    basisMap[b].defOut += r.OUTSTANDING||0;
+  });
+  var basisOrder=['MU','ASS','PROV','CEIL','UNKNOWN'];
+  var basisList = Object.keys(basisMap).sort(function(a,b){
+    var ia=basisOrder.indexOf(a), ib=basisOrder.indexOf(b);
+    if(ia<0) ia=99; if(ib<0) ib=99;
+    return ia-ib;
+  });
+  var billedTotal = D.filter(function(r){return r.SOURCE==='billed';}).length;
 
   // Defaulter stats
   var defOut=0, defSsMap={};
@@ -1196,6 +1257,34 @@ function buildDashboard(){
   html += '<button onclick="buildDashboard()" style="font-size:11px;background:#1E3A5F;color:#fff;border:none;padding:4px 12px;border-radius:6px;font-family:var(--fh);font-weight:700;cursor:pointer;">🔄 REFRESH</button>';
   html += '</div></div>';
 
+  // ── SS / FEEDER SELECTOR — interactive filtered report ──────────────
+  var feederBySS = {};
+  D.forEach(function(r){
+    var ss=r.SUBSTATION||'Unknown', fd=r.FEEDER||'Unknown';
+    if(!feederBySS[ss]) feederBySS[ss]=new Set();
+    feederBySS[ss].add(fd);
+  });
+  // store globally for the change handler
+  window._dashFeederBySS = {};
+  Object.keys(feederBySS).forEach(function(ss){ window._dashFeederBySS[ss]=Array.from(feederBySS[ss]).sort(); });
+
+  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
+  html += '<div style="background:#4338CA;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">🔍 FILTERED REPORT — SELECT SUBSTATION / FEEDER</div>';
+  html += '<div style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">';
+  html += '<div style="flex:1;min-width:160px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">SUBSTATION</div>';
+  html += '<select id="dash-ss-sel" onchange="dashFeederUpdate()" style="width:100%;padding:8px 10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:12px;font-family:var(--fb);">';
+  html += '<option value="">— All Substations —</option>';
+  ssList.forEach(function(ss){ html += '<option value="'+ss+'">'+ss+'</option>'; });
+  html += '</select></div>';
+  html += '<div style="flex:1;min-width:160px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">FEEDER</div>';
+  html += '<select id="dash-feed-sel" onchange="dashRenderFiltered()" style="width:100%;padding:8px 10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:12px;font-family:var(--fb);">';
+  html += '<option value="">— All Feeders —</option>';
+  html += '</select></div>';
+  html += '<button onclick="dashRenderFiltered()" style="background:#4338CA;color:#fff;border:none;padding:9px 18px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:12px;cursor:pointer;">APPLY</button>';
+  html += '<button onclick="dashResetFilter()" style="background:#F3F4F6;color:#374151;border:none;padding:9px 14px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:12px;cursor:pointer;">RESET</button>';
+  html += '</div>';
+  html += '<div id="dash-filtered-result"></div>';
+  html += '</div>';
   // KPI cards
   html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">';
   html += card('👥','TOTAL CONSUMERS',D.length.toLocaleString(),'Billed: '+billed.length+' | Unbilled: '+unbilled.length,'#EFF6FF','#1D4ED8');
@@ -1207,14 +1296,17 @@ function buildDashboard(){
 
   // Substation-wise table
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
-  html += '<div style="background:#1E3A5F;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">🏛 SUBSTATION-WISE SUMMARY</div>';
+  html += '<div style="background:#1E3A5F;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'+
+    '<span>🏛 SUBSTATION-WISE SUMMARY</span>'+
+    (ssList.length>16?'<span style="font-size:10px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">Top 16 of '+ssList.length+' by Outstanding</span>':'')+
+  '</div>';
   html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr style="background:#F8FAFC;">';
   ['SUBSTATION','BILLED','UNBILLED','TOTAL','OUTSTANDING','CA','DEFAULTERS','DEF OUTSTANDING'].forEach(function(h){
     html += '<th style="padding:8px 10px;text-align:'+(h==='SUBSTATION'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;white-space:nowrap;">'+h+'</th>';
   });
   html += '</tr></thead><tbody>';
-  ssList.forEach(function(ss,i){
+  ssListTop16.forEach(function(ss,i){
     var s=ssMap[ss], ds=defSsMap[ss]||{count:0,out:0};
     html += '<tr style="background:'+(i%2?'#F9FAFB':'#fff')+'">';
     html += '<td style="padding:8px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+ss+'</td>';
@@ -1260,6 +1352,30 @@ function buildDashboard(){
   });
   html += '</tbody></table></div></div>';
 
+  // Bill Basis-wise table
+  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
+  html += '<div style="background:#7C3AED;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">📑 BILL BASIS-WISE REPORT</div>';
+  html += '<div style="padding:10px 16px;font-size:11px;color:#6B7280;background:#F5F3FF;border-bottom:1px solid #DDD6FE;">MU = Actual meter reading | ASS = Assessed | PROV = Provisional | CEIL = Ceiling. Applies to billed consumers only.</div>';
+  html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<thead><tr style="background:#F5F3FF;">';
+  ['BILL BASIS','CONSUMERS','% SHARE','OUTSTANDING','DEFAULTERS','DEF OUTSTANDING'].forEach(function(h){
+    html += '<th style="padding:8px 10px;text-align:'+(h==='BILL BASIS'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #DDD6FE;white-space:nowrap;">'+h+'</th>';
+  });
+  html += '</tr></thead><tbody>';
+  basisList.forEach(function(b,i){
+    var bd=basisMap[b], pct=billedTotal>0?(bd.count/billedTotal*100).toFixed(1):'0.0';
+    var bi=billBasisInfo(b);
+    html += '<tr style="background:'+(i%2?'#FAFAFA':'#fff')+'">';
+    html += '<td style="padding:8px 10px;"><span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;background:'+bi.bg+';color:'+bi.color+';">'+bi.label+'</span></td>';
+    html += '<td style="padding:8px 10px;text-align:right;font-weight:600;">'+bd.count.toLocaleString()+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#6B7280;">'+pct+'%</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#EA580C;font-weight:700;">'+cr(bd.out)+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#D97706;font-weight:700;">'+(bd.defCount||0).toLocaleString()+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#F43F5E;font-weight:700;">'+cr(bd.defOut||0)+'</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+
   // Feeder Recovery Score + Revenue Leakage Score table
   function scoreBadge(sc, goodHigh){
     var good = goodHigh ? sc>=70 : sc>=70;
@@ -1293,6 +1409,218 @@ function buildDashboard(){
 
   html += '</div>'; // end container
   el.innerHTML = html;
+}
+
+function dashFeederUpdate(){
+  var ss = gel('dash-ss-sel').value;
+  var feedSel = gel('dash-feed-sel');
+  feedSel.innerHTML = '<option value="">— All Feeders —</option>';
+  if(ss && window._dashFeederBySS && window._dashFeederBySS[ss]){
+    window._dashFeederBySS[ss].forEach(function(fd){
+      var opt = document.createElement('option');
+      opt.value = fd; opt.textContent = fd;
+      feedSel.appendChild(opt);
+    });
+  } else if(!ss){
+    // all feeders across all SS
+    var allFeeders = new Set();
+    Object.keys(window._dashFeederBySS||{}).forEach(function(s){
+      (window._dashFeederBySS[s]||[]).forEach(function(fd){ allFeeders.add(fd); });
+    });
+    Array.from(allFeeders).sort().forEach(function(fd){
+      var opt = document.createElement('option');
+      opt.value = fd; opt.textContent = fd;
+      feedSel.appendChild(opt);
+    });
+  }
+  dashRenderFiltered();
+}
+
+function dashResetFilter(){
+  if(gel('dash-ss-sel')) gel('dash-ss-sel').value='';
+  dashFeederUpdate();
+  if(gel('dash-feed-sel')) gel('dash-feed-sel').value='';
+  dashRenderFiltered();
+}
+
+function dashNorm(s){ return String(s||'').trim().toUpperCase(); }
+
+function dashRenderFiltered(){
+  var ss = gel('dash-ss-sel') ? gel('dash-ss-sel').value : '';
+  var fd = gel('dash-feed-sel') ? gel('dash-feed-sel').value : '';
+  var resultEl = gel('dash-filtered-result');
+  if(!resultEl) return;
+
+  if(!ss && !fd){
+    resultEl.innerHTML = '<div style="padding:14px 16px;font-size:12px;color:#9CA3AF;font-family:var(--fh);border-top:1px solid #E5E7EB;">Select a Substation and/or Feeder above, then click APPLY.</div>';
+    return;
+  }
+
+  var ssN = dashNorm(ss), fdN = dashNorm(fd);
+
+  var scopeD = D.filter(function(r){
+    if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
+    if(fd && dashNorm(r.FEEDER)!==fdN) return false;
+    return true;
+  });
+  var scopeDef = DEF_ALL.filter(function(r){
+    if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
+    if(fd && dashNorm(r.FEEDER)!==fdN) return false;
+    return true;
+  });
+
+  function cr2(n){ return n>=10000000?'\u20b9'+(n/10000000).toFixed(2)+' Cr':n>=100000?'\u20b9'+(n/100000).toFixed(2)+' L':'\u20b9'+Math.round(n).toLocaleString(); }
+
+  var billedC=0, unbilledC=0, totOut=0, totCA=0;
+  scopeD.forEach(function(r){
+    if(r.SOURCE==='billed') billedC++; else unbilledC++;
+    totOut += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    totCA  += parseFloat(r.CA||0)||0;
+  });
+  var defOutS = scopeDef.reduce(function(s,r){return s+(r.OUTSTANDING||0);},0);
+
+  // Category (tariff) wise count + amount
+  var catMap = {};
+  scopeD.forEach(function(r){
+    var t = r.CATEGORY || 'Unknown';
+    if(!catMap[t]) catMap[t] = {count:0, out:0, defCount:0, defOut:0};
+    catMap[t].count++;
+    catMap[t].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+  });
+  scopeDef.forEach(function(r){
+    var t = r.SUPPLY_TYPE || 'Unknown';
+    if(!catMap[t]) catMap[t] = {count:0, out:0, defCount:0, defOut:0};
+    catMap[t].defCount++;
+    catMap[t].defOut += r.OUTSTANDING||0;
+  });
+  var catList = Object.keys(catMap).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+
+  // Bill Basis-wise (billed consumers only)
+  var fBasisMap = {};
+  scopeD.filter(function(r){return r.SOURCE==='billed';}).forEach(function(r){
+    var b = String(r.BILL_BASIS||'').trim().toUpperCase()||'UNKNOWN';
+    if(!fBasisMap[b]) fBasisMap[b]={count:0,out:0,defCount:0,defOut:0};
+    fBasisMap[b].count++;
+    fBasisMap[b].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+  });
+  scopeDef.forEach(function(r){
+    var b = String(r.BILL_BASIS||'').trim().toUpperCase()||'UNKNOWN';
+    if(!fBasisMap[b]) fBasisMap[b]={count:0,out:0,defCount:0,defOut:0};
+    fBasisMap[b].defCount++;
+    fBasisMap[b].defOut += r.OUTSTANDING||0;
+  });
+  var fBasisOrder=['MU','ASS','PROV','CEIL','UNKNOWN'];
+  var fBasisList = Object.keys(fBasisMap).sort(function(a,b){
+    var ia=fBasisOrder.indexOf(a), ib=fBasisOrder.indexOf(b);
+    if(ia<0) ia=99; if(ib<0) ib=99;
+    return ia-ib;
+  });
+
+  var scopeLabel = (ss?ss:'All Substations') + (fd?' &rarr; '+fd:'');
+
+  var h = '<div style="padding:14px 16px;border-top:1px solid #E5E7EB;">';
+  h += '<div style="font-family:var(--fh);font-weight:700;font-size:13px;color:#4338CA;margin-bottom:12px;">📍 '+scopeLabel+'</div>';
+
+  // mini KPI row
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">';
+  function mk(label,val,bg,tc){
+    return '<div style="background:'+bg+';border-radius:10px;padding:10px 14px;flex:1;min-width:120px;">'+
+      '<div style="font-size:16px;font-weight:800;color:'+tc+';font-family:var(--fh);">'+val+'</div>'+
+      '<div style="font-size:10px;font-weight:700;color:#6B7280;font-family:var(--fh);">'+label+'</div></div>';
+  }
+  h += mk('TOTAL CONSUMERS', scopeD.length.toLocaleString(), '#EFF6FF', '#1D4ED8');
+  h += mk('BILLED / UNBILLED', billedC+' / '+unbilledC, '#F0FDF4', '#059669');
+  h += mk('OUTSTANDING', cr2(totOut), '#FFF7ED', '#EA580C');
+  h += mk('TOTAL CA', cr2(totCA), '#FEF2F2', '#DC2626');
+  h += mk('DEFAULTERS', scopeDef.length.toLocaleString(), '#FEF3C7', '#D97706');
+  h += mk('DEF OUTSTANDING', cr2(defOutS), '#FFF1F2', '#F43F5E');
+  h += '</div>';
+
+  // Category-wise table
+  h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  h += '<thead><tr style="background:#F8FAFC;">';
+  ['TARIFF / CATEGORY','CONSUMERS','OUTSTANDING','DEFAULTERS','DEF OUTSTANDING'].forEach(function(hd){
+    h += '<th style="padding:7px 9px;text-align:'+(hd==='TARIFF / CATEGORY'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">'+hd+'</th>';
+  });
+  h += '</tr></thead><tbody>';
+  catList.forEach(function(t,i){
+    var c = catMap[t];
+    h += '<tr style="background:'+(i%2?'#F9FAFB':'#fff')+'">';
+    h += '<td style="padding:7px 9px;font-weight:700;color:#1E3A5F;font-family:var(--fh);">'+t+'</td>';
+    h += '<td style="padding:7px 9px;text-align:right;font-weight:600;">'+c.count.toLocaleString()+'</td>';
+    h += '<td style="padding:7px 9px;text-align:right;color:#EA580C;font-weight:700;">'+cr2(c.out)+'</td>';
+    h += '<td style="padding:7px 9px;text-align:right;color:#D97706;font-weight:700;">'+(c.defCount||0).toLocaleString()+'</td>';
+    h += '<td style="padding:7px 9px;text-align:right;color:#F43F5E;font-weight:700;">'+cr2(c.defOut||0)+'</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+
+  // Bill Basis-wise table for this scope
+  if(fBasisList.length){
+    h += '<div style="margin-top:14px;font-family:var(--fh);font-weight:700;font-size:12px;color:#7C3AED;">📑 BILL BASIS BREAKUP</div>';
+    h += '<div style="overflow-x:auto;margin-top:6px;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+    h += '<thead><tr style="background:#F5F3FF;">';
+    ['BILL BASIS','CONSUMERS','OUTSTANDING','DEFAULTERS','DEF OUTSTANDING'].forEach(function(hd){
+      h += '<th style="padding:7px 9px;text-align:'+(hd==='BILL BASIS'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #DDD6FE;">'+hd+'</th>';
+    });
+    h += '</tr></thead><tbody>';
+    fBasisList.forEach(function(b,i){
+      var bd=fBasisMap[b], bi=billBasisInfo(b);
+      h += '<tr style="background:'+(i%2?'#FAFAFA':'#fff')+'">';
+      h += '<td style="padding:7px 9px;"><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px;background:'+bi.bg+';color:'+bi.color+';">'+bi.label+'</span></td>';
+      h += '<td style="padding:7px 9px;text-align:right;font-weight:600;">'+bd.count.toLocaleString()+'</td>';
+      h += '<td style="padding:7px 9px;text-align:right;color:#EA580C;font-weight:700;">'+cr2(bd.out)+'</td>';
+      h += '<td style="padding:7px 9px;text-align:right;color:#D97706;font-weight:700;">'+(bd.defCount||0).toLocaleString()+'</td>';
+      h += '<td style="padding:7px 9px;text-align:right;color:#F43F5E;font-weight:700;">'+cr2(bd.defOut||0)+'</td>';
+      h += '</tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+
+  h += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">';
+  h += '<button onclick="dashExportFiltered()" style="background:#059669;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:11px;cursor:pointer;">\u2b07 EXPORT THIS REPORT (XLSX)</button>';
+  h += '</div>';
+
+  h += '</div>';
+  resultEl.innerHTML = h;
+}
+
+function dashExportFiltered(){
+  var ss = gel('dash-ss-sel') ? gel('dash-ss-sel').value : '';
+  var fd = gel('dash-feed-sel') ? gel('dash-feed-sel').value : '';
+  var ssN = dashNorm(ss), fdN = dashNorm(fd);
+  var scopeD = D.filter(function(r){
+    if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
+    if(fd && dashNorm(r.FEEDER)!==fdN) return false;
+    return true;
+  }).map(function(r){
+    return {
+      ACCT_ID:r.ACCT_ID, NAME:r.NAME, MOBILE:r.MOBILE_NO||r.MOBILE,
+      SUBSTATION:r.SUBSTATION, FEEDER:r.FEEDER, TARIFF:r.CATEGORY,
+      SOURCE:r.SOURCE, OUTSTANDING:Math.round(parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0),
+      CA:r.CA||'', BILLED_UNITS:r.BILLED_UNITS||'', BILL_DATE:r.BILL_DATE||'', DUE_DATE:r.DUE_DATE||'', BILL_BASIS:r.BILL_BASIS||''
+    };
+  });
+  var scopeDef = DEF_ALL.filter(function(r){
+    if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
+    if(fd && dashNorm(r.FEEDER)!==fdN) return false;
+    return true;
+  }).map(function(r){
+    var sc = collectionProbability(r), lb = collectionLabel(sc);
+    return {
+      ACCT_ID:r.ACCT_ID, NAME:r.NAME, MOBILE:r.MOBILE, SUBSTATION:r.SUBSTATION, FEEDER:r.FEEDER,
+      TARIFF:r.SUPPLY_TYPE, OUTSTANDING:Math.round(r.OUTSTANDING||0),
+      BILL_BASIS:billBasisInfo(r.BILL_BASIS).label,
+      AI_COLLECTION_PROB:sc, AI_LABEL:lb.label, ATR_STATUS:r.ATR_STATUS||'PENDING'
+    };
+  });
+  if(!scopeD.length && !scopeDef.length){ alert('No data for this selection.'); return; }
+  var wb = XLSX.utils.book_new();
+  if(scopeD.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(scopeD), 'Consumers');
+  if(scopeDef.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(scopeDef), 'Defaulters');
+  var label = (ss||'All')+(fd?'_'+fd:'');
+  label = label.replace(/[^a-zA-Z0-9_]/g,'_');
+  XLSX.writeFile(wb, 'Dashboard_Report_'+label+'_'+Date.now()+'.xlsx');
 }
 
 function buildSettingsPanel(){
@@ -1563,6 +1891,7 @@ function expDefaulterAtr(){
       LP_DATE:     r.PAY_DATE||'',
       LP_AMT:      Math.round(r.PAY_AMT||0),
       OUTSTANDING: Math.round(r.OUTSTANDING||0),
+      BILL_BASIS:  billBasisInfo(r.BILL_BASIS).label,
       AI_COLLECTION_PROB: sc,
       AI_LABEL:    lb.label,
       ATR_STATUS:  typeof e==='object'?(e.atr||r.ATR_STATUS||'PENDING'):(e||r.ATR_STATUS||'PENDING'),
@@ -1802,11 +2131,12 @@ function closeHelp(){ var m=gel('help-modal'); if(m){m.classList.remove('open');
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
 function st(name){
+  if(name==='dashboard' && window.innerWidth<=768){ name='lookup'; }
   if(name===_lastTab)return; _lastTab=name;
   document.querySelectorAll('.tab').forEach(function(tab){
     tab.classList.toggle('active', tab.getAttribute('onclick')&&tab.getAttribute('onclick').indexOf("'"+name+"'")>-1);
   });
-  ['lookup','dc','dfp','defaulter','settings'].forEach(function(n){
+  ['lookup','dc','dfp','defaulter','dashboard','settings'].forEach(function(n){
     var p=gel('panel-'+n); if(p)p.classList.toggle('active',n===name);
   });
   requestAnimationFrame(function(){
@@ -1993,7 +2323,8 @@ function parseFileInto(text, type){
   var iFeed = findCol(hdrs, ['FEEDER']);
   var iSerl = findCol(hdrs, ['SERIAL_NBR', 'METER_SERIAL_NBR', 'MTR_SRL_NO', 'METER_NO']);
   var iCA=hdrs.indexOf('CA'), iBUnits=hdrs.indexOf('BILLED_UNITS'),
-      iBillDate=hdrs.indexOf('BILL_DATE'), iDueDate=hdrs.indexOf('DUE_DATE');
+      iBillDate=hdrs.indexOf('BILL_DATE'), iDueDate=hdrs.indexOf('DUE_DATE'),
+      iBillBasis=hdrs.indexOf('BILL_BASIS');
   var iPayAmt  = findCol(hdrs, ['PAY_AMT', 'LP AMT', 'LAST_PAY_AMT', 'LAST_PAYMENT_AMOUNT']);
   var iPayDate = findCol(hdrs, ['PAY_DATE', 'LP DATE', 'LAST_PAY_DATE']);
   var iTotOut  = findCol(hdrs, ['TOTAL_OUTSTANDING', 'TOTAL OUTSTANDING', 'AMOUNT_PAYABLE', 'OUTSTANDING']);
@@ -2065,6 +2396,7 @@ function parseFileInto(text, type){
       BILLED_UNITS:       iBUnits>=0   ?(v[iBUnits]||'')     :'',
       BILL_DATE:          iBillDate>=0 ?(v[iBillDate]||'')   :'',
       DUE_DATE:           iDueDate>=0  ?(v[iDueDate]||'')    :'',
+      BILL_BASIS:         iBillBasis>=0?(v[iBillBasis]||''):'',
       AMOUNT_PAYABLE:     iTotOut>=0   ?(v[iTotOut]||'')     :'',
       LAST_PAYMENT_AMOUNT:iPayAmt>=0   ?(v[iPayAmt]||'')     :'',
       LAST_PAY_DATE:      iPayDate>=0  ?(v[iPayDate]||'')    :'',
@@ -2213,11 +2545,12 @@ function buildConsumerCard(r, q){
         '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">PAID DATE</div><div style="font-size:12px;font-weight:700;color:#1D4ED8;">'+lpDateStr+'</div></div>'+
         '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">OUTSTANDING</div><div style="font-size:14px;font-weight:700;color:'+(out>0?'#F43F5E':'#059669')+';">₹'+Math.round(out).toLocaleString()+'</div></div>'+
       '</div>'+
-      (r.SOURCE==="billed"&&(r.CA||r.BILLED_UNITS)?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #BFDBFE;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;">'+
+      (r.SOURCE==="billed"&&(r.CA||r.BILLED_UNITS)?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #BFDBFE;display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;">'+
         '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">CURRENT ASSESSMENT</div><div style="font-size:12px;font-weight:700;color:#7C3AED;">'+(r.CA||'-')+'</div></div>'+
         '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">BILLED UNITS</div><div style="font-size:12px;font-weight:700;color:#0369A1;">'+(r.BILLED_UNITS||'-')+'</div></div>'+
         '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">BILL DATE</div><div style="font-size:11px;font-weight:700;">'+(r.BILL_DATE||'-')+'</div></div>'+
         '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">DUE DATE</div><div style="font-size:11px;font-weight:700;color:#F43F5E;">'+(r.DUE_DATE||'-')+'</div></div>'+
+        '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">BILL BASIS</div><div style="font-size:11px;">'+(function(){var bi=billBasisInfo(r.BILL_BASIS);return '<span style="font-weight:700;padding:1px 6px;border-radius:4px;background:'+bi.bg+';color:'+bi.color+';">'+bi.label+'</span>';})()+'</div></div>'+
         '</div>':'')+
       '</div></div>';
   }
@@ -2866,6 +3199,16 @@ function clearSmFilter(){
   gel('def-sm-btn').textContent='ALL METERS';
   runDefaulterFilter();
 }
+function getSelectedBillBasis(){
+  var dd=gel('def-basis-dd'); if(!dd) return [];
+  return Array.from(dd.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
+}
+function clearBasisFilter(){
+  var dd=gel('def-basis-dd'); if(!dd) return;
+  dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){cb.checked=false;});
+  gel('def-basis-btn').textContent='ALL BASIS';
+  runDefaulterFilter();
+}
 function clearMs(type){
   if(type==='sub'){ _defSelSubs=[]; buildMsOptions('sub', getAllSubValues()); }
   else if(type==='feed'){ _defSelFeeds=[]; buildMsOptions('feed', getAllFeedValues()); }
@@ -3038,6 +3381,7 @@ function parseDefaulterText(text){
 }
 
 function buildDefAll() {
+  if(window._defAllLoading) return;
   if(!window._manifest_cache){setTimeout(buildDefAll,500);return;}
   var mc=window._manifest_cache;
   var defFiles=(mc.defaulters_eudd1||[]).concat(mc.defaulters_eudd2||[]);
@@ -3046,6 +3390,7 @@ function buildDefAll() {
     buildDefAllFromD(); return;
   }
 
+  window._defAllLoading = true;
   DEF_ALL=[];
   var loaded=0, total=defFiles.length;
   defFiles.forEach(function(f){
@@ -3055,10 +3400,11 @@ function buildDefAll() {
         if(text) parseDefFile(text);
         loaded++;
         if(loaded===total){
+          window._defAllLoading = false;
           console.log('DEF_ALL from files:',DEF_ALL.length);
           if(gel('def-tbody')) runDefaulterFilter();
         }
-      }).catch(function(){loaded++;if(loaded===total&&gel('def-tbody'))runDefaulterFilter();});
+      }).catch(function(){loaded++;if(loaded===total){window._defAllLoading=false;if(gel('def-tbody'))runDefaulterFilter();}});
   });
 }
 
@@ -3083,6 +3429,7 @@ function parseDefFile(text){
       iBUnits = hdrs.indexOf('BILLED_UNITS'),
       iBDate  = hdrs.indexOf('BILL_DATE'),
       iDDate  = hdrs.indexOf('DUE_DATE'),
+      iBBasis = hdrs.indexOf('BILL_BASIS'),
       iSrc    = hdrs.indexOf('SOURCE');
   if(iOut<0) iOut=8; // fallback to col index if not found
   var defSaved={};
@@ -3118,6 +3465,7 @@ function parseDefFile(text){
       BILLED_UNITS: iBUnits>=0 ? (v[iBUnits]||'').replace(/"/g,'') : '',
       BILL_DATE: iBDate>=0 ? (v[iBDate]||'').replace(/"/g,'')       : '',
       DUE_DATE:  iDDate>=0 ? (v[iDDate]||'').replace(/"/g,'')       : '',
+      BILL_BASIS: iBBasis>=0 ? (v[iBBasis]||'').replace(/"/g,'').trim() : '',
       SOURCE:    iSrc>=0   ? (v[iSrc]||'billed').replace(/"/g,'').trim() : 'billed',
       ATR_STATUS:typeof ae==='object'?(ae.atr||'PENDING'):ae,
       ATR_COMMENT:typeof ae==='object'?(ae.comment||''):''
@@ -3216,6 +3564,7 @@ function runDefaulterFilter(){
 
   var selLoads = getSelectedLoadRanges();
   var selSm    = getSelectedSmTypes();
+  var selBasis = getSelectedBillBasis();
 
   // Fast filter on pre-built array
   var all = DEF_ALL.filter(function(r){
@@ -3238,6 +3587,11 @@ function runDefaulterFilter(){
       var wantSm=selSm.indexOf('sm')>=0, wantNon=selSm.indexOf('nonsm')>=0;
       if(wantSm && !wantNon && !isSm) return false;
       if(wantNon && !wantSm && isSm) return false;
+    }
+    // Bill Basis filter — multi-select
+    if(selBasis.length){
+      var rb = String(r.BILL_BASIS||'').trim().toUpperCase();
+      if(selBasis.indexOf(rb)<0) return false;
     }
     if(q){
       var meter = METER_DATA[String(r.ACCT_ID)] || r.METER_NO || '';
@@ -3284,6 +3638,10 @@ function runDefaulterFilter(){
   if(gel('def-sm-btn')){
     var sc=selSm.length;
     gel('def-sm-btn').textContent=sc?(selSm.indexOf('sm')>=0&&selSm.indexOf('nonsm')>=0?'SM + NON-SM':selSm.indexOf('sm')>=0?'SMART METER':'NON-SM'):'ALL METERS';
+  }
+  if(gel('def-basis-btn')){
+    var bc=selBasis.length;
+    gel('def-basis-btn').textContent=bc?(bc===1?billBasisInfo(selBasis[0]).label:bc+' selected'):'ALL BASIS';
   }
   renderDefaulters(1);
 }
@@ -3380,6 +3738,7 @@ function openDefaulterModal(acctId){
     '<div class="modal-field"><div class="lbl">BILLED UNITS</div><div class="val" style="font-weight:700;color:#0369A1;">'+(defRec.BILLED_UNITS?defRec.BILLED_UNITS+' U':'-')+'</div></div>'+
     '<div class="modal-field"><div class="lbl">BILL DATE</div><div class="val">'+(defRec.BILL_DATE||'-')+'</div></div>'+
     '<div class="modal-field"><div class="lbl">DUE DATE</div><div class="val" style="color:#F43F5E;font-weight:600;">'+(defRec.DUE_DATE||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">BILL BASIS</div><div class="val">'+(function(){var bi=billBasisInfo(defRec.BILL_BASIS);return '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px;background:'+bi.bg+';color:'+bi.color+';">'+bi.label+'</span>';})()+'</div></div>'+
     '<div class="modal-field"><div class="lbl">SUBSTATION</div><div class="val" style="font-weight:600;">'+(defRec.SUBSTATION||'-')+'</div></div>'+
     '<div class="modal-field"><div class="lbl">FEEDER</div><div class="val">'+(defRec.FEEDER||'-')+'</div></div>'+
     '<div class="modal-field"><div class="lbl">LP DATE</div><div class="val">'+(defRec.PAY_DATE||'-')+'</div></div>'+
@@ -3750,6 +4109,7 @@ function expDefaultersX(){
       LP_DATE:     r.PAY_DATE,
       LP_AMT:      Math.round(r.PAY_AMT||0),
       CA:          r.CA||'',
+      BILL_BASIS:  billBasisInfo(r.BILL_BASIS).label,
       AI_COLLECTION_PROB: sc,
       AI_LABEL:    lb.label,
       ATR_STATUS:  r.ATR_STATUS||'PENDING',
