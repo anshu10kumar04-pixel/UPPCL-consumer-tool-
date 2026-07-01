@@ -1121,13 +1121,23 @@ function buildDashboard(){
   var ssList = Object.keys(ssMap).sort();
   var ssListTop16 = ssList.slice().sort(function(a,b){ return ssMap[b].out - ssMap[a].out; }).slice(0,16);
 
-  // Tariff-wise
+  // Tariff-wise with defaulter outstanding ranges
   var tarMap={};
   D.forEach(function(r){
     var t=r.CATEGORY||'Unknown';
-    if(!tarMap[t]) tarMap[t]={count:0,out:0};
+    if(!tarMap[t]) tarMap[t]={count:0,out:0,r5:0,r10:0,r50:0,r1l:0};
     tarMap[t].count++;
     tarMap[t].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+  });
+  // Add defaulter range breakdown per tariff
+  DEF_ALL.forEach(function(r){
+    var t=r.SUPPLY_TYPE||'Unknown';
+    if(!tarMap[t]) tarMap[t]={count:0,out:0,r5:0,r10:0,r50:0,r1l:0};
+    var o=r.OUTSTANDING||0;
+    if(o>=5000   && o<10000)  tarMap[t].r5++;
+    if(o>=10000  && o<50000)  tarMap[t].r10++;
+    if(o>=50000  && o<100000) tarMap[t].r50++;
+    if(o>=100000)             tarMap[t].r1l++;
   });
   var tarList = Object.keys(tarMap).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
 
@@ -1362,18 +1372,31 @@ function buildDashboard(){
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;overflow:hidden;">';
   html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">📋 TARIFF-WISE BREAKUP</div>';
   html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  html += '<thead><tr style="background:#F0FDF4;">';
-  ['TARIFF','CONSUMERS','% SHARE','OUTSTANDING'].forEach(function(h){
-    html += '<th style="padding:8px 10px;text-align:'+(h==='TARIFF'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">'+h+'</th>';
+  html += '<thead>';
+  html += '<tr style="background:#F0FDF4;">';
+  html += '<th rowspan="2" style="padding:8px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;border-right:1px solid #BBF7D0;">TARIFF</th>';
+  html += '<th rowspan="2" style="padding:8px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">CONSUMERS</th>';
+  html += '<th rowspan="2" style="padding:8px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">% SHARE</th>';
+  html += '<th rowspan="2" style="padding:8px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">OUTSTANDING</th>';
+  html += '<th colspan="4" style="padding:6px 10px;text-align:center;font-family:var(--fh);font-size:10px;color:#B91C1C;border-bottom:1px solid #BBF7D0;border-left:1px solid #BBF7D0;background:#FFF1F2;">⚠ DEFAULTER COUNT BY OUTSTANDING RANGE</th>';
+  html += '</tr>';
+  html += '<tr style="background:#FFF1F2;">';
+  ['₹5K–10K','₹10K–50K','₹50K–1L','Above ₹1L'].forEach(function(rh){
+    html += '<th style="padding:6px 8px;text-align:right;font-family:var(--fh);font-size:9px;color:#B91C1C;border-bottom:1px solid #FECACA;border-left:1px solid #FECACA;white-space:nowrap;">'+rh+'</th>';
   });
-  html += '</tr></thead><tbody>';
+  html += '</tr>';
+  html += '</thead><tbody>';
   tarList.forEach(function(t,i){
     var td=tarMap[t], pct=(td.count/D.length*100).toFixed(1);
     html += '<tr style="background:'+(i%2?'#F9FAFB':'#fff')+'">';
-    html += '<td style="padding:8px 10px;font-weight:700;color:#065F46;font-family:var(--fh);">'+t+'</td>';
+    html += '<td style="padding:8px 10px;font-weight:700;color:#065F46;font-family:var(--fh);border-right:1px solid #F0FDF4;">'+t+'</td>';
     html += '<td style="padding:8px 10px;text-align:right;font-weight:600;">'+td.count.toLocaleString()+'</td>';
     html += '<td style="padding:8px 10px;text-align:right;color:#6B7280;">'+pct+'%</td>';
     html += '<td style="padding:8px 10px;text-align:right;color:#EA580C;font-weight:700;">'+cr(td.out)+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#BE123C;font-weight:700;border-left:1px solid #FEE2E2;">'+(td.r5||0)+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#DC2626;font-weight:700;">'+(td.r10||0)+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#E11D48;font-weight:700;">'+(td.r50||0)+'</td>';
+    html += '<td style="padding:8px 10px;text-align:right;color:#C2410C;font-weight:800;">'+(td.r1l||0)+'</td>';
     html += '</tr>';
   });
   html += '</tbody></table></div></div>';
