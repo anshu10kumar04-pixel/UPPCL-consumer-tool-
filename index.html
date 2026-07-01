@@ -2490,6 +2490,17 @@ function ia(){
       setText('s-feed',feedSet.size.toString());
       gel('upload-screen').style.display='none';
       FD=D.slice();
+
+      // Post-process D: rename 132 KV HASARI substations → GROWTH CENTER
+      var _ssRename = {'132 KV HASARI_26295':'GROWTH CENTER_20058','132 KV HASARI_26400':'GROWTH CENTER_20058'};
+      D.forEach(function(r){
+        if(_ssRename[r.SUBSTATION]) r.SUBSTATION = _ssRename[r.SUBSTATION];
+      });
+
+      // Build global BILL_BASIS lookup {ACCT_ID: 'MU'/'ASS'/...} for filter use
+      window._basisLookupGlobal = {};
+      D.forEach(function(r){ window._basisLookupGlobal[String(r.ACCT_ID)] = String(r.BILL_BASIS||'').trim().toUpperCase(); });
+
       setTimeout(autoSyncAtr,1500);
     // Load location.xlsx for GPS fallback
     if(!Object.keys(LOCATION_MAP).length) loadLocationXlsx();
@@ -3402,6 +3413,9 @@ function buildDefAll() {
         if(loaded===total){
           window._defAllLoading = false;
           console.log('DEF_ALL from files:',DEF_ALL.length);
+          // Apply SS rename in DEF_ALL too
+          var _ssRen={'132 KV HASARI_26295':'GROWTH CENTER_20058','132 KV HASARI_26400':'GROWTH CENTER_20058'};
+          DEF_ALL.forEach(function(r){if(_ssRen[r.SUBSTATION])r.SUBSTATION=_ssRen[r.SUBSTATION];});
           if(gel('def-tbody')) runDefaulterFilter();
         }
       }).catch(function(){loaded++;if(loaded===total){window._defAllLoading=false;if(gel('def-tbody'))runDefaulterFilter();}});
@@ -3555,6 +3569,13 @@ function runDefaulterFilter(){
     }
   }
 
+  // Use pre-built global BILL_BASIS lookup (built when D loads)
+  var _basisLookup = window._basisLookupGlobal || {};
+  if(!Object.keys(_basisLookup).length){
+    // Fallback: build now if global not ready yet
+    D.forEach(function(d){ _basisLookup[String(d.ACCT_ID)] = String(d.BILL_BASIS||'').trim().toUpperCase(); });
+  }
+
   var minOut = parseFloat(gel('def-min') ? gel('def-min').value : 5000) || 5000;
   var sub    = _defSelSubs;
   var feed   = _defSelFeeds;
@@ -3588,9 +3609,9 @@ function runDefaulterFilter(){
       if(wantSm && !wantNon && !isSm) return false;
       if(wantNon && !wantSm && isSm) return false;
     }
-    // Bill Basis filter — multi-select
+    // Bill Basis filter — multi-select (uses D array fallback if DEF_ALL lacks BILL_BASIS)
     if(selBasis.length){
-      var rb = String(r.BILL_BASIS||'').trim().toUpperCase();
+      var rb = String(r.BILL_BASIS||'').trim().toUpperCase() || _basisLookup[String(r.ACCT_ID)] || '';
       if(selBasis.indexOf(rb)<0) return false;
     }
     if(q){
