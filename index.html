@@ -983,12 +983,50 @@ function autoSyncAtr(){
 }
 
 // Push all localStorage ATR entries to sheet (on load + after each save)
+// Helper: get/set pushed accounts set
+function getPushedAccts(){
+  try{ return new Set(JSON.parse(localStorage.getItem('atr_pushed_accts')||'[]')); }catch(e){ return new Set(); }
+}
+function addPushedAccts(smKeys, defKeys){
+  var pushed = getPushedAccts();
+  smKeys.forEach(function(a){ pushed.add(String(a)); });
+  defKeys.forEach(function(a){ pushed.add(String(a)); });
+  localStorage.setItem('atr_pushed_accts', JSON.stringify(Array.from(pushed)));
+}
+
+// Mark all existing submitted ATR entries as pushed (runs once on first load with new version)
+function initPushedAccts(){
+  var pushed = getPushedAccts();
+  if(pushed.size > 0) return; // already initialized
+  var sm  = {}; try{ sm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
+  var def = {}; try{ def = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+  // Mark all existing submitted entries as already pushed (so they show as editable)
+  var smKeys = Object.keys(sm).filter(function(a){ var e=sm[a]; var s=typeof e==='object'?e.atr:e; return s&&s!=='PENDING'; });
+  var defKeys = Object.keys(def).filter(function(a){ var e=def[a]; var s=typeof e==='object'?e.atr:e; return s&&s!=='PENDING'; });
+  if(smKeys.length || defKeys.length){
+    addPushedAccts(smKeys, defKeys);
+    console.log('ATR unlocked (grandfathered):', smKeys.length, 'SM +', defKeys.length, 'Def');
+  }
+}
+
+// Check if a consumer's ATR is locked (submitted but not yet pushed to sheet)
+function isAtrLocked(acctId, type){
+  var key = type==='defaulter' ? 'def_atr_data' : 'atr_data';
+  var data = {}; try{ data = JSON.parse(localStorage.getItem(key)||'{}'); }catch(e){}
+  var entry = data[String(acctId)];
+  if(!entry) return false;
+  var status = typeof entry==='object' ? entry.atr : entry;
+  if(!status || status==='PENDING') return false;
+  var pushed = getPushedAccts();
+  return !pushed.has(String(acctId));
+}
+
 function pushLocalAtrToSheet(){
   var url = getScriptUrl(); if(!url) return;
   var localSm  = {}; try{ localSm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
   var localDef = {}; try{ localDef = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
 
-  // Only push non-PENDING entries (PENDING = not actioned, no point syncing)
+  // Only push non-PENDING entries
   var smEntries = {}, defEntries = {};
   Object.keys(localSm).forEach(function(acct){
     var e = localSm[acct];
@@ -1003,7 +1041,6 @@ function pushLocalAtrToSheet(){
 
   if(!Object.keys(smEntries).length && !Object.keys(defEntries).length) return;
 
-  // Single batch POST — not 853 individual requests
   fetch(url, {
     method: 'POST',
     mode: 'no-cors',
@@ -1011,6 +1048,8 @@ function pushLocalAtrToSheet(){
     body: JSON.stringify({ type:'batch', sm: smEntries, defaulter: defEntries })
   }).then(function(){
     console.log('Batch ATR pushed:', Object.keys(smEntries).length, 'SM +', Object.keys(defEntries).length, 'Def');
+    // Mark all pushed accounts as unlocked
+    addPushedAccts(Object.keys(smEntries), Object.keys(defEntries));
     localStorage.setItem('atr_last_push', new Date().toLocaleString('en-IN'));
     updateAtrLocalCounts();
   }).catch(function(e){ console.warn('Batch push error:', e); });
@@ -1326,7 +1365,94 @@ function buildDashboard(){
   html += card('🔴','DEF OUTSTANDING',cr(defOut),'Total recoverable','#FFF1F2','#F43F5E');
   html += '</div>';
 
-  // Defaulter Outstanding Range-wise
+  // ── DEFAULTER RECOVERY — WHO PAID (Yesterday + Current Month) ─────────
+  var today   = new Date();
+  var yyyyMM  = today.getFullYear()+'-'+(today.getMonth()+1).toString().padStart(2,'0');
+  var yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
+  var yDay = yesterday.getDate(), yMon = yesterday.getMonth(), yYear = yesterday.getFullYear();
+
+  // Match consumers who were ever in DEF_ALL and have recent PAY_DATE in D
+  var defAcctSet = new Set(DEF_ALL.map(function(r){return String(r.ACCT_ID);}));
+  var recYest=[], recMonth=[];
+
+  D.forEach(function(r){
+    if(!defAcctSet.has(String(r.ACCT_ID))) return;
+    var pd = parseDate(r.LAST_PAY_DATE||r.PAY_DATE);
+    if(!pd) return;
+    var isYest = pd.getDate()===yDay && pd.getMonth()===yMon && pd.getFullYear()===yYear;
+    var isMon  = pd.getFullYear()===today.getFullYear() && pd.getMonth()===today.getMonth();
+    if(isYest) recYest.push(r);
+    if(isMon)  recMonth.push(r);
+  });
+
+  function buildRecoveryTable(records, label){
+    if(!records.length) return '<div style="padding:10px 16px;font-size:12px;color:#9CA3AF;">No records found for this period.</div>';
+    var ssMap2={}, catMap2={};
+    records.forEach(function(r){
+      var ss=r.SUBSTATION||'Unknown', cat=r.CATEGORY||'Unknown';
+      var amt=Math.max(0,parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);
+      if(!ssMap2[ss]) ssMap2[ss]={count:0,amt:0,cats:{}};
+      ssMap2[ss].count++; ssMap2[ss].amt+=amt;
+      if(!ssMap2[ss].cats[cat]) ssMap2[ss].cats[cat]={count:0,amt:0};
+      ssMap2[ss].cats[cat].count++; ssMap2[ss].cats[cat].amt+=amt;
+      if(!catMap2[cat]) catMap2[cat]={count:0,amt:0};
+      catMap2[cat].count++; catMap2[cat].amt+=amt;
+    });
+    var h2='';
+    // SS-wise + category breakdown
+    h2 += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+    h2 += '<thead><tr style="background:#F0FDF4;"><th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">SUBSTATION</th>';
+    h2 += '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">TARIFF</th>';
+    h2 += '<th style="padding:7px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">CONSUMERS PAID</th>';
+    h2 += '<th style="padding:7px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">AMOUNT COLLECTED</th></tr></thead><tbody>';
+    var rIdx=0;
+    Object.keys(ssMap2).sort().forEach(function(ss){
+      var sd=ssMap2[ss];
+      var cats=Object.keys(sd.cats).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+      cats.forEach(function(cat,ci){
+        var cd=sd.cats[cat];
+        h2 += '<tr style="background:'+(rIdx++%2?'#F9FAFB':'#fff')+'">';
+        h2 += '<td style="padding:7px 10px;font-weight:700;color:#065F46;font-family:var(--fh);">'+(ci===0?ss:'')+'</td>';
+        h2 += '<td style="padding:7px 10px;"><span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;background:#D1FAE5;color:#065F46;">'+cat+'</span></td>';
+        h2 += '<td style="padding:7px 10px;text-align:right;font-weight:700;color:#059669;">'+cd.count+'</td>';
+        h2 += '<td style="padding:7px 10px;text-align:right;font-weight:700;color:#1D4ED8;">'+cr(cd.amt)+'</td>';
+        h2 += '</tr>';
+      });
+      // SS subtotal
+      h2 += '<tr style="background:#F0FDF4;">';
+      h2 += '<td style="padding:5px 10px;font-weight:800;color:#065F46;font-family:var(--fh);">'+ss+' TOTAL</td>';
+      h2 += '<td></td>';
+      h2 += '<td style="padding:5px 10px;text-align:right;font-weight:800;color:#059669;">'+sd.count+'</td>';
+      h2 += '<td style="padding:5px 10px;text-align:right;font-weight:800;color:#1D4ED8;">'+cr(sd.amt)+'</td>';
+      h2 += '</tr>';
+    });
+    // Grand total
+    var gTotal=records.length, gAmt=records.reduce(function(s,r){return s+Math.max(0,parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);},0);
+    h2 += '<tr style="background:#D1FAE5;border-top:2px solid #6EE7B7;">';
+    h2 += '<td style="padding:8px 10px;font-weight:800;font-family:var(--fh);color:#065F46;">GRAND TOTAL</td><td></td>';
+    h2 += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#059669;">'+gTotal+'</td>';
+    h2 += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#1D4ED8;">'+cr(gAmt)+'</td>';
+    h2 += '</tr></tbody></table></div>';
+    return h2;
+  }
+
+  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
+  html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">💰 DEFAULTER RECOVERY REPORT — WHO PAID</div>';
+  html += '<div style="padding:0;">';
+
+  // Yesterday
+  html += '<div style="padding:10px 16px;font-family:var(--fh);font-weight:700;font-size:12px;color:#065F46;background:#F0FDF4;border-bottom:1px solid #BBF7D0;">';
+  html += '📅 YESTERDAY ('+yesterday.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})+') — '+recYest.length+' consumers paid</div>';
+  html += buildRecoveryTable(recYest, 'yesterday');
+
+  // Current month
+  html += '<div style="padding:10px 16px;font-family:var(--fh);font-weight:700;font-size:12px;color:#065F46;background:#F0FDF4;border-bottom:1px solid #BBF7D0;border-top:2px solid #6EE7B7;">';
+  html += '📆 CURRENT MONTH ('+today.toLocaleDateString('en-IN',{month:'long',year:'numeric'})+') — '+recMonth.length+' consumers paid</div>';
+  html += buildRecoveryTable(recMonth, 'month');
+
+  html += '</div></div>';
+
+    // Defaulter Outstanding Range-wise
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
   html += '<div style="background:#B91C1C;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">🎯 DEFAULTER — OUTSTANDING RANGE ANALYSIS</div>';
   html += '<div style="display:flex;flex-wrap:wrap;gap:0;">';
@@ -1588,92 +1714,8 @@ function buildDashboard(){
     html += '</div>';
   }
 
-  // ── DEFAULTER RECOVERY — WHO PAID (Yesterday + Current Month) ─────────
-  var today   = new Date();
-  var yyyyMM  = today.getFullYear()+'-'+(today.getMonth()+1).toString().padStart(2,'0');
-  var yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
-  var yDay = yesterday.getDate(), yMon = yesterday.getMonth(), yYear = yesterday.getFullYear();
 
-  // Match consumers who were ever in DEF_ALL and have recent PAY_DATE in D
-  var defAcctSet = new Set(DEF_ALL.map(function(r){return String(r.ACCT_ID);}));
-  var recYest=[], recMonth=[];
 
-  D.forEach(function(r){
-    if(!defAcctSet.has(String(r.ACCT_ID))) return;
-    var pd = parseDate(r.LAST_PAY_DATE||r.PAY_DATE);
-    if(!pd) return;
-    var isYest = pd.getDate()===yDay && pd.getMonth()===yMon && pd.getFullYear()===yYear;
-    var isMon  = pd.getFullYear()===today.getFullYear() && pd.getMonth()===today.getMonth();
-    if(isYest) recYest.push(r);
-    if(isMon)  recMonth.push(r);
-  });
-
-  function buildRecoveryTable(records, label){
-    if(!records.length) return '<div style="padding:10px 16px;font-size:12px;color:#9CA3AF;">No records found for this period.</div>';
-    var ssMap2={}, catMap2={};
-    records.forEach(function(r){
-      var ss=r.SUBSTATION||'Unknown', cat=r.CATEGORY||'Unknown';
-      var amt=Math.max(0,parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);
-      if(!ssMap2[ss]) ssMap2[ss]={count:0,amt:0,cats:{}};
-      ssMap2[ss].count++; ssMap2[ss].amt+=amt;
-      if(!ssMap2[ss].cats[cat]) ssMap2[ss].cats[cat]={count:0,amt:0};
-      ssMap2[ss].cats[cat].count++; ssMap2[ss].cats[cat].amt+=amt;
-      if(!catMap2[cat]) catMap2[cat]={count:0,amt:0};
-      catMap2[cat].count++; catMap2[cat].amt+=amt;
-    });
-    var h2='';
-    // SS-wise + category breakdown
-    h2 += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-    h2 += '<thead><tr style="background:#F0FDF4;"><th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">SUBSTATION</th>';
-    h2 += '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">TARIFF</th>';
-    h2 += '<th style="padding:7px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">CONSUMERS PAID</th>';
-    h2 += '<th style="padding:7px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">AMOUNT COLLECTED</th></tr></thead><tbody>';
-    var rIdx=0;
-    Object.keys(ssMap2).sort().forEach(function(ss){
-      var sd=ssMap2[ss];
-      var cats=Object.keys(sd.cats).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
-      cats.forEach(function(cat,ci){
-        var cd=sd.cats[cat];
-        h2 += '<tr style="background:'+(rIdx++%2?'#F9FAFB':'#fff')+'">';
-        h2 += '<td style="padding:7px 10px;font-weight:700;color:#065F46;font-family:var(--fh);">'+(ci===0?ss:'')+'</td>';
-        h2 += '<td style="padding:7px 10px;"><span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;background:#D1FAE5;color:#065F46;">'+cat+'</span></td>';
-        h2 += '<td style="padding:7px 10px;text-align:right;font-weight:700;color:#059669;">'+cd.count+'</td>';
-        h2 += '<td style="padding:7px 10px;text-align:right;font-weight:700;color:#1D4ED8;">'+cr(cd.amt)+'</td>';
-        h2 += '</tr>';
-      });
-      // SS subtotal
-      h2 += '<tr style="background:#F0FDF4;">';
-      h2 += '<td style="padding:5px 10px;font-weight:800;color:#065F46;font-family:var(--fh);">'+ss+' TOTAL</td>';
-      h2 += '<td></td>';
-      h2 += '<td style="padding:5px 10px;text-align:right;font-weight:800;color:#059669;">'+sd.count+'</td>';
-      h2 += '<td style="padding:5px 10px;text-align:right;font-weight:800;color:#1D4ED8;">'+cr(sd.amt)+'</td>';
-      h2 += '</tr>';
-    });
-    // Grand total
-    var gTotal=records.length, gAmt=records.reduce(function(s,r){return s+Math.max(0,parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);},0);
-    h2 += '<tr style="background:#D1FAE5;border-top:2px solid #6EE7B7;">';
-    h2 += '<td style="padding:8px 10px;font-weight:800;font-family:var(--fh);color:#065F46;">GRAND TOTAL</td><td></td>';
-    h2 += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#059669;">'+gTotal+'</td>';
-    h2 += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#1D4ED8;">'+cr(gAmt)+'</td>';
-    h2 += '</tr></tbody></table></div>';
-    return h2;
-  }
-
-  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-  html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">💰 DEFAULTER RECOVERY REPORT — WHO PAID</div>';
-  html += '<div style="padding:0;">';
-
-  // Yesterday
-  html += '<div style="padding:10px 16px;font-family:var(--fh);font-weight:700;font-size:12px;color:#065F46;background:#F0FDF4;border-bottom:1px solid #BBF7D0;">';
-  html += '📅 YESTERDAY ('+yesterday.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})+') — '+recYest.length+' consumers paid</div>';
-  html += buildRecoveryTable(recYest, 'yesterday');
-
-  // Current month
-  html += '<div style="padding:10px 16px;font-family:var(--fh);font-weight:700;font-size:12px;color:#065F46;background:#F0FDF4;border-bottom:1px solid #BBF7D0;border-top:2px solid #6EE7B7;">';
-  html += '📆 CURRENT MONTH ('+today.toLocaleDateString('en-IN',{month:'long',year:'numeric'})+') — '+recMonth.length+' consumers paid</div>';
-  html += buildRecoveryTable(recMonth, 'month');
-
-  html += '</div></div>';
 
   html += '</div>'; // end container
   el.innerHTML = html;
@@ -2085,6 +2127,7 @@ function buildSettingsPanel(){
           '<b>Defaulter ATR (localStorage):</b> <span id="atr-def-local-count" style="color:#F43F5E;font-weight:700;">–</span><br>'+
           '<b>Last pushed to sheet:</b> <span id="atr-last-push" style="color:#6B7280;font-weight:600;">–</span>&emsp;'+
           '<button onclick="clearPendingAtr()" style="background:#FEE2E2;border:1px solid #FECACA;border-radius:6px;padding:3px 10px;font-size:11px;font-family:var(--fh);font-weight:700;color:#DC2626;cursor:pointer;">🗑 CLEAR PENDING-ONLY RECORDS</button>'+
+          '&nbsp;<button onclick="unlockAllAtr()" style="background:#EDE9FE;border:1px solid #C4B5FD;border-radius:6px;padding:3px 10px;font-size:11px;font-family:var(--fh);font-weight:700;color:#6D28D9;cursor:pointer;">🔓 UNLOCK ALL ATR</button>'+
         '</div>'+
       '</div>'+
 
@@ -2491,8 +2534,12 @@ function logout(){
   gel('app').style.display='none';
 }
 window.addEventListener('DOMContentLoaded',function(){
-  // ── MONTHLY ATR RESET ─────────────────────────────────────────────────
+  // ── INIT PUSHED ACCTS (grandfather existing ATR data) ───────────────
+  initPushedAccts();
   // On new month: archive previous month ATR to sheet, clear localStorage
+  // Initialize pushed accts — grandfather existing ATR entries as already pushed
+  initPushedAccts();
+
   (function checkMonthlyAtrReset(){
     var now = new Date();
     var curMonth = now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
@@ -2522,6 +2569,7 @@ window.addEventListener('DOMContentLoaded',function(){
       localStorage.removeItem('atr_data');
       localStorage.removeItem('def_atr_data');
       localStorage.removeItem('atr_last_push');
+      localStorage.removeItem('atr_pushed_accts'); // unlock all for new month
       localStorage.setItem('atr_last_reset_month', curMonth);
       // Show notification
       setTimeout(function(){
@@ -3244,15 +3292,15 @@ function openDcDetail(acctId){
   sel.value=r.ATR_STATUS||'DISCONNECTED';
   updateAtrSelectStyle();
 
-  // Freeze ATR if already submitted (not DISCONNECTED)
+  // ATR submitted state — show with unlock option
   var currentAtr = r.ATR_STATUS || 'DISCONNECTED';
   var isSubmitted = currentAtr !== 'DISCONNECTED';
+  var isLocked = isSubmitted && isAtrLocked(r.ACCT_ID, 'sm');
   // Load saved comment
   var savedAtrData = {};
   try{savedAtrData=JSON.parse(localStorage.getItem('atr_data')||'{}');}catch(e){}
   var savedEntry = savedAtrData[String(r.ACCT_ID)]||{};
   var savedComment = typeof savedEntry==='object' ? (savedEntry.comment||'') : '';
-  var commentWrap = gel('modal-atr-comment-wrap');
   var commentBox = gel('modal-atr-comment');
   if(commentBox){ commentBox.value = savedComment; commentBox.disabled = isSubmitted; }
   var sel2 = gel('modal-atr-sel');
@@ -3263,18 +3311,38 @@ function openDcDetail(acctId){
   }
   var saveBtns = gel('modal-atr-section').querySelectorAll('.save-atr-btn');
   saveBtns.forEach(function(b){
-    if(isSubmitted){
+    if(isLocked){
+      // Submitted but not pushed to sheet — LOCKED
       b.disabled = true;
-      b.style.opacity = '0.5';
+      b.style.opacity = '0.7';
       b.style.cursor = 'not-allowed';
-      b.textContent = '✅ ATR ALREADY SUBMITTED';
+      b.textContent = '🔒 PUSH TO SHEET TO UNLOCK';
       b.style.background = '#9CA3AF';
+      b.style.fontSize = '11px';
+    } else if(isSubmitted){
+      // Submitted AND pushed to sheet — allow re-edit
+      b.disabled = false;
+      b.style.opacity = '1';
+      b.style.cursor = 'pointer';
+      b.textContent = '✏️ EDIT ATR';
+      b.style.background = '#6366F1';
+      b.onclick = function(){
+        var sel3=gel('modal-atr-sel'), cb=gel('modal-atr-comment');
+        if(sel3){ sel3.disabled=false; sel3.style.opacity='1'; sel3.style.cursor='pointer'; }
+        if(cb){ cb.disabled=false; }
+        b.textContent='💾 SAVE ATR STATUS';
+        b.style.background='#F59E0B';
+        b.style.fontSize='';
+        b.onclick=null;
+        b.addEventListener('click', function saveHandler(){ saveModalAtr(); b.removeEventListener('click',saveHandler); });
+      };
     } else {
       b.disabled = false;
       b.style.opacity = '1';
       b.style.cursor = 'pointer';
       b.textContent = '💾 SAVE ATR STATUS';
       b.style.background = '#F59E0B';
+      b.style.fontSize = '';
     }
   });
 
@@ -3438,6 +3506,14 @@ function clearPendingAtr(){
   localStorage.setItem('def_atr_data', JSON.stringify(newDef));
   updateAtrLocalCounts();
   alert('✅ Cleared '+smRemoved+' SM + '+defRemoved+' Defaulter PENDING records.\nKept: '+smKept+' SM + '+defKept+' Defaulter actioned records.');
+}
+
+function unlockAllAtr(){
+  var sm  = {}; try{ sm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
+  var def = {}; try{ def = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+  addPushedAccts(Object.keys(sm), Object.keys(def));
+  updateAtrLocalCounts();
+  alert('✅ All submitted ATR entries unlocked for re-editing.');
 }
 
 function updateAtrLocalCounts(){
@@ -4227,7 +4303,8 @@ function openDefaulterModal(acctId){
   sel.value = currentAtr;
   updateAtrSelectStyle();
   var isSubmitted = currentAtr !== 'PENDING';
-  sel.disabled = isSubmitted;
+  var isLocked = isSubmitted && isAtrLocked(defRec.ACCT_ID, 'defaulter');
+  sel.disabled = isLocked;
   sel.style.opacity = isSubmitted ? '0.7' : '1';
   var defSaved = {};
   try{ defSaved = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
@@ -4241,10 +4318,23 @@ function openDefaulterModal(acctId){
     defCommentWrap.style.display=(showFor.indexOf(currentAtr)>=0||defComment)?'block':'none';
   }
   atrSec.querySelectorAll('.save-atr-btn').forEach(function(b){
-    b.disabled=isSubmitted; b.style.opacity=isSubmitted?'0.5':'1';
-    b.style.cursor=isSubmitted?'not-allowed':'pointer';
-    b.style.background=isSubmitted?'#9CA3AF':'#F59E0B';
-    b.textContent=isSubmitted?'✅ ATR ALREADY SUBMITTED':'💾 SAVE ATR STATUS';
+    if(isLocked){
+      b.disabled=true; b.style.opacity='0.7'; b.style.cursor='not-allowed';
+      b.style.background='#9CA3AF'; b.textContent='🔒 PUSH TO SHEET TO UNLOCK'; b.style.fontSize='11px';
+    } else if(isSubmitted){
+      b.disabled=false; b.style.opacity='1'; b.style.cursor='pointer';
+      b.style.background='#6366F1'; b.textContent='✏️ EDIT ATR'; b.style.fontSize='';
+      b.onclick=function(){
+        var ds=gel('modal-def-atr-sel'), dc=gel('modal-def-atr-comment');
+        if(ds){ds.disabled=false;ds.style.opacity='1';ds.style.cursor='pointer';}
+        if(dc){dc.disabled=false;}
+        b.style.background='#F59E0B'; b.textContent='💾 SAVE ATR STATUS'; b.onclick=null;
+        b.addEventListener('click',function sh(){saveDefModalAtr();b.removeEventListener('click',sh);});
+      };
+    } else {
+      b.disabled=false; b.style.opacity='1'; b.style.cursor='pointer';
+      b.style.background='#F59E0B'; b.textContent='💾 SAVE ATR STATUS'; b.style.fontSize='';
+    }
   });
   atrSec.dataset.type = 'defaulter';
 
@@ -4329,18 +4419,17 @@ function openDefaulterModalDirect(d){
   sel.value=currentAtr;
   updateAtrSelectStyle();
   var isSubmitted=currentAtr!=='PENDING';
-  sel.disabled=isSubmitted; sel.style.opacity=isSubmitted?'0.7':'1';
+  var isLocked = isSubmitted && isAtrLocked(d.ACCT_ID, 'defaulter');
+  sel.disabled=isLocked; sel.style.opacity=isLocked?'0.7':'1';
   var defSaved={};
   try{defSaved=JSON.parse(localStorage.getItem('def_atr_data')||'{}');}catch(e){}
   var defEntry=defSaved[String(d.ACCT_ID)]||{};
   var defComment=typeof defEntry==='object'?(defEntry.comment||''):'';
   var cb=gel('modal-atr-comment'), cw=gel('modal-atr-comment-wrap');
-  if(cb){cb.value=defComment;cb.disabled=isSubmitted;}
+  if(cb){cb.value=defComment;cb.disabled=isLocked;}
   if(cw){var sf=['OTHER','DISPUTE','PROMISE','PARTIAL'];cw.style.display=(sf.indexOf(currentAtr)>=0||defComment)?'block':'none';}
   atrSec.querySelectorAll('.save-atr-btn').forEach(function(b){
-    b.disabled=isSubmitted;b.style.opacity=isSubmitted?'0.5':'1';
-    b.style.background=isSubmitted?'#9CA3AF':'#F59E0B';
-    b.textContent=isSubmitted?'✅ ATR ALREADY SUBMITTED':'💾 SAVE ATR STATUS';
+    b.textContent=isLocked?'🔒 PUSH TO SHEET TO UNLOCK':isSubmitted?'✏️ EDIT ATR':'💾 SAVE ATR STATUS'; b.style.background=isLocked?'#9CA3AF':isSubmitted?'#6366F1':'#F59E0B'; b.disabled=isLocked; b.style.opacity=isLocked?'0.7':'1'; b.style.cursor=isLocked?'not-allowed':'pointer'; b.style.fontSize=isLocked?'11px':'';
   });
   atrSec.dataset.type='defaulter';
 
@@ -4480,7 +4569,8 @@ function openMainDetail(acctId){
     sel.value = currentAtr;
     updateAtrSelectStyle();
     var isSubmitted = currentAtr !== 'PENDING';
-    sel.disabled = isSubmitted;
+    var isLocked = isSubmitted && isAtrLocked(defRec.ACCT_ID, 'defaulter');
+    sel.disabled = isLocked;
     sel.style.opacity = isSubmitted ? '0.7' : '1';
     // Load saved comment
     var defSaved = {};
