@@ -1105,7 +1105,7 @@ function buildDashboard(){
   var billed=[], unbilled=[], totalOut=0, totalCA=0;
   D.forEach(function(r){
     if(r.SOURCE==='billed') billed.push(r); else unbilled.push(r);
-    totalOut += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    totalOut += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
     totalCA  += parseFloat(r.CA||0)||0;
   });
 
@@ -1115,7 +1115,7 @@ function buildDashboard(){
     var ss=r.SUBSTATION||'Unknown';
     if(!ssMap[ss]) ssMap[ss]={billed:0,unbilled:0,out:0,ca:0};
     if(r.SOURCE==='billed') ssMap[ss].billed++; else ssMap[ss].unbilled++;
-    ssMap[ss].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    ssMap[ss].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
     ssMap[ss].ca  += parseFloat(r.CA||0)||0;
   });
   var ssList = Object.keys(ssMap).sort();
@@ -1127,7 +1127,7 @@ function buildDashboard(){
     var t=r.CATEGORY||'Unknown';
     if(!tarMap[t]) tarMap[t]={count:0,out:0,r5:0,r10:0,r50:0,r1l:0};
     tarMap[t].count++;
-    tarMap[t].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    tarMap[t].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
   });
   // Add defaulter range breakdown per tariff
   DEF_ALL.forEach(function(r){
@@ -1147,7 +1147,7 @@ function buildDashboard(){
     var b=String(r.BILL_BASIS||'').trim().toUpperCase()||'UNKNOWN';
     if(!basisMap[b]) basisMap[b]={count:0,out:0,defCount:0,defOut:0};
     basisMap[b].count++;
-    basisMap[b].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    basisMap[b].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
   });
   DEF_ALL.forEach(function(r){
     var b=String(r.BILL_BASIS||'').trim().toUpperCase()||'UNKNOWN';
@@ -1192,7 +1192,7 @@ function buildDashboard(){
     var f = feederMap[fd];
     f.total++;
     if(r.SOURCE==='billed') f.billed++; else f.unbilled++;
-    var rOut = parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    var rOut = Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
     f.out += rOut;
     f.ca  += parseFloat(r.CA||0)||0;
     var pd = parseDate(r.LAST_PAY_DATE||r.PAY_DATE);
@@ -1538,7 +1538,7 @@ function dashRenderFiltered(){
   var billedC=0, unbilledC=0, totOut=0, totCA=0;
   scopeD.forEach(function(r){
     if(r.SOURCE==='billed') billedC++; else unbilledC++;
-    totOut += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    totOut += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
     totCA  += parseFloat(r.CA||0)||0;
   });
   var defOutS = scopeDef.reduce(function(s,r){return s+(r.OUTSTANDING||0);},0);
@@ -1547,15 +1547,20 @@ function dashRenderFiltered(){
   var catMap = {};
   scopeD.forEach(function(r){
     var t = r.CATEGORY || 'Unknown';
-    if(!catMap[t]) catMap[t] = {count:0, out:0, defCount:0, defOut:0};
+    if(!catMap[t]) catMap[t] = {count:0, out:0, defCount:0, defOut:0, r5:0, r10:0, r50:0, r1l:0};
     catMap[t].count++;
-    catMap[t].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    catMap[t].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
   });
   scopeDef.forEach(function(r){
     var t = r.SUPPLY_TYPE || 'Unknown';
-    if(!catMap[t]) catMap[t] = {count:0, out:0, defCount:0, defOut:0};
+    if(!catMap[t]) catMap[t] = {count:0, out:0, defCount:0, defOut:0, r5:0, r10:0, r50:0, r1l:0};
+    var o = r.OUTSTANDING||0;
     catMap[t].defCount++;
-    catMap[t].defOut += r.OUTSTANDING||0;
+    catMap[t].defOut += o;
+    if(o>=5000   && o<10000)  catMap[t].r5++;
+    if(o>=10000  && o<50000)  catMap[t].r10++;
+    if(o>=50000  && o<100000) catMap[t].r50++;
+    if(o>=100000)             catMap[t].r1l++;
   });
   var catList = Object.keys(catMap).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
 
@@ -1565,7 +1570,7 @@ function dashRenderFiltered(){
     var b = String(r.BILL_BASIS||'').trim().toUpperCase()||'UNKNOWN';
     if(!fBasisMap[b]) fBasisMap[b]={count:0,out:0,defCount:0,defOut:0};
     fBasisMap[b].count++;
-    fBasisMap[b].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    fBasisMap[b].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
   });
   scopeDef.forEach(function(r){
     var b = String(r.BILL_BASIS||'').trim().toUpperCase()||'UNKNOWN';
@@ -1600,11 +1605,20 @@ function dashRenderFiltered(){
   h += mk('DEF OUTSTANDING', cr2(defOutS), '#FFF1F2', '#F43F5E');
   h += '</div>';
 
-  // Category-wise table
+  // Category-wise table with defaulter range breakdown
   h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  h += '<thead><tr style="background:#F8FAFC;">';
-  ['TARIFF / CATEGORY','CONSUMERS','OUTSTANDING','DEFAULTERS','DEF OUTSTANDING'].forEach(function(hd){
-    h += '<th style="padding:7px 9px;text-align:'+(hd==='TARIFF / CATEGORY'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">'+hd+'</th>';
+  h += '<thead>';
+  h += '<tr style="background:#F8FAFC;">';
+  h += '<th rowspan="2" style="padding:7px 9px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">TARIFF</th>';
+  h += '<th rowspan="2" style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">CONSUMERS</th>';
+  h += '<th rowspan="2" style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">OUTSTANDING</th>';
+  h += '<th rowspan="2" style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">DEFAULTERS</th>';
+  h += '<th rowspan="2" style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">DEF OUTSTANDING</th>';
+  h += '<th colspan="4" style="padding:5px 9px;text-align:center;font-family:var(--fh);font-size:10px;color:#B91C1C;border-bottom:1px solid #FECACA;border-left:1px solid #FECACA;background:#FFF1F2;">⚠ DEFAULTER COUNT BY RANGE</th>';
+  h += '</tr>';
+  h += '<tr style="background:#FFF1F2;">';
+  ['₹5K–10K','₹10K–50K','₹50K–1L','Above ₹1L'].forEach(function(rh){
+    h += '<th style="padding:5px 7px;text-align:right;font-family:var(--fh);font-size:9px;color:#B91C1C;border-bottom:1px solid #FECACA;border-left:1px solid #FECACA;white-space:nowrap;">'+rh+'</th>';
   });
   h += '</tr></thead><tbody>';
   catList.forEach(function(t,i){
@@ -1615,6 +1629,10 @@ function dashRenderFiltered(){
     h += '<td style="padding:7px 9px;text-align:right;color:#EA580C;font-weight:700;">'+cr2(c.out)+'</td>';
     h += '<td style="padding:7px 9px;text-align:right;color:#D97706;font-weight:700;">'+(c.defCount||0).toLocaleString()+'</td>';
     h += '<td style="padding:7px 9px;text-align:right;color:#F43F5E;font-weight:700;">'+cr2(c.defOut||0)+'</td>';
+    h += '<td style="padding:7px 9px;text-align:right;color:#BE123C;font-weight:700;border-left:1px solid #FEE2E2;">'+(c.r5||0)+'</td>';
+    h += '<td style="padding:7px 9px;text-align:right;color:#DC2626;font-weight:700;">'+(c.r10||0)+'</td>';
+    h += '<td style="padding:7px 9px;text-align:right;color:#E11D48;font-weight:700;">'+(c.r50||0)+'</td>';
+    h += '<td style="padding:7px 9px;text-align:right;color:#C2410C;font-weight:800;">'+(c.r1l||0)+'</td>';
     h += '</tr>';
   });
   h += '</tbody></table></div>';
@@ -1649,7 +1667,7 @@ function dashRenderFiltered(){
       if(!feedCatMap[f]) feedCatMap[f]={};
       if(!feedCatMap[f][c]) feedCatMap[f][c]={count:0,out:0};
       feedCatMap[f][c].count++;
-      feedCatMap[f][c].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+      feedCatMap[f][c].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
     });
     var fcFeeders = Object.keys(feedCatMap).sort();
     if(fcFeeders.length){
@@ -1686,7 +1704,7 @@ function dashRenderFiltered(){
       if(!catFeedMap[c]) catFeedMap[c]={};
       if(!catFeedMap[c][f]) catFeedMap[c][f]={count:0,out:0};
       catFeedMap[c][f].count++;
-      catFeedMap[c][f].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+      catFeedMap[c][f].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
     });
     var cfCats = Object.keys(catFeedMap).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
     if(cfCats.length > 1){
@@ -1737,7 +1755,7 @@ function dashExportFiltered(){
     return {
       ACCT_ID:r.ACCT_ID, NAME:r.NAME, MOBILE:r.MOBILE_NO||r.MOBILE,
       SUBSTATION:r.SUBSTATION, FEEDER:r.FEEDER, TARIFF:r.CATEGORY,
-      SOURCE:r.SOURCE, OUTSTANDING:Math.round(parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0),
+      SOURCE:r.SOURCE, OUTSTANDING:Math.round(Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0)),
       CA:r.CA||'', BILLED_UNITS:r.BILLED_UNITS||'', BILL_DATE:r.BILL_DATE||'', DUE_DATE:r.DUE_DATE||'', BILL_BASIS:r.BILL_BASIS||''
     };
   });
