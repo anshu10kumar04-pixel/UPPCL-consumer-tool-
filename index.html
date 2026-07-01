@@ -1125,19 +1125,20 @@ function buildDashboard(){
   var tarMap={};
   D.forEach(function(r){
     var t=r.CATEGORY||'Unknown';
-    if(!tarMap[t]) tarMap[t]={count:0,out:0,r5:0,r10:0,r50:0,r1l:0};
+    if(!tarMap[t]) tarMap[t]={count:0,out:0,r2:0,r2o:0,r5:0,r5o:0,r10:0,r10o:0,r50:0,r50o:0,r1l:0,r1lo:0};
     tarMap[t].count++;
     tarMap[t].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
   });
   // Add defaulter range breakdown per tariff
   DEF_ALL.forEach(function(r){
     var t=r.SUPPLY_TYPE||'Unknown';
-    if(!tarMap[t]) tarMap[t]={count:0,out:0,r5:0,r10:0,r50:0,r1l:0};
+    if(!tarMap[t]) tarMap[t]={count:0,out:0,r2:0,r2o:0,r5:0,r5o:0,r10:0,r10o:0,r50:0,r50o:0,r1l:0,r1lo:0};
     var o=r.OUTSTANDING||0;
-    if(o>=5000   && o<10000)  tarMap[t].r5++;
-    if(o>=10000  && o<50000)  tarMap[t].r10++;
-    if(o>=50000  && o<100000) tarMap[t].r50++;
-    if(o>=100000)             tarMap[t].r1l++;
+    if(o>=2000  && o<5000)  { tarMap[t].r2++;  tarMap[t].r2o+=o;  }
+    if(o>=5000  && o<10000) { tarMap[t].r5++;  tarMap[t].r5o+=o;  }
+    if(o>=10000 && o<50000) { tarMap[t].r10++; tarMap[t].r10o+=o; }
+    if(o>=50000 && o<100000){ tarMap[t].r50++; tarMap[t].r50o+=o; }
+    if(o>=100000)           { tarMap[t].r1l++; tarMap[t].r1lo+=o; }
   });
   var tarList = Object.keys(tarMap).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
 
@@ -1166,6 +1167,7 @@ function buildDashboard(){
   // Defaulter stats
   var defOut=0, defSsMap={};
   var defRanges=[
+    {label:'₹2K–5K',   min:2000,   max:5000,   count:0, out:0},
     {label:'₹5K–10K',  min:5000,   max:10000,  count:0, out:0},
     {label:'₹10K–50K', min:10000,  max:50000,  count:0, out:0},
     {label:'₹50K–1L',  min:50000,  max:100000, count:0, out:0},
@@ -1390,11 +1392,11 @@ function buildDashboard(){
   html += '<th rowspan="2" style="padding:8px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">CONSUMERS</th>';
   html += '<th rowspan="2" style="padding:8px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">% SHARE</th>';
   html += '<th rowspan="2" style="padding:8px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">OUTSTANDING</th>';
-  html += '<th colspan="4" style="padding:6px 10px;text-align:center;font-family:var(--fh);font-size:10px;color:#B91C1C;border-bottom:1px solid #BBF7D0;border-left:1px solid #BBF7D0;background:#FFF1F2;">⚠ DEFAULTER COUNT BY OUTSTANDING RANGE</th>';
+  html += '<th colspan="4" style="padding:6px 10px;text-align:center;font-family:var(--fh);font-size:10px;color:#B91C1C;border-bottom:1px solid #BBF7D0;border-left:1px solid #BBF7D0;background:#FFF1F2;">⚠ DEFAULTER COUNT &amp; AMOUNT BY OUTSTANDING RANGE</th>';
   html += '</tr>';
   html += '<tr style="background:#FFF1F2;">';
-  ['₹5K–10K','₹10K–50K','₹50K–1L','Above ₹1L'].forEach(function(rh){
-    html += '<th style="padding:6px 8px;text-align:right;font-family:var(--fh);font-size:9px;color:#B91C1C;border-bottom:1px solid #FECACA;border-left:1px solid #FECACA;white-space:nowrap;">'+rh+'</th>';
+  ['₹2K–5K','Amt','₹5K–10K','Amt','₹10K–50K','Amt','₹50K–1L','Amt','Above ₹1L','Amt'].forEach(function(rh,ri){
+    html += '<th style="padding:5px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:'+(ri%2?'#9CA3AF':'#B91C1C')+';border-bottom:1px solid #FECACA;border-left:'+(ri===0?'1px solid #FECACA':'none')+';white-space:nowrap;">'+rh+'</th>';
   });
   html += '</tr>';
   html += '</thead><tbody>';
@@ -1405,10 +1407,16 @@ function buildDashboard(){
     html += '<td style="padding:8px 10px;text-align:right;font-weight:600;">'+td.count.toLocaleString()+'</td>';
     html += '<td style="padding:8px 10px;text-align:right;color:#6B7280;">'+pct+'%</td>';
     html += '<td style="padding:8px 10px;text-align:right;color:#EA580C;font-weight:700;">'+cr(td.out)+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#BE123C;font-weight:700;border-left:1px solid #FEE2E2;">'+(td.r5||0)+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#DC2626;font-weight:700;">'+(td.r10||0)+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#E11D48;font-weight:700;">'+(td.r50||0)+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#C2410C;font-weight:800;">'+(td.r1l||0)+'</td>';
+    html += '<td style="padding:6px 8px;text-align:right;color:#BE123C;font-weight:700;border-left:1px solid #FEE2E2;">'+(td.r2||0)+'</td>';
+    html += '<td style="padding:6px 8px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(td.r2o||0)+'</td>';
+    html += '<td style="padding:6px 8px;text-align:right;color:#DC2626;font-weight:700;">'+(td.r5||0)+'</td>';
+    html += '<td style="padding:6px 8px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(td.r5o||0)+'</td>';
+    html += '<td style="padding:6px 8px;text-align:right;color:#E11D48;font-weight:700;">'+(td.r10||0)+'</td>';
+    html += '<td style="padding:6px 8px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(td.r10o||0)+'</td>';
+    html += '<td style="padding:6px 8px;text-align:right;color:#9A3412;font-weight:700;">'+(td.r50||0)+'</td>';
+    html += '<td style="padding:6px 8px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(td.r50o||0)+'</td>';
+    html += '<td style="padding:6px 8px;text-align:right;color:#C2410C;font-weight:800;">'+(td.r1l||0)+'</td>';
+    html += '<td style="padding:6px 8px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=10000000?'₹'+(v/10000000).toFixed(1)+'Cr':v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(td.r1lo||0)+'</td>';
     html += '</tr>';
   });
   html += '</tbody></table></div></div>';
@@ -1466,6 +1474,206 @@ function buildDashboard(){
     html += '</tr>';
   });
   html += '</tbody></table></div></div>';
+
+  // ── ATR PROGRESS (SS-wise, day-wise) ─────────────────────────────────
+  var atrDef = {}; try{ atrDef = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+  var atrSm  = {}; try{ atrSm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
+
+  if(Object.keys(atrDef).length || Object.keys(atrSm).length){
+    // Build SS-wise, day-wise ATR summary
+    var atrSsDay = {}; // {SS: {day: {PAID:0,LOCK:0,THEFT:0,OTHER:0}}}
+    var atrDays  = new Set();
+    var atrStatuses = ['PAID','LOCK','THEFT','DISPUTE','PROMISE','OTHER'];
+
+    function processAtrEntry(acct, e, lookup){
+      var status = (typeof e==='object'?e.atr:e)||'PENDING';
+      if(status==='PENDING') return;
+      var ts = typeof e==='object'?e.ts:'';
+      var day = 'Unknown';
+      if(ts){
+        try{
+          var d = new Date(ts);
+          if(!isNaN(d)) day = d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
+        }catch(ex){}
+      }
+      var defRec = DEF_ALL.find(function(r){return String(r.ACCT_ID)===String(acct);});
+      var ss = defRec ? defRec.SUBSTATION : (lookup&&lookup[acct]?lookup[acct]:'Unknown');
+      if(!ss) ss = 'Unknown';
+      if(!atrSsDay[ss]) atrSsDay[ss]={};
+      if(!atrSsDay[ss][day]) atrSsDay[ss][day]={PAID:0,LOCK:0,THEFT:0,DISPUTE:0,PROMISE:0,OTHER:0,total:0};
+      atrSsDay[ss][day][status] = (atrSsDay[ss][day][status]||0)+1;
+      atrSsDay[ss][day].total++;
+      atrDays.add(day);
+    }
+
+    // Build SS lookup from D for SM ATR entries
+    var _ssLookup={};
+    D.forEach(function(r){_ssLookup[String(r.ACCT_ID)]=r.SUBSTATION;});
+    Object.keys(atrDef).forEach(function(a){processAtrEntry(a,atrDef[a],_ssLookup);});
+    Object.keys(atrSm).forEach(function(a){processAtrEntry(a,atrSm[a],_ssLookup);});
+
+    var sortedDays = Array.from(atrDays).filter(function(d){return d!=='Unknown';}).sort(function(a,b){
+      return new Date(a)-new Date(b);
+    });
+    if(atrDays.has('Unknown')) sortedDays.push('Unknown');
+    var atrSsList = Object.keys(atrSsDay).sort();
+    var totalActioned = Object.values(atrDef).filter(function(e){return (typeof e==='object'?e.atr:e)!=='PENDING';}).length
+                      + Object.values(atrSm).filter(function(e){return (typeof e==='object'?e.atr:e)!=='PENDING';}).length;
+
+    html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
+    html += '<div style="background:#1E40AF;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;">';
+    html += '<span>📋 ATR PROGRESS — SS-WISE DAY-WISE</span>';
+    html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">Total Actioned: '+totalActioned+'</span>';
+    html += '</div>';
+
+    if(sortedDays.length===0){
+      html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No ATR entries recorded yet. Field staff should mark ATR status in Defaulter tab.</div>';
+    } else {
+      html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+      html += '<thead><tr style="background:#EFF6FF;">';
+      html += '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;min-width:130px;">SUBSTATION</th>';
+      sortedDays.forEach(function(day){
+        html += '<th colspan="2" style="padding:7px 8px;text-align:center;font-family:var(--fh);font-size:10px;color:#1D4ED8;border-bottom:1px solid #BFDBFE;border-left:1px solid #BFDBFE;white-space:nowrap;">'+day+'</th>';
+      });
+      html += '<th colspan="2" style="padding:7px 8px;text-align:center;font-family:var(--fh);font-size:10px;color:#065F46;border-bottom:1px solid #BFDBFE;border-left:1px solid #BFDBFE;">TOTAL</th>';
+      html += '</tr>';
+      html += '<tr style="background:#F8FAFC;">';
+      html += '<th style="padding:5px 10px;font-family:var(--fh);font-size:9px;color:#9CA3AF;border-bottom:1px solid #E5E7EB;"></th>';
+      sortedDays.forEach(function(){
+        html += '<th style="padding:5px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#059669;border-bottom:1px solid #E5E7EB;border-left:1px solid #E5E7EB;">Entries</th>';
+        html += '<th style="padding:5px 6px;text-align:left;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #E5E7EB;">Breakdown</th>';
+      });
+      html += '<th style="padding:5px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#059669;border-bottom:1px solid #E5E7EB;border-left:1px solid #E5E7EB;">Count</th>';
+      html += '<th style="padding:5px 6px;text-align:left;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #E5E7EB;">Breakdown</th>';
+      html += '</tr></thead><tbody>';
+
+      var statusColors = {PAID:'#059669',LOCK:'#7C3AED',THEFT:'#DC2626',DISPUTE:'#D97706',PROMISE:'#0EA5E9',OTHER:'#6B7280'};
+
+      atrSsList.forEach(function(ss,i){
+        var grand=0, grandBreak={};
+        html += '<tr style="background:'+(i%2?'#F9FAFB':'#fff')+'">';
+        html += '<td style="padding:7px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+ss+'</td>';
+        sortedDays.forEach(function(day){
+          var d = atrSsDay[ss]&&atrSsDay[ss][day];
+          html += '<td style="padding:6px 6px;text-align:right;font-weight:700;color:#1D4ED8;border-left:1px solid #F0F0F0;">'+(d?d.total:'-')+'</td>';
+          html += '<td style="padding:6px 6px;font-size:10px;">';
+          if(d){ atrStatuses.forEach(function(s){if(d[s]>0){html+='<span style="color:'+statusColors[s]+';font-weight:600;">'+s[0]+':'+d[s]+'</span> ';}});
+            grand+=d.total; atrStatuses.forEach(function(s){grandBreak[s]=(grandBreak[s]||0)+(d[s]||0);}); }
+          html += '</td>';
+        });
+        html += '<td style="padding:6px 6px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #BBF7D0;">'+(grand||'-')+'</td>';
+        html += '<td style="padding:6px 6px;font-size:10px;">';
+        atrStatuses.forEach(function(s){if(grandBreak[s]>0){html+='<span style="color:'+statusColors[s]+';font-weight:600;">'+s[0]+':'+grandBreak[s]+'</span> ';}});
+        html += '</td></tr>';
+      });
+      // Grand total row
+      var gt=0, gtb={};
+      html += '<tr style="background:#EFF6FF;border-top:2px solid #BFDBFE;">';
+      html += '<td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#1E40AF;">TOTAL</td>';
+      sortedDays.forEach(function(day){
+        var dayTotal=0,dayBreak={};
+        atrSsList.forEach(function(ss){var d=atrSsDay[ss]&&atrSsDay[ss][day];if(d){dayTotal+=d.total;atrStatuses.forEach(function(s){dayBreak[s]=(dayBreak[s]||0)+(d[s]||0);});}});
+        html += '<td style="padding:6px 6px;text-align:right;font-weight:800;color:#1D4ED8;border-left:1px solid #BFDBFE;">'+(dayTotal||'-')+'</td>';
+        html += '<td style="padding:6px 6px;font-size:10px;">';
+        atrStatuses.forEach(function(s){if(dayBreak[s]>0){html+='<span style="color:'+statusColors[s]+';font-weight:600;">'+s[0]+':'+dayBreak[s]+'</span> ';}});
+        gt+=dayTotal; atrStatuses.forEach(function(s){gtb[s]=(gtb[s]||0)+(dayBreak[s]||0);});
+        html += '</td>';
+      });
+      html += '<td style="padding:6px 6px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #BBF7D0;">'+gt+'</td>';
+      html += '<td style="padding:6px 6px;font-size:10px;">';
+      atrStatuses.forEach(function(s){if(gtb[s]>0){html+='<span style="color:'+statusColors[s]+';font-weight:600;">'+s+':<b>'+gtb[s]+'</b></span> ';}});
+      html += '</td></tr>';
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+  }
+
+  // ── DEFAULTER RECOVERY — WHO PAID (Yesterday + Current Month) ─────────
+  var today   = new Date();
+  var yyyyMM  = today.getFullYear()+'-'+(today.getMonth()+1).toString().padStart(2,'0');
+  var yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
+  var yDay = yesterday.getDate(), yMon = yesterday.getMonth(), yYear = yesterday.getFullYear();
+
+  // Match consumers who were ever in DEF_ALL and have recent PAY_DATE in D
+  var defAcctSet = new Set(DEF_ALL.map(function(r){return String(r.ACCT_ID);}));
+  var recYest=[], recMonth=[];
+
+  D.forEach(function(r){
+    if(!defAcctSet.has(String(r.ACCT_ID))) return;
+    var pd = parseDate(r.LAST_PAY_DATE||r.PAY_DATE);
+    if(!pd) return;
+    var isYest = pd.getDate()===yDay && pd.getMonth()===yMon && pd.getFullYear()===yYear;
+    var isMon  = pd.getFullYear()===today.getFullYear() && pd.getMonth()===today.getMonth();
+    if(isYest) recYest.push(r);
+    if(isMon)  recMonth.push(r);
+  });
+
+  function buildRecoveryTable(records, label){
+    if(!records.length) return '<div style="padding:10px 16px;font-size:12px;color:#9CA3AF;">No records found for this period.</div>';
+    var ssMap2={}, catMap2={};
+    records.forEach(function(r){
+      var ss=r.SUBSTATION||'Unknown', cat=r.CATEGORY||'Unknown';
+      var amt=Math.max(0,parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);
+      if(!ssMap2[ss]) ssMap2[ss]={count:0,amt:0,cats:{}};
+      ssMap2[ss].count++; ssMap2[ss].amt+=amt;
+      if(!ssMap2[ss].cats[cat]) ssMap2[ss].cats[cat]={count:0,amt:0};
+      ssMap2[ss].cats[cat].count++; ssMap2[ss].cats[cat].amt+=amt;
+      if(!catMap2[cat]) catMap2[cat]={count:0,amt:0};
+      catMap2[cat].count++; catMap2[cat].amt+=amt;
+    });
+    var h2='';
+    // SS-wise + category breakdown
+    h2 += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+    h2 += '<thead><tr style="background:#F0FDF4;"><th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">SUBSTATION</th>';
+    h2 += '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">TARIFF</th>';
+    h2 += '<th style="padding:7px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">CONSUMERS PAID</th>';
+    h2 += '<th style="padding:7px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">AMOUNT COLLECTED</th></tr></thead><tbody>';
+    var rIdx=0;
+    Object.keys(ssMap2).sort().forEach(function(ss){
+      var sd=ssMap2[ss];
+      var cats=Object.keys(sd.cats).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+      cats.forEach(function(cat,ci){
+        var cd=sd.cats[cat];
+        h2 += '<tr style="background:'+(rIdx++%2?'#F9FAFB':'#fff')+'">';
+        h2 += '<td style="padding:7px 10px;font-weight:700;color:#065F46;font-family:var(--fh);">'+(ci===0?ss:'')+'</td>';
+        h2 += '<td style="padding:7px 10px;"><span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;background:#D1FAE5;color:#065F46;">'+cat+'</span></td>';
+        h2 += '<td style="padding:7px 10px;text-align:right;font-weight:700;color:#059669;">'+cd.count+'</td>';
+        h2 += '<td style="padding:7px 10px;text-align:right;font-weight:700;color:#1D4ED8;">'+cr(cd.amt)+'</td>';
+        h2 += '</tr>';
+      });
+      // SS subtotal
+      h2 += '<tr style="background:#F0FDF4;">';
+      h2 += '<td style="padding:5px 10px;font-weight:800;color:#065F46;font-family:var(--fh);">'+ss+' TOTAL</td>';
+      h2 += '<td></td>';
+      h2 += '<td style="padding:5px 10px;text-align:right;font-weight:800;color:#059669;">'+sd.count+'</td>';
+      h2 += '<td style="padding:5px 10px;text-align:right;font-weight:800;color:#1D4ED8;">'+cr(sd.amt)+'</td>';
+      h2 += '</tr>';
+    });
+    // Grand total
+    var gTotal=records.length, gAmt=records.reduce(function(s,r){return s+Math.max(0,parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);},0);
+    h2 += '<tr style="background:#D1FAE5;border-top:2px solid #6EE7B7;">';
+    h2 += '<td style="padding:8px 10px;font-weight:800;font-family:var(--fh);color:#065F46;">GRAND TOTAL</td><td></td>';
+    h2 += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#059669;">'+gTotal+'</td>';
+    h2 += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#1D4ED8;">'+cr(gAmt)+'</td>';
+    h2 += '</tr></tbody></table></div>';
+    return h2;
+  }
+
+  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
+  html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">💰 DEFAULTER RECOVERY REPORT — WHO PAID</div>';
+  html += '<div style="padding:0;">';
+
+  // Yesterday
+  html += '<div style="padding:10px 16px;font-family:var(--fh);font-weight:700;font-size:12px;color:#065F46;background:#F0FDF4;border-bottom:1px solid #BBF7D0;">';
+  html += '📅 YESTERDAY ('+yesterday.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})+') — '+recYest.length+' consumers paid</div>';
+  html += buildRecoveryTable(recYest, 'yesterday');
+
+  // Current month
+  html += '<div style="padding:10px 16px;font-family:var(--fh);font-weight:700;font-size:12px;color:#065F46;background:#F0FDF4;border-bottom:1px solid #BBF7D0;border-top:2px solid #6EE7B7;">';
+  html += '📆 CURRENT MONTH ('+today.toLocaleDateString('en-IN',{month:'long',year:'numeric'})+') — '+recMonth.length+' consumers paid</div>';
+  html += buildRecoveryTable(recMonth, 'month');
+
+  html += '</div></div>';
 
   html += '</div>'; // end container
   el.innerHTML = html;
@@ -1547,20 +1755,21 @@ function dashRenderFiltered(){
   var catMap = {};
   scopeD.forEach(function(r){
     var t = r.CATEGORY || 'Unknown';
-    if(!catMap[t]) catMap[t] = {count:0, out:0, defCount:0, defOut:0, r5:0, r10:0, r50:0, r1l:0};
+    if(!catMap[t]) catMap[t] = {count:0, out:0, defCount:0, defOut:0, r2:0,r2o:0,r5:0,r5o:0,r10:0,r10o:0,r50:0,r50o:0,r1l:0,r1lo:0};
     catMap[t].count++;
     catMap[t].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
   });
   scopeDef.forEach(function(r){
     var t = r.SUPPLY_TYPE || 'Unknown';
-    if(!catMap[t]) catMap[t] = {count:0, out:0, defCount:0, defOut:0, r5:0, r10:0, r50:0, r1l:0};
+    if(!catMap[t]) catMap[t] = {count:0, out:0, defCount:0, defOut:0, r2:0,r2o:0,r5:0,r5o:0,r10:0,r10o:0,r50:0,r50o:0,r1l:0,r1lo:0};
     var o = r.OUTSTANDING||0;
     catMap[t].defCount++;
     catMap[t].defOut += o;
-    if(o>=5000   && o<10000)  catMap[t].r5++;
-    if(o>=10000  && o<50000)  catMap[t].r10++;
-    if(o>=50000  && o<100000) catMap[t].r50++;
-    if(o>=100000)             catMap[t].r1l++;
+    if(o>=2000  && o<5000)  { catMap[t].r2++;  catMap[t].r2o+=o;  }
+    if(o>=5000  && o<10000) { catMap[t].r5++;  catMap[t].r5o+=o;  }
+    if(o>=10000 && o<50000) { catMap[t].r10++; catMap[t].r10o+=o; }
+    if(o>=50000 && o<100000){ catMap[t].r50++; catMap[t].r50o+=o; }
+    if(o>=100000)           { catMap[t].r1l++; catMap[t].r1lo+=o; }
   });
   var catList = Object.keys(catMap).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
 
@@ -1614,11 +1823,11 @@ function dashRenderFiltered(){
   h += '<th rowspan="2" style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">OUTSTANDING</th>';
   h += '<th rowspan="2" style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">DEFAULTERS</th>';
   h += '<th rowspan="2" style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">DEF OUTSTANDING</th>';
-  h += '<th colspan="4" style="padding:5px 9px;text-align:center;font-family:var(--fh);font-size:10px;color:#B91C1C;border-bottom:1px solid #FECACA;border-left:1px solid #FECACA;background:#FFF1F2;">⚠ DEFAULTER COUNT BY RANGE</th>';
+  h += '<th colspan="10" style="padding:5px 9px;text-align:center;font-family:var(--fh);font-size:10px;color:#B91C1C;border-bottom:1px solid #FECACA;border-left:1px solid #FECACA;background:#FFF1F2;">⚠ DEFAULTER COUNT &amp; AMOUNT BY RANGE</th>';
   h += '</tr>';
   h += '<tr style="background:#FFF1F2;">';
-  ['₹5K–10K','₹10K–50K','₹50K–1L','Above ₹1L'].forEach(function(rh){
-    h += '<th style="padding:5px 7px;text-align:right;font-family:var(--fh);font-size:9px;color:#B91C1C;border-bottom:1px solid #FECACA;border-left:1px solid #FECACA;white-space:nowrap;">'+rh+'</th>';
+  ['₹2K–5K','Amt','₹5K–10K','Amt','₹10K–50K','Amt','₹50K–1L','Amt','Above ₹1L','Amt'].forEach(function(rh,ri){
+    h += '<th style="padding:4px 5px;text-align:right;font-family:var(--fh);font-size:9px;color:'+(ri%2?'#9CA3AF':'#B91C1C')+';border-bottom:1px solid #FECACA;border-left:'+(ri===0?'1px solid #FECACA':'none')+';white-space:nowrap;">'+rh+'</th>';
   });
   h += '</tr></thead><tbody>';
   catList.forEach(function(t,i){
@@ -1629,10 +1838,16 @@ function dashRenderFiltered(){
     h += '<td style="padding:7px 9px;text-align:right;color:#EA580C;font-weight:700;">'+cr2(c.out)+'</td>';
     h += '<td style="padding:7px 9px;text-align:right;color:#D97706;font-weight:700;">'+(c.defCount||0).toLocaleString()+'</td>';
     h += '<td style="padding:7px 9px;text-align:right;color:#F43F5E;font-weight:700;">'+cr2(c.defOut||0)+'</td>';
-    h += '<td style="padding:7px 9px;text-align:right;color:#BE123C;font-weight:700;border-left:1px solid #FEE2E2;">'+(c.r5||0)+'</td>';
-    h += '<td style="padding:7px 9px;text-align:right;color:#DC2626;font-weight:700;">'+(c.r10||0)+'</td>';
-    h += '<td style="padding:7px 9px;text-align:right;color:#E11D48;font-weight:700;">'+(c.r50||0)+'</td>';
-    h += '<td style="padding:7px 9px;text-align:right;color:#C2410C;font-weight:800;">'+(c.r1l||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#BE123C;font-weight:700;border-left:1px solid #FEE2E2;">'+(c.r2||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(c.r2o||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#DC2626;font-weight:700;">'+(c.r5||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(c.r5o||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#E11D48;font-weight:700;">'+(c.r10||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(c.r10o||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#9A3412;font-weight:700;">'+(c.r50||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(c.r50o||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#C2410C;font-weight:800;">'+(c.r1l||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=10000000?'₹'+(v/10000000).toFixed(1)+'Cr':v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(c.r1lo||0)+'</td>';
     h += '</tr>';
   });
   h += '</tbody></table></div>';
@@ -2276,6 +2491,49 @@ function logout(){
   gel('app').style.display='none';
 }
 window.addEventListener('DOMContentLoaded',function(){
+  // ── MONTHLY ATR RESET ─────────────────────────────────────────────────
+  // On new month: archive previous month ATR to sheet, clear localStorage
+  (function checkMonthlyAtrReset(){
+    var now = new Date();
+    var curMonth = now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
+    var lastMonth = localStorage.getItem('atr_last_reset_month');
+    if(lastMonth && lastMonth !== curMonth){
+      // New month detected — archive then reset
+      console.log('New month detected. Archiving ATR for:', lastMonth);
+      var smData  = {}; try{smData  = JSON.parse(localStorage.getItem('atr_data')||'{}');    }catch(e){}
+      var defData = {}; try{defData = JSON.parse(localStorage.getItem('def_atr_data')||'{}');}catch(e){}
+      var url = localStorage.getItem('atr_script_url');
+      if(url && (Object.keys(smData).length || Object.keys(defData).length)){
+        // Push archive to sheet with month label
+        fetch(url, {
+          method:'POST', mode:'no-cors',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            type: 'archive_month',
+            month: lastMonth,
+            sm: smData,
+            defaulter: defData
+          })
+        }).then(function(){
+          console.log('ATR archived for month:', lastMonth);
+        }).catch(function(e){ console.warn('Archive failed:', e); });
+      }
+      // Clear ATR localStorage — fresh start for new month
+      localStorage.removeItem('atr_data');
+      localStorage.removeItem('def_atr_data');
+      localStorage.removeItem('atr_last_push');
+      localStorage.setItem('atr_last_reset_month', curMonth);
+      // Show notification
+      setTimeout(function(){
+        var msg = '🗓 नए महीने की शुरुआत! पिछले महीने ('+lastMonth+') की ATR Google Sheet में archive हो गई। सभी ATR entries reset हो गई हैं।';
+        if(document.body) alert(msg);
+      }, 2000);
+    } else if(!lastMonth){
+      // First time — just record current month
+      localStorage.setItem('atr_last_reset_month', curMonth);
+    }
+  })();
+
   var session = null;
   try { session = JSON.parse(localStorage.getItem('uppcl_session')); } catch(e){}
   if(session && session.role && session.ts && (Date.now() - session.ts < SESSION_TIMEOUT)){
@@ -3852,7 +4110,8 @@ function renderDefaulters(page){
     {label:'🔴 Above ₹1 Lakh',  min:100000, max:Infinity, rows:[]},
     {label:'🟠 ₹50K – ₹1 Lakh', min:50000,  max:100000,  rows:[]},
     {label:'🟡 ₹10K – ₹50K',    min:10000,  max:50000,   rows:[]},
-    {label:'🟢 ₹5K – ₹10K',     min:5000,   max:10000,   rows:[]}
+    {label:'🟢 ₹2K – ₹5K',      min:2000,   max:5000,    rows:[]},
+    {label:'🔵 ₹5K – ₹10K',     min:5000,   max:10000,   rows:[]}
   ];
   slice.forEach(function(r){
     var o=Math.round(r.OUTSTANDING||0);
