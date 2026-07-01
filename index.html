@@ -1286,18 +1286,30 @@ function buildDashboard(){
   window._dashFeederBySS = {};
   Object.keys(feederBySS).forEach(function(ss){ window._dashFeederBySS[ss]=Array.from(feederBySS[ss]).sort(); });
 
+  // Collect all bill basis values
+  var allBasisVals = [...new Set(D.map(function(r){return String(r.BILL_BASIS||'').trim().toUpperCase();}).filter(Boolean))].sort();
+
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
-  html += '<div style="background:#4338CA;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">🔍 FILTERED REPORT — SELECT SUBSTATION / FEEDER</div>';
+  html += '<div style="background:#4338CA;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">🔍 FILTERED REPORT — SELECT FILTERS</div>';
   html += '<div style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">';
-  html += '<div style="flex:1;min-width:160px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">SUBSTATION</div>';
+  // SS
+  html += '<div style="flex:1;min-width:150px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">SUBSTATION</div>';
   html += '<select id="dash-ss-sel" onchange="dashFeederUpdate()" style="width:100%;padding:8px 10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:12px;font-family:var(--fb);">';
-  html += '<option value="">— All Substations —</option>';
+  html += '<option value="">— All —</option>';
   ssList.forEach(function(ss){ html += '<option value="'+ss+'">'+ss+'</option>'; });
   html += '</select></div>';
-  html += '<div style="flex:1;min-width:160px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">FEEDER</div>';
+  // Feeder
+  html += '<div style="flex:1;min-width:150px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">FEEDER</div>';
   html += '<select id="dash-feed-sel" onchange="dashRenderFiltered()" style="width:100%;padding:8px 10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:12px;font-family:var(--fb);">';
-  html += '<option value="">— All Feeders —</option>';
+  html += '<option value="">— All —</option>';
   html += '</select></div>';
+  // Bill Basis
+  html += '<div style="flex:1;min-width:140px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">BILL BASIS</div>';
+  html += '<select id="dash-basis-sel" onchange="dashRenderFiltered()" style="width:100%;padding:8px 10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:12px;font-family:var(--fb);">';
+  html += '<option value="">— All —</option>';
+  allBasisVals.forEach(function(b){ var bi=billBasisInfo(b); html += '<option value="'+b+'">'+bi.label+'</option>'; });
+  html += '</select></div>';
+  // Buttons
   html += '<button onclick="dashRenderFiltered()" style="background:#4338CA;color:#fff;border:none;padding:9px 18px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:12px;cursor:pointer;">APPLY</button>';
   html += '<button onclick="dashResetFilter()" style="background:#F3F4F6;color:#374151;border:none;padding:9px 14px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:12px;cursor:pointer;">RESET</button>';
   html += '</div>';
@@ -1438,14 +1450,13 @@ function buildDashboard(){
   html += '<div style="padding:10px 16px;font-size:11px;color:#6B7280;background:#FFF7ED;border-bottom:1px solid #FED7AA;">Recovery Score: higher = better collection health. Leakage Score: higher = lower revenue leakage risk. Sorted by worst leakage first.</div>';
   html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr style="background:#FFF7ED;">';
-  ['FEEDER','SUBSTATION','CONSUMERS','DEFAULTERS','OUTSTANDING','DEF OUTSTANDING','RECOVERY SCORE','LEAKAGE SCORE'].forEach(function(h){
-    html += '<th style="padding:8px 10px;text-align:'+(h==='FEEDER'||h==='SUBSTATION'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #FED7AA;white-space:nowrap;">'+h+'</th>';
+  ['FEEDER','CONSUMERS','DEFAULTERS','OUTSTANDING','DEF OUTSTANDING','RECOVERY SCORE','LEAKAGE SCORE'].forEach(function(h){
+    html += '<th style="padding:8px 10px;text-align:'+(h==='FEEDER'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #FED7AA;white-space:nowrap;">'+h+'</th>';
   });
   html += '</tr></thead><tbody>';
   feederRows.forEach(function(f,i){
     html += '<tr style="background:'+(i%2?'#FFFBF5':'#fff')+'">';
     html += '<td style="padding:8px 10px;font-weight:700;color:#7C2D12;font-family:var(--fh);white-space:nowrap;">'+f.feeder+'</td>';
-    html += '<td style="padding:8px 10px;color:#374151;white-space:nowrap;">'+f.ss+'</td>';
     html += '<td style="padding:8px 10px;text-align:right;font-weight:600;">'+f.total.toLocaleString()+'</td>';
     html += '<td style="padding:8px 10px;text-align:right;color:#D97706;font-weight:700;">'+f.defCount.toLocaleString()+'</td>';
     html += '<td style="padding:8px 10px;text-align:right;color:#EA580C;font-weight:700;">'+cr(f.out)+'</td>';
@@ -1486,7 +1497,8 @@ function dashFeederUpdate(){
 }
 
 function dashResetFilter(){
-  if(gel('dash-ss-sel')) gel('dash-ss-sel').value='';
+  if(gel('dash-ss-sel'))    gel('dash-ss-sel').value='';
+  if(gel('dash-basis-sel')) gel('dash-basis-sel').value='';
   dashFeederUpdate();
   if(gel('dash-feed-sel')) gel('dash-feed-sel').value='';
   dashRenderFiltered();
@@ -1497,24 +1509,27 @@ function dashNorm(s){ return String(s||'').trim().toUpperCase(); }
 function dashRenderFiltered(){
   var ss = gel('dash-ss-sel') ? gel('dash-ss-sel').value : '';
   var fd = gel('dash-feed-sel') ? gel('dash-feed-sel').value : '';
+  var basis = gel('dash-basis-sel') ? gel('dash-basis-sel').value : '';
   var resultEl = gel('dash-filtered-result');
   if(!resultEl) return;
 
-  if(!ss && !fd){
-    resultEl.innerHTML = '<div style="padding:14px 16px;font-size:12px;color:#9CA3AF;font-family:var(--fh);border-top:1px solid #E5E7EB;">Select a Substation and/or Feeder above, then click APPLY.</div>';
+  if(!ss && !fd && !basis){
+    resultEl.innerHTML = '<div style="padding:14px 16px;font-size:12px;color:#9CA3AF;font-family:var(--fh);border-top:1px solid #E5E7EB;">Select Substation, Feeder, and/or Bill Basis above, then click APPLY.</div>';
     return;
   }
 
-  var ssN = dashNorm(ss), fdN = dashNorm(fd);
+  var ssN = dashNorm(ss), fdN = dashNorm(fd), basisN = dashNorm(basis);
 
   var scopeD = D.filter(function(r){
     if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
     if(fd && dashNorm(r.FEEDER)!==fdN) return false;
+    if(basis && dashNorm(r.BILL_BASIS)!==basisN) return false;
     return true;
   });
   var scopeDef = DEF_ALL.filter(function(r){
     if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
     if(fd && dashNorm(r.FEEDER)!==fdN) return false;
+    if(basis){ var rb=dashNorm(r.BILL_BASIS)||(window._basisLookupGlobal&&window._basisLookupGlobal[String(r.ACCT_ID)])||''; if(rb!==basisN) return false; }
     return true;
   });
 
@@ -1626,6 +1641,80 @@ function dashRenderFiltered(){
     h += '</tbody></table></div>';
   }
 
+  // ── CROSS ANALYSIS 1: Categories under each Feeder (show when SS selected, no specific feeder) ──
+  if(ss && !fd){
+    var feedCatMap = {};
+    scopeD.forEach(function(r){
+      var f=r.FEEDER||'Unknown', c=r.CATEGORY||'Unknown';
+      if(!feedCatMap[f]) feedCatMap[f]={};
+      if(!feedCatMap[f][c]) feedCatMap[f][c]={count:0,out:0};
+      feedCatMap[f][c].count++;
+      feedCatMap[f][c].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    });
+    var fcFeeders = Object.keys(feedCatMap).sort();
+    if(fcFeeders.length){
+      h += '<div style="margin-top:14px;font-family:var(--fh);font-weight:700;font-size:12px;color:#1E3A5F;">📶 CATEGORY-WISE REPORT UNDER EACH FEEDER</div>';
+      h += '<div style="overflow-x:auto;margin-top:6px;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+      h += '<thead><tr style="background:#EFF6FF;"><th style="padding:7px 9px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">FEEDER</th>';
+      h += '<th style="padding:7px 9px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">TARIFF</th>';
+      h += '<th style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">CONSUMERS</th>';
+      h += '<th style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">OUTSTANDING</th></tr></thead><tbody>';
+      var rowI=0;
+      fcFeeders.forEach(function(f){
+        var cats=Object.keys(feedCatMap[f]).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+        var firstCat=true;
+        cats.forEach(function(c){
+          var d=feedCatMap[f][c];
+          h += '<tr style="background:'+(rowI++%2?'#F9FAFB':'#fff')+'">';
+          h += '<td style="padding:7px 9px;font-weight:700;color:#1D4ED8;font-family:var(--fh);">'+(firstCat?f:'')+'</td>';
+          h += '<td style="padding:7px 9px;"><span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;background:#EEF2FF;color:#4338CA;">'+c+'</span></td>';
+          h += '<td style="padding:7px 9px;text-align:right;font-weight:600;">'+d.count.toLocaleString()+'</td>';
+          h += '<td style="padding:7px 9px;text-align:right;color:#EA580C;font-weight:700;">'+cr2(d.out)+'</td>';
+          h += '</tr>';
+          firstCat=false;
+        });
+      });
+      h += '</tbody></table></div>';
+    }
+  }
+
+  // ── CROSS ANALYSIS 2: Feeders under each Category (show when specific feeder NOT selected) ──
+  if(!fd){
+    var catFeedMap = {};
+    scopeD.forEach(function(r){
+      var c=r.CATEGORY||'Unknown', f=r.FEEDER||'Unknown';
+      if(!catFeedMap[c]) catFeedMap[c]={};
+      if(!catFeedMap[c][f]) catFeedMap[c][f]={count:0,out:0};
+      catFeedMap[c][f].count++;
+      catFeedMap[c][f].out += parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0;
+    });
+    var cfCats = Object.keys(catFeedMap).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+    if(cfCats.length > 1){
+      h += '<div style="margin-top:14px;font-family:var(--fh);font-weight:700;font-size:12px;color:#065F46;">📊 FEEDER-WISE REPORT UNDER EACH CATEGORY</div>';
+      h += '<div style="overflow-x:auto;margin-top:6px;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+      h += '<thead><tr style="background:#F0FDF4;"><th style="padding:7px 9px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">TARIFF</th>';
+      h += '<th style="padding:7px 9px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">FEEDER</th>';
+      h += '<th style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">CONSUMERS</th>';
+      h += '<th style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">OUTSTANDING</th></tr></thead><tbody>';
+      var rowJ=0;
+      cfCats.forEach(function(c){
+        var feeds=Object.keys(catFeedMap[c]).sort();
+        var firstFeed=true;
+        feeds.forEach(function(f){
+          var d=catFeedMap[c][f];
+          h += '<tr style="background:'+(rowJ++%2?'#F9FAFB':'#fff')+'">';
+          h += '<td style="padding:7px 9px;"><span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;background:#D1FAE5;color:#065F46;">'+(firstFeed?c:'')+'</span></td>';
+          h += '<td style="padding:7px 9px;font-weight:600;color:#1D4ED8;">'+f+'</td>';
+          h += '<td style="padding:7px 9px;text-align:right;font-weight:600;">'+d.count.toLocaleString()+'</td>';
+          h += '<td style="padding:7px 9px;text-align:right;color:#EA580C;font-weight:700;">'+cr2(d.out)+'</td>';
+          h += '</tr>';
+          firstFeed=false;
+        });
+      });
+      h += '</tbody></table></div>';
+    }
+  }
+
   h += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">';
   h += '<button onclick="dashExportFiltered()" style="background:#059669;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:11px;cursor:pointer;">\u2b07 EXPORT THIS REPORT (XLSX)</button>';
   h += '</div>';
@@ -1637,10 +1726,12 @@ function dashRenderFiltered(){
 function dashExportFiltered(){
   var ss = gel('dash-ss-sel') ? gel('dash-ss-sel').value : '';
   var fd = gel('dash-feed-sel') ? gel('dash-feed-sel').value : '';
-  var ssN = dashNorm(ss), fdN = dashNorm(fd);
+  var basis = gel('dash-basis-sel') ? gel('dash-basis-sel').value : '';
+  var ssN = dashNorm(ss), fdN = dashNorm(fd), basisN = dashNorm(basis);
   var scopeD = D.filter(function(r){
     if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
     if(fd && dashNorm(r.FEEDER)!==fdN) return false;
+    if(basis && dashNorm(r.BILL_BASIS)!==basisN) return false;
     return true;
   }).map(function(r){
     return {
@@ -3737,46 +3828,69 @@ function renderDefaulters(page){
   defPage=page;
   var tbody=gel('def-tbody'); if(!tbody)return;
   var slice=DEF_DATA.slice((page-1)*PS,page*PS);
-  tbody.innerHTML=slice.map(function(r,i){
-    var rank=(page-1)*PS+i+1;
-    var rIcon=rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank;
-    var out=Math.round(r.OUTSTANDING);
-    var outColor=out>100000?'#F43F5E':out>25000?'#EA580C':'#F59E0B';
-    var paid=Math.round(r.PAY_AMT||0);
-    var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
-    if(lat>50){var t=lat;lat=lon;lon=t;}
-    var mapUrl=(lat&&lon)?'https://www.google.com/maps?q='+lat+','+lon:'';
-    var meterNo=METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'-';
-    var atr=r.ATR_STATUS||'PENDING';
-    var atrColors={'PAID':'#059669','LOCK':'#7C3AED','THEFT':'#DC2626','OTHER':'#374151','PENDING':'#9CA3AF'};
-    var atrBgs={'PAID':'#D1FAE5','LOCK':'#EDE9FE','THEFT':'#FEE2E2','OTHER':'#F3F4F6','PENDING':'#F9FAFB'};
-    var rowJson = encodeURIComponent(JSON.stringify({
-      ACCT_ID:r.ACCT_ID, NAME:r.NAME, MOBILE:r.MOBILE, ADDRESS:r.ADDRESS,
-      SUPPLY_TYPE:r.SUPPLY_TYPE, OUTSTANDING:r.OUTSTANDING,
-      PAY_AMT:r.PAY_AMT, PAY_DATE:r.PAY_DATE,
-      SUBSTATION:r.SUBSTATION, FEEDER:r.FEEDER,
-      LAT:r.LAT, LON:r.LON, ATR_STATUS:r.ATR_STATUS||'PENDING',
-      METER_NO:meterNo
-    }));
-    return '<tr>'+
-      '<td class="mob-hide" style="font-family:var(--fh);font-size:14px;font-weight:700;text-align:center;">'+rIcon+'</td>'+
-      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;cursor:pointer;" data-id="'+r.ACCT_ID+'" data-row="'+rowJson+'" onclick="openFromDefRow(this)">'+r.ACCT_ID+'</td>'+
-      '<td style="font-weight:700;">'+r.NAME+'</td>'+
-      '<td>'+r.MOBILE+'</td>'+
-      '<td style="font-family:var(--fh);font-size:11px;color:#1D4ED8;font-weight:700;">'+meterNo+'</td>'+
-      '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD?r.LOAD+' kW':'-')+'</td>'+
-      '<td><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:#EEF2FF;color:#4338CA;">'+r.SUPPLY_TYPE+'</span></td>'+
-      '<td style="font-size:11px;color:#374151;" title="'+r.ADDRESS+'">'+r.ADDRESS+'</td>'+
-      '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';font-size:13px;">₹'+out.toLocaleString()+'</td>'+
-      '<td style="font-size:11px;color:var(--muted);">'+r.PAY_DATE+'</td>'+
-      '<td style="font-family:var(--fh);color:#059669;font-weight:700;">'+(paid>0?'₹'+paid.toLocaleString():'-')+'</td>'+
-      '<td>'+(function(){var sc=collectionProbability(r),lb=collectionLabel(sc);return '<span style="font-size:11px;font-weight:800;padding:2px 7px;border-radius:5px;background:'+lb.bg+';color:'+lb.color+';">'+sc+'%</span>';})()+'</td>'+
-      '<td class="mob-hide"><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:'+(atrBgs[atr]||'#F9FAFB')+';color:'+(atrColors[atr]||'#9CA3AF')+';">'+atr+'</span></td>'+
-      '<td>'+r.SUBSTATION+'</td>'+
-      '<td style="display:none">'+r.FEEDER+'</td>'+
-      '<td>'+(mapUrl?'<a class="ml" href="#" data-id="'+r.ACCT_ID+'" onclick="event.preventDefault();openDefaulterMap(this.dataset.id)">📍</a>':'')+'</td>'+
-    '</tr>';
-  }).join('');
+
+  // Group by outstanding range
+  var ranges=[
+    {label:'🔴 Above ₹1 Lakh',  min:100000, max:Infinity, rows:[]},
+    {label:'🟠 ₹50K – ₹1 Lakh', min:50000,  max:100000,  rows:[]},
+    {label:'🟡 ₹10K – ₹50K',    min:10000,  max:50000,   rows:[]},
+    {label:'🟢 ₹5K – ₹10K',     min:5000,   max:10000,   rows:[]}
+  ];
+  slice.forEach(function(r){
+    var o=Math.round(r.OUTSTANDING||0);
+    for(var i=0;i<ranges.length;i++){
+      if(o>=ranges[i].min && o<ranges[i].max){ ranges[i].rows.push(r); break; }
+    }
+  });
+
+  var html='';
+  var globalRank=(page-1)*PS;
+  ranges.forEach(function(rng){
+    if(!rng.rows.length) return;
+    var rngTotal=rng.rows.reduce(function(s,r){return s+Math.round(r.OUTSTANDING||0);},0);
+    html+='<tr><td colspan="16" style="background:#1E3A5F;color:#fff;padding:6px 12px;font-family:var(--fh);font-size:12px;font-weight:700;">'+
+      rng.label+'&ensp;<span style="font-weight:400;font-size:11px;opacity:0.85;">'+rng.rows.length+' consumers &nbsp;|&nbsp; ₹'+Math.round(rngTotal).toLocaleString()+' outstanding</span></td></tr>';
+    rng.rows.forEach(function(r){
+      globalRank++;
+      var rIcon=globalRank===1?'🥇':globalRank===2?'🥈':globalRank===3?'🥉':globalRank;
+      var out=Math.round(r.OUTSTANDING);
+      var outColor=out>100000?'#F43F5E':out>25000?'#EA580C':'#F59E0B';
+      var paid=Math.round(r.PAY_AMT||0);
+      var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
+      if(lat>50){var t=lat;lat=lon;lon=t;}
+      var mapUrl=(lat&&lon)?'https://www.google.com/maps?q='+lat+','+lon:'';
+      var meterNo=METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'-';
+      var atr=r.ATR_STATUS||'PENDING';
+      var atrColors={'PAID':'#059669','LOCK':'#7C3AED','THEFT':'#DC2626','OTHER':'#374151','PENDING':'#9CA3AF'};
+      var atrBgs={'PAID':'#D1FAE5','LOCK':'#EDE9FE','THEFT':'#FEE2E2','OTHER':'#F3F4F6','PENDING':'#F9FAFB'};
+      var rowJson=encodeURIComponent(JSON.stringify({
+        ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE,ADDRESS:r.ADDRESS,
+        SUPPLY_TYPE:r.SUPPLY_TYPE,OUTSTANDING:r.OUTSTANDING,
+        PAY_AMT:r.PAY_AMT,PAY_DATE:r.PAY_DATE,
+        SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,
+        LAT:r.LAT,LON:r.LON,ATR_STATUS:r.ATR_STATUS||'PENDING',METER_NO:meterNo
+      }));
+      html+='<tr>'+
+        '<td class="mob-hide" style="font-family:var(--fh);font-size:14px;font-weight:700;text-align:center;">'+rIcon+'</td>'+
+        '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;cursor:pointer;" data-id="'+r.ACCT_ID+'" data-row="'+rowJson+'" onclick="openFromDefRow(this)">'+r.ACCT_ID+'</td>'+
+        '<td style="font-weight:700;">'+r.NAME+'</td>'+
+        '<td>'+r.MOBILE+'</td>'+
+        '<td style="font-family:var(--fh);font-size:11px;color:#1D4ED8;font-weight:700;">'+meterNo+'</td>'+
+        '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD?r.LOAD+' kW':'-')+'</td>'+
+        '<td><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:#EEF2FF;color:#4338CA;">'+r.SUPPLY_TYPE+'</span></td>'+
+        '<td style="font-size:11px;color:#374151;" title="'+r.ADDRESS+'">'+r.ADDRESS+'</td>'+
+        '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';font-size:13px;">₹'+out.toLocaleString()+'</td>'+
+        '<td style="font-size:11px;color:var(--muted);">'+r.PAY_DATE+'</td>'+
+        '<td style="font-family:var(--fh);color:#059669;font-weight:700;">'+(paid>0?'₹'+paid.toLocaleString():'-')+'</td>'+
+        '<td>'+(function(){var sc=collectionProbability(r),lb=collectionLabel(sc);return '<span style="font-size:11px;font-weight:800;padding:2px 7px;border-radius:5px;background:'+lb.bg+';color:'+lb.color+';">'+sc+'%</span>';})()+'</td>'+
+        '<td class="mob-hide"><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:'+(atrBgs[atr]||'#F9FAFB')+';color:'+(atrColors[atr]||'#9CA3AF')+';">'+atr+'</span></td>'+
+        '<td>'+r.SUBSTATION+'</td>'+
+        '<td style="display:none">'+r.FEEDER+'</td>'+
+        '<td>'+(mapUrl?'<a class="ml" href="#" data-id="'+r.ACCT_ID+'" onclick="event.preventDefault();openDefaulterMap(this.dataset.id)">📍</a>':'')+'</td>'+
+      '</tr>';
+    });
+  });
+  tbody.innerHTML=html;
   rp('def-pg',page,Math.ceil(DEF_DATA.length/PS),renderDefaulters);
 }
 
