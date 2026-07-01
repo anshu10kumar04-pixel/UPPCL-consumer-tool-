@@ -1155,12 +1155,20 @@ function buildDashboard(){
 
   // Defaulter stats
   var defOut=0, defSsMap={};
+  var defRanges=[
+    {label:'₹5K–10K',  min:5000,   max:10000,  count:0, out:0},
+    {label:'₹10K–50K', min:10000,  max:50000,  count:0, out:0},
+    {label:'₹50K–1L',  min:50000,  max:100000, count:0, out:0},
+    {label:'Above ₹1L',min:100000, max:Infinity,count:0,out:0}
+  ];
   DEF_ALL.forEach(function(r){
-    defOut += r.OUTSTANDING||0;
+    var o = r.OUTSTANDING||0;
+    defOut += o;
     var ss=r.SUBSTATION||'Unknown';
     if(!defSsMap[ss]) defSsMap[ss]={count:0,out:0};
     defSsMap[ss].count++;
-    defSsMap[ss].out += r.OUTSTANDING||0;
+    defSsMap[ss].out += o;
+    defRanges.forEach(function(rng){ if(o>=rng.min && o<rng.max){ rng.count++; rng.out+=o; } });
   });
 
   // ── Feeder Recovery Score + Revenue Leakage Score ───────────────────
@@ -1293,6 +1301,24 @@ function buildDashboard(){
   html += card('⚠️','DEFAULTERS',DEF_ALL.length.toLocaleString(),'Outstanding > ₹5,000','#FEF3C7','#D97706');
   html += card('🔴','DEF OUTSTANDING',cr(defOut),'Total recoverable','#FFF1F2','#F43F5E');
   html += '</div>';
+
+  // Defaulter Outstanding Range-wise
+  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
+  html += '<div style="background:#B91C1C;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">🎯 DEFAULTER — OUTSTANDING RANGE ANALYSIS</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:0;">';
+  var rangeBgs=['#FFF1F2','#FEE2E2','#FFE4E6','#FFF7ED'];
+  var rangeTc=['#BE123C','#DC2626','#E11D48','#C2410C'];
+  defRanges.forEach(function(rng,i){
+    var pct = DEF_ALL.length ? (rng.count/DEF_ALL.length*100).toFixed(1) : '0.0';
+    html += '<div style="flex:1;min-width:140px;padding:16px 18px;background:'+rangeBgs[i]+';border-right:1px solid #FECACA;">';
+    html += '<div style="font-size:11px;font-weight:700;color:'+rangeTc[i]+';font-family:var(--fh);margin-bottom:4px;">'+rng.label+'</div>';
+    html += '<div style="font-size:22px;font-weight:800;color:'+rangeTc[i]+';font-family:var(--fh);">'+rng.count.toLocaleString()+'</div>';
+    html += '<div style="font-size:10px;color:#6B7280;font-family:var(--fh);">'+pct+'% of total defaulters</div>';
+    html += '<div style="font-size:12px;font-weight:700;color:'+rangeTc[i]+';margin-top:4px;">'+cr(rng.out)+'</div>';
+    html += '<div style="font-size:9px;color:#9CA3AF;font-family:var(--fh);">Outstanding</div>';
+    html += '</div>';
+  });
+  html += '</div></div>';
 
   // Substation-wise table
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
