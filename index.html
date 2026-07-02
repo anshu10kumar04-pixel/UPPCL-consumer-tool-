@@ -254,7 +254,6 @@ select option{background:#fff;color:#1E1B4B;}
   .hdr-btn{padding:6px 8px;font-size:10px;}
 }
 </style>
-</style>
 </head>
 <body>
 
@@ -923,17 +922,16 @@ function rp(cid, cur, tot, fn){
   if(tot <= 1){ c.innerHTML=''; return; }
   _pgFns[cid] = fn;
   var b = [], s = Math.max(1,cur-2), e = Math.min(tot,cur+2);
-  if(cur>1) b.push('<button class="pgb" onclick="_pg(\'' + cid + '\',1)">«</button>');
-  if(cur>1) b.push('<button class="pgb" onclick="_pg(\'' + cid + '\',' + (cur-1) + ')">‹</button>');
+  if(cur>1) b.push('<button class="pgb" onclick="_pg(\'' + cid + '\',1)">\u00ab</button>');
+  if(cur>1) b.push('<button class="pgb" onclick="_pg(\'' + cid + '\',' + (cur-1) + ')">\u2039</button>');
   for(var i=s;i<=e;i++)
     b.push('<button class="pgb' + (i===cur?' active':'') + '" onclick="_pg(\'' + cid + '\',' + i + ')">' + i + '</button>');
-  if(cur<tot) b.push('<button class="pgb" onclick="_pg(\'' + cid + '\',' + (cur+1) + ')">›</button>');
-  if(cur<tot) b.push('<button class="pgb" onclick="_pg(\'' + cid + '\',' + tot + ')">»</button>');
+  if(cur<tot) b.push('<button class="pgb" onclick="_pg(\'' + cid + '\',' + (cur+1) + ')">\u203a</button>');
+  if(cur<tot) b.push('<button class="pgb" onclick="_pg(\'' + cid + '\',' + tot + ')">\u00bb</button>');
   b.push('<span class="pgi">Page ' + cur + ' / ' + tot + '</span>');
   b.push('<input type="number" min="1" max="' + tot + '" value="' + cur + '" data-cid="' + cid + '" data-tot="' + tot + '" style="width:50px;border:1.5px solid #C7D2FE;border-radius:6px;padding:4px 6px;font-size:12px;text-align:center;outline:none;" onchange="_pgJump(this)" onkeydown="if(event.keyCode===13)_pgJump(this)" />');
   gel(cid).innerHTML = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' + b.join('') + '</div>';
 }
-
 function _pgJump(el){
   var p = parseInt(el.value), tot = parseInt(el.dataset.tot), cid = el.dataset.cid;
   if(p >= 1 && p <= tot) _pg(cid, p);
@@ -1358,7 +1356,7 @@ function buildDashboard(){
   var allBasisVals = [...new Set(D.map(function(r){return String(r.BILL_BASIS||'').trim().toUpperCase();}).filter(Boolean))].sort();
 
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
-  html += '<div style="background:#4338CA;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle('dash-filtered-body')">🔍 FILTERED REPORT — SELECT FILTERS<span id="dash-filtered-body-arrow" style="font-size:14px;opacity:0.8;">\u25bc</span></div><div id="dash-filtered-body" style="display:block;">';
+  html += '<div style="background:#4338CA;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-filtered-body\')">🔍 FILTERED REPORT — SELECT FILTERS<span id="dash-filtered-body-arrow" style="font-size:14px;opacity:0.8;">\u25bc</span></div><div id="dash-filtered-body" style="display:block;">';
   html += '<div style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">';
   // Division (cascade level 1)
   html += '<div style="flex:1;min-width:130px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">DIVISION</div>';
@@ -1470,7 +1468,7 @@ function buildDashboard(){
   }
 
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-  html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle('dash-recovery-body')">💰 DEFAULTER RECOVERY REPORT — WHO PAID<span id="dash-recovery-body-arrow" style="font-size:14px;opacity:0.8;">\u25bc</span></div><div id="dash-recovery-body" style="display:block;">';
+  html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-recovery-body\')">💰 DEFAULTER RECOVERY REPORT — WHO PAID<span id="dash-recovery-body-arrow" style="font-size:14px;opacity:0.8;">\u25bc</span></div><div id="dash-recovery-body" style="display:block;">';
   html += '<div style="padding:0;">';
 
   // Yesterday
@@ -1487,7 +1485,7 @@ function buildDashboard(){
 
     // Defaulter Outstanding Range-wise
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
-  html += '<div style="background:#B91C1C;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle('dash-ranges-body')">🎯 DEFAULTER — OUTSTANDING RANGE ANALYSIS<span id="dash-ranges-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-ranges-body" style="display:none;">';
+  html += '<div style="background:#B91C1C;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-ranges-body\')">🎯 DEFAULTER — OUTSTANDING RANGE ANALYSIS<span id="dash-ranges-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-ranges-body" style="display:none;">';
   html += '<div style="display:flex;flex-wrap:wrap;gap:0;">';
   var rangeBgs=['#FFF1F2','#FEE2E2','#FFE4E6','#FFF7ED'];
   var rangeTc=['#BE123C','#DC2626','#E11D48','#C2410C'];
@@ -1505,7 +1503,7 @@ function buildDashboard(){
 
   // Substation-wise table
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
-  html += '<div style="background:#1E3A5F;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;" onclick="dashToggle('dash-ss-body')">'+
+  html += '<div style="background:#1E3A5F;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-ss-body\')">'+
     '<span>🏛 SUBSTATION-WISE SUMMARY</span>'+
     (ssList.length>16?'<span style="font-size:10px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">Top 16 of '+ssList.length+' by Outstanding</span>':'')+
   '<span id="dash-ss-body-arrow" style="font-size:14px;opacity:0.8;">&#9654;</span></div><div id="dash-ss-body" style="display:none;">';
@@ -1543,7 +1541,7 @@ function buildDashboard(){
 
   // Tariff-wise table
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;overflow:hidden;">';
-  html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle('dash-tariff-body')">📋 TARIFF-WISE BREAKUP<span id="dash-tariff-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-tariff-body" style="display:none;">';
+  html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-tariff-body\')">📋 TARIFF-WISE BREAKUP<span id="dash-tariff-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-tariff-body" style="display:none;">';
   html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead>';
   html += '<tr style="background:#F0FDF4;">';
@@ -1582,7 +1580,7 @@ function buildDashboard(){
 
   // Bill Basis-wise table
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-  html += '<div style="background:#7C3AED;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle('dash-basis-body')">📑 BILL BASIS-WISE REPORT<span id="dash-basis-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-basis-body" style="display:none;">';
+  html += '<div style="background:#7C3AED;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-basis-body\')">📑 BILL BASIS-WISE REPORT<span id="dash-basis-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-basis-body" style="display:none;">';
   html += '<div style="padding:10px 16px;font-size:11px;color:#6B7280;background:#F5F3FF;border-bottom:1px solid #DDD6FE;">MU = Actual meter reading | ASS = Assessed | PROV = Provisional | CEIL = Ceiling. Applies to billed consumers only.</div>';
   html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr style="background:#F5F3FF;">';
@@ -1613,7 +1611,7 @@ function buildDashboard(){
     return '<span style="font-size:11px;font-weight:800;padding:3px 9px;border-radius:6px;background:'+bg+';color:'+tc+';">'+sc+'</span>';
   }
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-  html += '<div style="background:#7C2D12;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle('dash-feeder-body')">⚡ FEEDER RECOVERY &amp; REVENUE LEAKAGE SCORE<span id="dash-feeder-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-feeder-body" style="display:none;">';
+  html += '<div style="background:#7C2D12;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-feeder-body\')">⚡ FEEDER RECOVERY &amp; REVENUE LEAKAGE SCORE<span id="dash-feeder-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-feeder-body" style="display:none;">';
   html += '<div style="padding:10px 16px;font-size:11px;color:#6B7280;background:#FFF7ED;border-bottom:1px solid #FED7AA;">Recovery Score: higher = better collection health. Leakage Score: higher = lower revenue leakage risk. Sorted by worst leakage first.</div>';
   html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr style="background:#FFF7ED;">';
@@ -2627,63 +2625,47 @@ function logout(){
   gel('app').style.display='none';
 }
 window.addEventListener('DOMContentLoaded',function(){
-  // ── INIT PUSHED ACCTS (grandfather existing ATR data) ───────────────
-  initPushedAccts();
-  // On new month: archive previous month ATR to sheet, clear localStorage
-  // Initialize pushed accts — grandfather existing ATR entries as already pushed
+  // Init pushed accts once
   initPushedAccts();
 
-  (function checkMonthlyAtrReset(){
+  // Monthly ATR reset check (non-blocking, wrapped in try-catch)
+  try{
     var now = new Date();
     var curMonth = now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
     var lastMonth = localStorage.getItem('atr_last_reset_month');
     if(lastMonth && lastMonth !== curMonth){
-      // New month detected — archive then reset
-      console.log('New month detected. Archiving ATR for:', lastMonth);
-      var smData  = {}; try{smData  = JSON.parse(localStorage.getItem('atr_data')||'{}');    }catch(e){}
-      var defData = {}; try{defData = JSON.parse(localStorage.getItem('def_atr_data')||'{}');}catch(e){}
-
-      // Save archive to localStorage for XLSX access
+      var smData  = {}; try{smData  = JSON.parse(localStorage.getItem('atr_data')||'{}');    }catch(ex){}
+      var defData = {}; try{defData = JSON.parse(localStorage.getItem('def_atr_data')||'{}');}catch(ex){}
       if(Object.keys(defData).length) localStorage.setItem('def_atr_archive_'+lastMonth, JSON.stringify(defData));
       if(Object.keys(smData).length)  localStorage.setItem('sm_atr_archive_'+lastMonth,  JSON.stringify(smData));
-
-      var url = localStorage.getItem('atr_script_url');
-      if(url && (Object.keys(smData).length || Object.keys(defData).length)){
-        // Push archive to sheet with month label
-        fetch(url, {
-          method:'POST', mode:'no-cors',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            type: 'archive_month',
-            month: lastMonth,
-            sm: smData,
-            defaulter: defData
-          })
-        }).then(function(){
-          console.log('ATR archived for month:', lastMonth);
-        }).catch(function(e){ console.warn('Archive failed:', e); });
+      var archUrl = localStorage.getItem('atr_script_url');
+      if(archUrl && (Object.keys(smData).length || Object.keys(defData).length)){
+        fetch(archUrl, {method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({type:'archive_month',month:lastMonth,sm:smData,defaulter:defData})
+        }).catch(function(){}); 
       }
-      // Clear ATR localStorage — fresh start for new month
       localStorage.removeItem('atr_data');
       localStorage.removeItem('def_atr_data');
       localStorage.removeItem('atr_last_push');
-      localStorage.removeItem('atr_pushed_accts'); // unlock all for new month
+      localStorage.removeItem('atr_pushed_accts');
       localStorage.setItem('atr_last_reset_month', curMonth);
-      // Show notification
-      setTimeout(function(){
-        var msg = '🗓 नए महीने की शुरुआत! पिछले महीने ('+lastMonth+') की ATR Google Sheet में archive हो गई। सभी ATR entries reset हो गई हैं।';
-        if(document.body) alert(msg);
-      }, 2000);
+      window._showMonthResetAlert = lastMonth;
     } else if(!lastMonth){
-      // First time — just record current month
       localStorage.setItem('atr_last_reset_month', curMonth);
     }
-  })();
+  }catch(e){ console.warn('Monthly ATR reset error:',e); }
 
+  // Session restore
   var session = null;
   try { session = JSON.parse(localStorage.getItem('uppcl_session')); } catch(e){}
   if(session && session.role && session.ts && (Date.now() - session.ts < SESSION_TIMEOUT)){
     loginSuccess(session.role);
+    if(window._showMonthResetAlert){
+      setTimeout(function(){
+        alert('\ud83d\uddd3 \u0928\u090f \u092e\u0939\u0940\u0928\u0947 \u0915\u0940 \u0936\u0941\u0930\u0941\u0906\u0924! \u092a\u093f\u091b\u0932\u0947 \u092e\u0939\u0940\u0928\u0947 ('+window._showMonthResetAlert+') \u0915\u0940 ATR archive \u0939\u094b \u0917\u0908\u0964 \u0938\u092d\u0940 ATR entries reset \u0939\u094b \u0917\u0908 \u0939\u0948\u0902\u0964');
+        window._showMonthResetAlert = null;
+      }, 2000);
+    }
   } else {
     gel('login-screen').style.display='flex';
   }
@@ -2903,7 +2885,7 @@ function parseFileInto(text, type){
     var current = '';
     for(var i=0; i<line.length; i++){
       var c = line[i];
-      if(c==='"' && (i===0 || line[i-1]!== '\\')){ inQuotes = !inQuotes; }
+      if(c==='"' && (i===0 || line[i-1]!== '\\\\')){ inQuotes = !inQuotes; }
       else if(c===',' && !inQuotes){ v.push(current.trim()); current = ''; }
       else { current += c; }
     }
