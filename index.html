@@ -330,6 +330,7 @@ select option{background:#fff;color:#1E1B4B;}
     <div class="tab active" onclick="st('lookup')" ontouchstart="st('lookup')">🔍 SEARCH</div>
     <div class="tab" onclick="st('defaulter')" ontouchstart="st('defaulter')">⚠️ DEFAULTERS</div>
     <div class="tab mob-hide" id="tab-dashboard" onclick="st('dashboard')" ontouchstart="st('dashboard')">📊 DASHBOARD</div>
+    <div class="tab" id="tab-progress" onclick="st('progress')" ontouchstart="st('progress')">📈 PROGRESS REPORT</div>
     <div class="tab" id="tab-settings" onclick="st('settings')" ontouchstart="st('settings')" style="display:none">⚙️ SETTINGS</div>
   </div>
 
@@ -548,6 +549,7 @@ select option{background:#fff;color:#1E1B4B;}
   <!-- SETTINGS PANEL -->
   <div class="panel" id="panel-settings"></div>
   <div class="panel" id="panel-dashboard" style="overflow-x:hidden;max-width:100%;"></div>
+  <div class="panel" id="panel-progress" style="overflow-x:hidden;max-width:100%;padding:16px;"></div>
 
 </div><!-- end #app -->
 
@@ -1091,6 +1093,241 @@ function dashToggle(id){
 
 // Dashboard PDF export using print
 // Dashboard Excel export
+// ─── DAILY PROGRESS REPORT ───────────────────────────────────────────────────
+function buildProgressReport(){
+  var el = gel('panel-progress');
+  if(!el) return;
+  if(!D.length){
+    el.innerHTML='<div style="padding:40px;text-align:center;color:#9CA3AF;font-family:var(--fh);">⏳ Data loading... please wait.</div>';
+    setTimeout(buildProgressReport, 1000);
+    return;
+  }
+
+  var today = new Date();
+  var dateStr = today.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+
+  // ── Build SS → Feeder aggregation ───────────────────────────────────────
+  // ssMap[ss] = { feeders:{fd:{...}}, totals:{...} }
+  var ssMap = {};
+
+  D.forEach(function(r){
+    var ss = r.SUBSTATION||'Unknown';
+    var fd = r.FEEDER||'Unknown';
+    if(!ssMap[ss]) ssMap[ss]={feeders:{}, tots:{billable:0,billed:0,unbilled:0,muCnt:0,gap:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0}};
+    if(!ssMap[ss].feeders[fd]) ssMap[ss].feeders[fd]={billable:0,billed:0,unbilled:0,muCnt:0,gap:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
+    var f = ssMap[ss].feeders[fd];
+    var t = ssMap[ss].tots;
+    var out = Math.max(0, parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
+    var ca  = Math.max(0, parseFloat(r.CA||0)||0);
+    var lp  = Math.max(0, parseFloat(r.LAST_PAYMENT_AMOUNT||0)||0);
+    var lpDate = r.LAST_PAY_DATE||r.PAY_DATE||'';
+    var basis  = String(r.BILL_BASIS||'').trim().toUpperCase();
+    var isBilled   = r.SOURCE==='billed';
+    var isUnbilled = r.SOURCE==='unbilled';
+    var isMU       = basis==='MU';
+    var isToday    = (function(){
+      var pd = parseDate(lpDate);
+      if(!pd) return false;
+      return pd.getDate()===today.getDate() && pd.getMonth()===today.getMonth() && pd.getFullYear()===today.getFullYear();
+    })();
+
+    // Billable = billed + unbilled
+    f.billable++; t.billable++;
+    if(isBilled){   f.billed++;   t.billed++;   }
+    if(isUnbilled){ f.unbilled++; t.unbilled++; }
+    if(isBilled && isMU){ f.muCnt++; t.muCnt++; }
+    // GAP = billable - (billed + unbilled) except prov → in our data = unbilled count
+    f.currAsst += ca; t.currAsst += ca;
+    // Upto Revenue = sum of CA (current arrear = total outstanding)
+    f.uptoRev += out; t.uptoRev += out;
+    // Today Revenue & Paid — based on last payment date = today
+    if(isToday){
+      f.todayRev  += lp; t.todayRev  += lp;
+      f.todayPaid++;     t.todayPaid++;
+    }
+    f.uptoPaid++; t.uptoPaid++;
+  });
+
+  function cr2(n){
+    if(!n || n===0) return '0';
+    if(n>=100000) return (n/100000).toFixed(2)+' L';
+    return Math.round(n).toLocaleString();
+  }
+  function pct(a,b){ return b>0?(a/b*100).toFixed(1)+'%':'—'; }
+
+  // ─── Build HTML ─────────────────────────────────────────────────────────
+  // Top 16 SS by billable consumers
+  var ssList = Object.keys(ssMap).sort(function(a,b){return ssMap[b].tots.billable-ssMap[a].tots.billable;}).slice(0,16);
+  var grand = {billable:0,billed:0,unbilled:0,muCnt:0,currAsst:0,uptoRev:0,todayRev:0,todayPaid:0,uptoPaid:0};
+
+  var h = '';
+  h += '<div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;">';
+  h += '<div style="background:#1E3A5F;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
+  h += '<div style="font-family:var(--fh);font-weight:700;font-size:13px;">📈 SUB STATION WISE BILLING & COLLECTION SUMMARY <span style="color:#93C5FD;font-size:11px;">(Amt in Lacs)</span></div>';
+  h += '<div style="display:flex;gap:8px;align-items:center;">';
+  h += '<span style="font-size:11px;opacity:0.8;">upto</span>';
+  h += '<span style="background:#3B82F6;padding:3px 10px;border-radius:5px;font-size:12px;font-weight:700;">'+dateStr+'</span>';
+  h += '<button onclick="buildProgressReport()" style="background:#374151;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">🔄</button>';
+  h += '<button onclick="progressExportXLSX()" style="background:#059669;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">⬇ XLSX</button>';
+  h += '<button onclick="progressExportPDF()" style="background:#DC2626;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">🖨 PDF</button>';
+  h += '</div></div>';
+
+  // Table header
+  h += '<div style="overflow-x:auto;"><table id="progress-table" style="width:100%;border-collapse:collapse;font-size:11px;min-width:900px;">';
+  h += '<thead>';
+  h += '<tr style="background:#DBEAFE;">';
+  var cols = ['DIV','SUBSTATION','BILLABLE CONS','METER BILLABLE','BILLED','% Billed','% Billed (Excpt Prov)','MU CNT','% MU','GAP (Billed & MU)','CURR. ASST.','TODAY REVENUE','Upto REVENUE','TODAY Paid Cnt','Upto Paid Cnt','% Coll. effic.','Turn Up%'];
+  var colWidths = ['40px','140px','60px','60px','60px','55px','70px','60px','55px','70px','80px','90px','90px','80px','80px','65px','65px'];
+  cols.forEach(function(c,i){
+    var isRed = (c==='TODAY REVENUE'||c==='TODAY Paid Cnt');
+    h += '<th style="padding:5px 6px;border:1px solid #BFDBFE;font-family:var(--fh);font-size:9px;font-weight:700;text-align:center;width:'+colWidths[i]+';'+(isRed?'color:#DC2626;':'color:#1E3A5F;')+'">'+c+'</th>';
+  });
+  h += '</tr></thead><tbody>';
+
+  ssList.forEach(function(ss, si){
+    var t = ssMap[ss].tots;
+    var div = (SUB_DIVISION_MAP&&SUB_DIVISION_MAP[ss])==='eudd2'?'233512':'233511';
+    var pctBilled   = pct(t.billed,   t.billable);
+    var pctMU       = pct(t.muCnt,    t.billed);
+    var pctColl     = pct(t.todayRev, t.currAsst);
+    var turnUp      = pct(t.todayPaid,t.billable);
+    var gap         = t.billable - t.billed - t.unbilled;
+    var rowBg       = si%2===0?'#F9FAFB':'#fff';
+
+    // SS row
+    h += '<tr style="background:'+rowBg+'" id="ss-row-'+si+'">';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:center;color:#374151;">'+div+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;font-weight:700;color:#1E3A5F;">';
+    h += '<span style="cursor:pointer;color:#1D4ED8;font-weight:700;margin-right:4px;" onclick="toggleFeeder('+si+')" id="ss-btn-'+si+'">➕</span>'+ss;
+    h += '</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.billable.toLocaleString()+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.billed.toLocaleString()+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.billed.toLocaleString()+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+pctBilled+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+pct(t.billed-t.unbilled,t.billable)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.muCnt.toLocaleString()+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+pctMU+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+(gap>0?gap:'0')+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+cr2(t.currAsst)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#DC2626;font-weight:700;">'+cr2(t.todayRev)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+cr2(t.uptoRev)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#DC2626;font-weight:700;">'+t.todayPaid+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.uptoPaid.toLocaleString()+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+pctColl+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+turnUp+'</td>';
+    h += '</tr>';
+
+    // Feeder rows (hidden by default)
+    var feeders = Object.keys(ssMap[ss].feeders).sort();
+    feeders.forEach(function(fd, fi){
+      var f = ssMap[ss].feeders[fd];
+      var fgap = f.billable - f.billed - f.unbilled;
+      h += '<tr style="display:none;background:#EFF6FF;" class="feeder-row-'+si+'">';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:center;font-size:10px;color:#6B7280;"></td>';
+      h += '<td style="padding:4px 6px 4px 22px;border:1px solid #BFDBFE;font-size:10px;color:#1D4ED8;">↳ '+fd+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.billable+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.billed+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.billed+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+pct(f.billed,f.billable)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+pct(f.billed-f.unbilled,f.billable)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.muCnt+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+pct(f.muCnt,f.billed)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+(fgap>0?fgap:'0')+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+cr2(f.currAsst)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;color:#DC2626;">'+cr2(f.todayRev)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+cr2(f.uptoRev)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;color:#DC2626;">'+f.todayPaid+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.uptoPaid+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+pct(f.todayRev,f.currAsst)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+pct(f.todayPaid,f.billable)+'</td>';
+      h += '</tr>';
+
+      // Accumulate grand totals
+      grand.billable+=f.billable; grand.billed+=f.billed; grand.muCnt+=f.muCnt;
+      grand.currAsst+=f.currAsst; grand.uptoRev+=f.uptoRev;
+      grand.todayRev+=f.todayRev; grand.todayPaid+=f.todayPaid; grand.uptoPaid+=f.uptoPaid;
+    });
+  });
+
+  // Grand Total row
+  h += '<tr style="background:#1E3A5F;color:#fff;font-weight:700;">';
+  h += '<td colspan="2" style="padding:6px 10px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.billable.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.billed.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.billed.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+pct(grand.billed,grand.billable)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">—</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.muCnt.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+pct(grand.muCnt,grand.billed)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">—</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+cr2(grand.currAsst)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+cr2(grand.todayRev)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+cr2(grand.uptoRev)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+grand.todayPaid+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.uptoPaid.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+pct(grand.todayRev,grand.currAsst)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+pct(grand.todayPaid,grand.billable)+'</td>';
+  h += '</tr>';
+
+  h += '</tbody></table></div></div>';
+  el.innerHTML = h;
+}
+
+function toggleFeeder(si){
+  var rows = document.querySelectorAll('.feeder-row-'+si);
+  var btn  = gel('ss-btn-'+si);
+  var open = rows.length && rows[0].style.display !== 'none';
+  rows.forEach(function(r){ r.style.display = open ? 'none' : ''; });
+  if(btn) btn.textContent = open ? '➕' : '➖';
+}
+
+function progressExportXLSX(){
+  var tbl = gel('progress-table');
+  if(!tbl){ alert('Report not loaded.'); return; }
+  // Show all feeder rows temporarily for export
+  var hidden = document.querySelectorAll('[class^="feeder-row-"]');
+  hidden.forEach(function(r){ r._wasHidden = r.style.display==='none'; r.style.display=''; });
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet(tbl), 'Progress_Report');
+  hidden.forEach(function(r){ if(r._wasHidden) r.style.display='none'; });
+  var d = new Date().toLocaleDateString('en-IN').replace(/\//g,'-');
+  XLSX.writeFile(wb,'SS_Progress_Report_'+d+'.xlsx');
+}
+
+function progressExportPDF(){
+  var tbl = gel('progress-table');
+  if(!tbl){ alert('Report not loaded.'); return; }
+  // Show all rows
+  var hidden = document.querySelectorAll('[class^="feeder-row-"]');
+  hidden.forEach(function(r){ r._wasHidden = r.style.display==='none'; r.style.display=''; });
+  var cleanHtml = '<table>';
+  tbl.querySelectorAll('tr').forEach(function(row){
+    cleanHtml += '<tr>';
+    row.querySelectorAll('th,td').forEach(function(cell){
+      var tag = cell.tagName.toLowerCase();
+      var cs = cell.getAttribute('colspan')?(' colspan="'+cell.getAttribute('colspan')+'"'):'';
+      cleanHtml += '<'+tag+cs+'>'+cell.textContent.trim()+'</'+tag+'>';
+    });
+    cleanHtml += '</tr>';
+  });
+  cleanHtml += '</table>';
+  hidden.forEach(function(r){ if(r._wasHidden) r.style.display='none'; });
+  var d = new Date().toLocaleDateString('en-IN');
+  var w = window.open('','_blank','width=1200,height=750');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>SS Progress Report</title>');
+  w.document.write('<style>*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:9px;margin:0;}');
+  w.document.write('h2{font-size:12px;color:#1E3A5F;margin:8px 0 4px;text-align:center;}');
+  w.document.write('table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ccc;padding:3px 5px;text-align:center;}');
+  w.document.write('th{background:#1E3A5F;color:#fff;font-size:8px;}tr:nth-child(even) td{background:#f9f9f9;}');
+  w.document.write('@page{size:A3 landscape;margin:8mm;}@media print{body{margin:0;}}');
+  w.document.write('</style></head><body>');
+  w.document.write('<h2>Sub Station Wise Billing & Collection Summary (Amt in Lacs) &nbsp; upto '+d+'</h2>');
+  w.document.write(cleanHtml);
+  w.document.write('<scr'+'ipt>window.onload=function(){window.print();};<'+'/scr'+'ipt>');
+  w.document.write('</body></html>');
+  w.document.close();
+}
+
 function buildDashboard(){
   var el = gel('panel-dashboard');
   if(!el) return;
@@ -2909,7 +3146,7 @@ function st(name){
   document.querySelectorAll('.tab').forEach(function(tab){
     tab.classList.toggle('active', tab.getAttribute('onclick')&&tab.getAttribute('onclick').indexOf("'"+name+"'")>-1);
   });
-  ['lookup','dc','dfp','defaulter','dashboard','settings'].forEach(function(n){
+  ['lookup','dc','dfp','defaulter','dashboard','settings','progress'].forEach(function(n){
     var p=gel('panel-'+n); if(p)p.classList.toggle('active',n===name);
   });
   requestAnimationFrame(function(){
@@ -2917,6 +3154,7 @@ function st(name){
     if(name==='dfp'&&!_dfpLoaded) loadDfp();
     if(name==='defaulter') loadDefaulters();
     if(name==='dashboard') buildDashboard();
+    if(name==='progress')  buildProgressReport();
     if(name==='settings'){
       if(!_settingsBuilt) buildSettingsPanel();
       setTimeout(function(){
@@ -4088,15 +4326,13 @@ function tariffLabel(code){
   return stToTariff(code);
 }
 function getAllSupplyValues(){
-  // Prefer TARIFF_TYPE from D array (LMV1, HV1 etc.) over raw SUPPLY_TYPE codes
-  var tariffLookup = {};
-  D.forEach(function(r){ if(r.ACCT_ID && r.CATEGORY) tariffLookup[String(r.ACCT_ID)] = r.CATEGORY; });
   var vals = new Set();
+  D.forEach(function(r){ if(r.CATEGORY) vals.add(r.CATEGORY); });
   DEF_ALL.forEach(function(r){
-    var t = tariffLookup[String(r.ACCT_ID)] || r.SUPPLY_TYPE || '';
+    var t=(window._tariffLookup&&window._tariffLookup[String(r.ACCT_ID)])||stToTariff(r.SUPPLY_TYPE)||r.SUPPLY_TYPE;
     if(t) vals.add(t);
   });
-  return Array.from(vals).sort(function(a,b){ return a.localeCompare(b, undefined, {numeric:true}); });
+  return Array.from(vals).filter(Boolean).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
 }
 
 function refreshFeedOptions(){
@@ -4380,10 +4616,15 @@ function runDefaulterFilter(){
   // Rebuild dropdowns every time DEF_ALL has data (options may be stale)
   if(DEF_ALL.length){
     var supplyOpts = gel('def-supply-opts');
-    if(supplyOpts && !supplyOpts.querySelectorAll('.ms-option').length){
-      buildMsOptions('sub',    getAllSubValues());
-      buildMsOptions('feed',   getAllFeedValues());
-      buildMsOptions('supply', getAllSupplyValues());
+    if(supplyOpts){
+      // Always rebuild supply options from D array (ensures LMV1/HV1 labels not raw ST codes)
+      var curSupplyVals = getAllSupplyValues();
+      var curBuilt = supplyOpts.querySelectorAll('.ms-option').length;
+      if(!curBuilt || curBuilt !== curSupplyVals.length){
+        buildMsOptions('sub',    getAllSubValues());
+        buildMsOptions('feed',   getAllFeedValues());
+        buildMsOptions('supply', curSupplyVals);
+      }
     }
   }
 
@@ -4411,7 +4652,7 @@ function runDefaulterFilter(){
     if(sub.length    && sub.indexOf(r.SUBSTATION)<0)    return false;
     if(feed.length   && feed.indexOf(r.FEEDER)<0)        return false;
     if(supply.length){
-      var rTariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || r.SUPPLY_TYPE || '';
+      var rTariff = (window._tariffLookup&&window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || r.SUPPLY_TYPE || '';
       if(supply.indexOf(rTariff)<0) return false;
     }
     // Load filter — multi-select ranges
