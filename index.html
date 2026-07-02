@@ -506,7 +506,6 @@ select option{background:#fff;color:#1E1B4B;}
     <div class="btn-group" style="margin-bottom:12px;">
       <div id="def-summary" style="font-family:var(--fh);font-size:13px;font-weight:600;color:var(--muted);flex:1;"></div>
       <button class="btn btn-acc" onclick="expDefaultersX()">⬇ EXPORT XLSX</button>
-      <button class="btn btn-out" onclick="expDefaulterAtr()">📋 ATR REPORT</button>
       <button class="btn" style="background:#059669;color:#fff;border:none;" onclick="downloadAtrFromSheet()">⬇ DOWNLOAD ATR XLSX</button>
     </div>
     <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
@@ -644,12 +643,12 @@ const DEFAULTER_FILE = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/u
 const DFP_FILE = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/uppcl-data/main/dfp.csv';
 const METERNO_FILE  = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/uppcl-data/main/METERNO.csv';
 const WORKER_URL = 'https://anshu10kumar04-pixel.github.io/uppcl-data/worker.js';
-const LOCAL_SYNC_URL = 'http://localhost:7321';
+const LOCAL_SYNC_URL = 'http://localhost:7423';
 var _syncPollTimer = null;
 
 function checkSyncServer(){
   var dot=gel('ftp-dot'), txt=gel('ftp-status-text'), btn=gel('ftp-sync-btn');
-  fetch(LOCAL_SYNC_URL+'/ping',{mode:'cors'})
+  fetch(LOCAL_SYNC_URL+'/status',{mode:'cors'})
     .then(function(r){return r.json();})
     .then(function(){
       if(dot)dot.style.background='#10B981';
@@ -665,22 +664,15 @@ function checkSyncServer(){
 }
 
 function loadSyncedInfo(){
-  fetch(LOCAL_SYNC_URL+'/sync-status',{mode:'cors'})
-    .then(function(r){return r.json();})
-    .then(function(d){
-      var el=gel('ftp-synced-info'); if(!el)return;
-      if(!d.ok){el.style.display='none';return;}
-      var ss=d.sync_status||{};
-      var lines=['<b style="color:#1D4ED8;">📋 LAST SYNCED</b>'];
-      Object.keys(ss).forEach(function(div){
-        var s=ss[div];
-        lines.push('DIV'+div+': Master=<b>'+(s.master_period||'—')+'</b> | Billed=<b>'+(s.billed_date||'—')+'</b> | Unbilled=<b>'+(s.unbilled_date||'—')+'</b>');
-      });
-      if(d.updated) lines.push('<span style="color:#64748B;">Updated: '+new Date(d.updated).toLocaleString('en-IN')+'</span>');
+  // Show last sync info from GitHub manifest
+  var el=gel('ftp-synced-info'); if(!el)return;
+  try{
+    var m=JSON.parse(localStorage.getItem('uppcl_manifest')||'{}');
+    if(m.updated){
       el.style.display='block';
-      el.innerHTML=lines.join('<br>');
-    })
-    .catch(function(){});
+      el.innerHTML='<b style="color:#1D4ED8;">📋 LAST SYNCED:</b> '+new Date(m.updated).toLocaleString('en-IN');
+    }
+  }catch(e){}
 }
 
 function triggerFtpSync(){
@@ -690,68 +682,48 @@ function triggerFtpSync(){
   if(gel('sync-billed')&&gel('sync-billed').checked) types.push('billed');
   if(gel('sync-unbilled')&&gel('sync-unbilled').checked) types.push('unbilled');
   if(!types.length){alert('Select at least one data type.');return;}
-
-  fetch(LOCAL_SYNC_URL+'/sync-status',{mode:'cors'})
-    .then(function(r){return r.json();})
-    .then(function(d){
-      if(!d.ok){
-        doSync(types, false, btn, logEl);
-        return;
-      }
-      var ss=d.sync_status||{};
-      var alreadySynced=[];
-      var today=new Date();
-      var ddmmyyyy=('0'+today.getDate()).slice(-2)+('0'+(today.getMonth()+1)).slice(-2)+today.getFullYear();
-      Object.keys(ss).forEach(function(div){
-        var s=ss[div];
-        if(types.includes('billed')&&s.billed_date===ddmmyyyy) alreadySynced.push('DIV'+div+' Billed ('+ddmmyyyy+')');
-        if(types.includes('unbilled')&&s.unbilled_date===ddmmyyyy) alreadySynced.push('DIV'+div+' Unbilled ('+ddmmyyyy+')');
-        if(types.includes('master')&&s.master_period) alreadySynced.push('DIV'+div+' Master ('+s.master_period+')');
-      });
-      if(alreadySynced.length){
-        var msg='⚠ Already synced:\n'+alreadySynced.join('\n')+'\n\nRefetch anyway?';
-        if(!confirm(msg)) return;
-        doSync(types, true, btn, logEl);
-      } else {
-        doSync(types, false, btn, logEl);
-      }
-    })
-    .catch(function(){ doSync(types, false, btn, logEl); });
+  var force=gel('sync-force')&&gel('sync-force').checked;
+  doSync(types, force, btn, logEl);
 }
 
 function doSync(types, force, btn, logEl){
-  if(logEl){logEl.style.display='block';logEl.innerHTML='Starting…\n';}
+  if(logEl){logEl.style.display='block';logEl.innerHTML='⏳ Starting sync...\n';}
   if(btn){btn.textContent='⏳ SYNCING…';btn.disabled=true;}
-  fetch(LOCAL_SYNC_URL+'/sync',{
-    method:'POST',mode:'cors',
+
+  var body = {
+    master:   types.includes('master'),
+    billed:   types.includes('billed'),
+    unbilled: types.includes('unbilled'),
+    force:    !!force
+  };
+
+  fetch(LOCAL_SYNC_URL+'/run-sync',{
+    method:'POST', mode:'cors',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({types:types,force:force})
-  })
-  .then(function(r){return r.json();})
-  .then(function(d){
-    if(!d.ok){
-      if(logEl)logEl.innerHTML+='❌ '+d.message;
-      if(btn){btn.disabled=false;btn.textContent='🔄 SYNC FROM FTP';}
-      return;
+    body:JSON.stringify(body)
+  }).then(function(response){
+    var reader = response.body.getReader();
+    var decoder = new TextDecoder();
+    function read(){
+      reader.read().then(function(result){
+        if(result.done){
+          if(btn){btn.disabled=false;btn.textContent='🔄 START SYNC PROCESS';}
+          if(logEl){logEl.innerHTML+='\n✅ Sync complete!';logEl.scrollTop=logEl.scrollHeight;}
+          loadSyncedInfo();
+          return;
+        }
+        var text = decoder.decode(result.value, {stream:true});
+        if(logEl){logEl.innerHTML+=text;logEl.scrollTop=logEl.scrollHeight;}
+        read();
+      }).catch(function(e){
+        if(logEl)logEl.innerHTML+='\n⚠ Stream ended.';
+        if(btn){btn.disabled=false;btn.textContent='🔄 START SYNC PROCESS';}
+      });
     }
-    clearInterval(_syncPollTimer);
-    _syncPollTimer=setInterval(function(){
-      fetch(LOCAL_SYNC_URL+'/status',{mode:'cors'})
-        .then(function(r){return r.json();})
-        .then(function(s){
-          if(logEl){logEl.innerHTML=s.log.join('\n');logEl.scrollTop=logEl.scrollHeight;}
-          if(!s.running){
-            clearInterval(_syncPollTimer);
-            if(btn){btn.disabled=false;btn.textContent='🔄 SYNC FROM FTP';}
-            var last=s.log[s.log.length-1]||'';
-            if(last.includes('DONE')){loadSyncedInfo();alert('✅ Sync complete!');}
-          }
-        }).catch(function(){clearInterval(_syncPollTimer);});
-    },1500);
-  })
-  .catch(function(){
-    if(logEl)logEl.innerHTML+='❌ Server not reachable.';
-    if(btn){btn.disabled=false;btn.textContent='🔄 SYNC FROM FTP';}
+    read();
+  }).catch(function(){
+    if(logEl)logEl.innerHTML+='❌ Server not reachable. Run local_server.py first.';
+    if(btn){btn.disabled=false;btn.textContent='🔄 START SYNC PROCESS';}
   });
 }
 
@@ -2554,58 +2526,70 @@ function processAndUpload(){
 }
 
 function expDefaulterAtr(){
-  var saved = {}; try{ saved = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
   var curMonth = (function(){ var n=new Date(); return n.getFullYear()+'-'+(n.getMonth()+1).toString().padStart(2,'0'); })();
-  var curMonthLabel = new Date().toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+  var saved = {}; try{ saved = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
 
-  function buildRows(data){
+  function buildFullRows(data){
+    if(!DEF_ALL.length) return buildRawRows(data);
     return DEF_ALL.map(function(r){
       var e = data[String(r.ACCT_ID)] || {};
-      var sc = collectionProbability(r), lb = collectionLabel(sc);
       return {
         ACCT_ID:     r.ACCT_ID,
         NAME:        r.NAME,
         MOBILE:      r.MOBILE||r.MOBILE_NO||'',
-        ADDRESS:     r.ADDRESS||'',
-        METER_NO:    METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'',
-        TARIFF:      r.SUPPLY_TYPE||'',
-        LOAD_KW:     r.LOAD||0,
         SUBSTATION:  r.SUBSTATION,
         FEEDER:      r.FEEDER,
+        TARIFF:      r.SUPPLY_TYPE||'',
+        OUTSTANDING: Math.round(r.OUTSTANDING||0),
         LP_DATE:     r.PAY_DATE||'',
         LP_AMT:      Math.round(r.PAY_AMT||0),
-        OUTSTANDING: Math.round(r.OUTSTANDING||0),
         BILL_BASIS:  billBasisInfo(r.BILL_BASIS).label,
-        AI_COLLECTION_PROB: sc,
-        AI_LABEL:    lb.label,
-        ATR_STATUS:  typeof e==='object'?(e.atr||r.ATR_STATUS||'PENDING'):(e||r.ATR_STATUS||'PENDING'),
-        COMMENT:     typeof e==='object'?(e.comment||r.ATR_COMMENT||''):'',
+        ATR_STATUS:  typeof e==='object'?(e.atr||'PENDING'):(e||'PENDING'),
+        COMMENT:     typeof e==='object'?(e.comment||''):'',
         TIMESTAMP:   typeof e==='object'?(e.ts||''):''
       };
     });
   }
 
-  if(!DEF_ALL.length){ alert('No defaulter data loaded.'); return; }
-  var wb = XLSX.utils.book_new();
-
-  // Current month sheet
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildRows(saved)), curMonth+'_ATR');
-
-  // Archive sheets from localStorage (previous months)
-  for(var i=0; i<localStorage.length; i++){
-    var k = localStorage.key(i);
-    if(k && k.startsWith('def_atr_archive_')){
-      var monthKey = k.replace('def_atr_archive_','');
-      try{
-        var archData = JSON.parse(localStorage.getItem(k)||'{}');
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildRows(archData)), monthKey+'_ATR');
-      }catch(ex){}
-    }
+  function buildRawRows(data){
+    return Object.keys(data).map(function(acct){
+      var e = data[acct];
+      return {
+        ACCT_ID:    acct,
+        ATR_STATUS: typeof e==='object'?(e.atr||'PENDING'):(e||'PENDING'),
+        COMMENT:    typeof e==='object'?(e.comment||''):'',
+        TIMESTAMP:  typeof e==='object'?(e.ts||''):''
+      };
+    });
   }
 
+  var wb = XLSX.utils.book_new();
+
+  var curRows = buildFullRows(saved);
+  if(curRows.length){
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(curRows), (curMonth+'_ATR').substring(0,31));
+  }
+
+  var archiveKeys = [];
+  for(var i=0; i<localStorage.length; i++){
+    var k = localStorage.key(i);
+    if(k && k.startsWith('def_atr_archive_')) archiveKeys.push(k);
+  }
+  archiveKeys.sort().forEach(function(k){
+    var monthKey = k.replace('def_atr_archive_','');
+    try{
+      var archData = JSON.parse(localStorage.getItem(k)||'{}');
+      if(Object.keys(archData).length){
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildRawRows(archData)), (monthKey+'_ATR').substring(0,31));
+      }
+    }catch(ex){}
+  });
+
+  if(!wb.SheetNames.length){ alert('No ATR data found.'); return; }
   var date = new Date().toLocaleDateString('en-IN').replace(/\//g,'-');
   XLSX.writeFile(wb, 'Defaulter_ATR_'+curMonth+'_'+date+'.xlsx');
 }
+
 
 function downloadAtrFromSheet(){
   // Ensure DEF_ALL is populated before building the report
@@ -3412,7 +3396,6 @@ function buildDCPanel(){
     '<div class="btn-group" style="margin-bottom:14px;">'+
       '<div id="dc-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>'+
       '<button class="btn btn-acc" onclick="expDcX()">⬇ EXPORT XLSX</button>'+
-      '<button class="btn btn-out" onclick="exportAtrXlsx()">📋 ATR REPORT</button>'+
       '<button class="btn" style="background:#059669;color:#fff;border:none;" onclick="downloadAtrFromSheet()">⬇ DOWNLOAD ATR XLSX</button>'+
       '<button class="btn" style="background:#fff;border:1.5px solid #C7D2FE;color:var(--muted);" onclick="resetDc()">↺ RESET</button>'+
     '</div>'+
@@ -3569,7 +3552,7 @@ function openDcDetail(acctId){
   // ATR submitted state — show with unlock option
   var currentAtr = r.ATR_STATUS || 'DISCONNECTED';
   var isSubmitted = currentAtr !== 'DISCONNECTED';
-  var isLocked = isSubmitted && isAtrLocked(r.ACCT_ID, 'sm');
+  var isLocked = isAtrLocked(r.ACCT_ID, 'sm');
   // Load saved comment
   var savedAtrData = {};
   try{savedAtrData=JSON.parse(localStorage.getItem('atr_data')||'{}');}catch(e){}
@@ -4579,16 +4562,17 @@ function openDefaulterModal(acctId){
   atrSec.querySelector('div:first-child').textContent = '📋 ATR STATUS — DEFAULTER ACTION REPORT';
   var sel = gel('modal-atr-sel');
   sel.innerHTML = '<option value="PENDING">⏳ PENDING</option><option value="PAID">✅ PAID</option><option value="PARTIAL">💰 PARTIAL PAYMENT</option><option value="PROMISE">🤝 PROMISE TO PAY</option><option value="LOCK">🔒 LOCK / AWAY</option><option value="DISPUTE">⚖️ DISPUTE</option><option value="TD">🔌 TEMP DISCONNECTED</option><option value="OTHER">📝 OTHER</option>';
-  var currentAtr = defRec.ATR_STATUS || 'PENDING';
-  sel.value = currentAtr;
-  updateAtrSelectStyle();
-  var isSubmitted = currentAtr !== 'PENDING';
-  var isLocked = isSubmitted && isAtrLocked(defRec.ACCT_ID, 'defaulter');
-  sel.disabled = isLocked;
-  sel.style.opacity = isSubmitted ? '0.7' : '1';
   var defSaved = {};
   try{ defSaved = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
   var defEntry = defSaved[String(acctId)] || {};
+  var savedAtr = typeof defEntry==='object' ? (defEntry.atr||'PENDING') : (defEntry||'PENDING');
+  var currentAtr = savedAtr !== 'PENDING' ? savedAtr : (defRec.ATR_STATUS || 'PENDING');
+  sel.value = currentAtr;
+  updateAtrSelectStyle();
+  var isSubmitted = currentAtr !== 'PENDING';
+  var isLocked = isAtrLocked(defRec.ACCT_ID, 'defaulter');
+  sel.disabled = isLocked;
+  sel.style.opacity = isLocked ? '0.7' : '1';
   var defComment = typeof defEntry==='object' ? (defEntry.comment||'') : '';
   var defCommentBox = gel('modal-atr-comment');
   var defCommentWrap = gel('modal-atr-comment-wrap');
@@ -4698,12 +4682,15 @@ function openDefaulterModalDirect(d){
   var currentAtr=d.ATR_STATUS||'PENDING';
   sel.value=currentAtr;
   updateAtrSelectStyle();
-  var isSubmitted=currentAtr!=='PENDING';
-  var isLocked = isSubmitted && isAtrLocked(d.ACCT_ID, 'defaulter');
-  sel.disabled=isLocked; sel.style.opacity=isLocked?'0.7':'1';
   var defSaved={};
   try{defSaved=JSON.parse(localStorage.getItem('def_atr_data')||'{}');}catch(e){}
   var defEntry=defSaved[String(d.ACCT_ID)]||{};
+  var _lsAtr2=typeof defEntry==='object'?(defEntry.atr||'PENDING'):(defEntry||'PENDING');
+  if(_lsAtr2!=='PENDING') currentAtr=_lsAtr2;
+  sel.value=currentAtr; updateAtrSelectStyle();
+  var isSubmitted=currentAtr!=='PENDING';
+  var isLocked = isAtrLocked(d.ACCT_ID, 'defaulter');
+  sel.disabled=isLocked; sel.style.opacity=isLocked?'0.7':'1';
   var defComment=typeof defEntry==='object'?(defEntry.comment||''):'';
   var cb=gel('modal-atr-comment'), cw=gel('modal-atr-comment-wrap');
   if(cb){cb.value=defComment;cb.disabled=isLocked;}
@@ -4849,7 +4836,7 @@ function openMainDetail(acctId){
     sel.value = currentAtr;
     updateAtrSelectStyle();
     var isSubmitted = currentAtr !== 'PENDING';
-    var isLocked = isSubmitted && isAtrLocked(defRec.ACCT_ID, 'defaulter');
+    var isLocked = isAtrLocked(defRec.ACCT_ID, 'defaulter');
     sel.disabled = isLocked;
     sel.style.opacity = isSubmitted ? '0.7' : '1';
     // Load saved comment
