@@ -1108,6 +1108,16 @@ function settingsLog(msg){
   l.innerHTML+='<div>'+msg+'</div>'; l.scrollTop=l.scrollHeight;
 }
 
+
+function dashToggle(id){
+  var el=document.getElementById(id);
+  var btn=document.getElementById(id+'-arrow');
+  if(!el)return;
+  var isOpen=el.style.display!=='none';
+  el.style.display=isOpen?'none':'block';
+  if(btn)btn.textContent=isOpen?'\u25b6':'\u25bc';
+  try{var s=JSON.parse(localStorage.getItem('dash_sections')||'{}');s[id]=!isOpen;localStorage.setItem('dash_sections',JSON.stringify(s));}catch(e){}
+}
 function buildDashboard(){
   var el = gel('panel-dashboard');
   if(!el) return;
@@ -1190,7 +1200,10 @@ function buildDashboard(){
     basisMap[b].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
   });
   DEF_ALL.forEach(function(r){
-    var b=String(r.BILL_BASIS||'').trim().toUpperCase()||'UNKNOWN';
+    // Use BILL_BASIS from DEF_ALL, fallback to D array lookup (billed data has BILL_BASIS)
+    var rb = String(r.BILL_BASIS||'').trim().toUpperCase();
+    if(!rb && window._basisLookupGlobal) rb = window._basisLookupGlobal[String(r.ACCT_ID)]||'';
+    var b = rb || 'UNKNOWN';
     if(!basisMap[b]) basisMap[b]={count:0,out:0,defCount:0,defOut:0};
     basisMap[b].defCount++;
     basisMap[b].defOut += r.OUTSTANDING||0;
@@ -1327,12 +1340,32 @@ function buildDashboard(){
   window._dashFeederBySS = {};
   Object.keys(feederBySS).forEach(function(ss){ window._dashFeederBySS[ss]=Array.from(feederBySS[ss]).sort(); });
 
+  // Build division → SS cascade map
+  var _divMap = SUB_DIVISION_MAP || {};
+  var divSsMap = {};
+  D.forEach(function(r){
+    var ss=r.SUBSTATION||''; if(!ss) return;
+    var div=_divMap[ss]||'eudd1';
+    var dl=div==='eudd2'?'EUDD-II (233512)':'EUDD-I (233511)';
+    if(!divSsMap[dl]) divSsMap[dl]=new Set();
+    divSsMap[dl].add(ss);
+  });
+  window._dashDivSsMap={};
+  Object.keys(divSsMap).sort().forEach(function(d){ window._dashDivSsMap[d]=Array.from(divSsMap[d]).sort(); });
+
+
   // Collect all bill basis values
   var allBasisVals = [...new Set(D.map(function(r){return String(r.BILL_BASIS||'').trim().toUpperCase();}).filter(Boolean))].sort();
 
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
-  html += '<div style="background:#4338CA;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">🔍 FILTERED REPORT — SELECT FILTERS</div>';
+  html += '<div style="background:#4338CA;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle('dash-filtered-body')">🔍 FILTERED REPORT — SELECT FILTERS<span id="dash-filtered-body-arrow" style="font-size:14px;opacity:0.8;">\u25bc</span></div><div id="dash-filtered-body" style="display:block;">';
   html += '<div style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">';
+  // Division (cascade level 1)
+  html += '<div style="flex:1;min-width:130px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">DIVISION</div>';
+  html += '<select id="dash-div-sel" onchange="dashDivUpdate()" style="width:100%;padding:8px 10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:12px;font-family:var(--fb);">';
+  html += '<option value="">— All —</option>';
+  Object.keys(window._dashDivSsMap||{}).sort().forEach(function(d){ html += '<option value="'+d+'">'+d+'</option>'; });
+  html += '</select></div>';
   // SS
   html += '<div style="flex:1;min-width:150px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">SUBSTATION</div>';
   html += '<select id="dash-ss-sel" onchange="dashFeederUpdate()" style="width:100%;padding:8px 10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:12px;font-family:var(--fb);">';
@@ -1355,7 +1388,7 @@ function buildDashboard(){
   html += '<button onclick="dashResetFilter()" style="background:#F3F4F6;color:#374151;border:none;padding:9px 14px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:12px;cursor:pointer;">RESET</button>';
   html += '</div>';
   html += '<div id="dash-filtered-result"></div>';
-  html += '</div>';
+  html += '</div></div>'; // close dash-filtered-body + card
   // KPI cards
   html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">';
   html += card('👥','TOTAL CONSUMERS',D.length.toLocaleString(),'Billed: '+billed.length+' | Unbilled: '+unbilled.length,'#EFF6FF','#1D4ED8');
@@ -1437,7 +1470,7 @@ function buildDashboard(){
   }
 
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-  html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">💰 DEFAULTER RECOVERY REPORT — WHO PAID</div>';
+  html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle('dash-recovery-body')">💰 DEFAULTER RECOVERY REPORT — WHO PAID<span id="dash-recovery-body-arrow" style="font-size:14px;opacity:0.8;">\u25bc</span></div><div id="dash-recovery-body" style="display:block;">';
   html += '<div style="padding:0;">';
 
   // Yesterday
@@ -1450,11 +1483,11 @@ function buildDashboard(){
   html += '📆 CURRENT MONTH ('+today.toLocaleDateString('en-IN',{month:'long',year:'numeric'})+') — '+recMonth.length+' consumers paid</div>';
   html += buildRecoveryTable(recMonth, 'month');
 
-  html += '</div></div>';
+  html += '</div></div></div>';
 
     // Defaulter Outstanding Range-wise
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
-  html += '<div style="background:#B91C1C;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">🎯 DEFAULTER — OUTSTANDING RANGE ANALYSIS</div>';
+  html += '<div style="background:#B91C1C;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle('dash-ranges-body')">🎯 DEFAULTER — OUTSTANDING RANGE ANALYSIS<span id="dash-ranges-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-ranges-body" style="display:none;">';
   html += '<div style="display:flex;flex-wrap:wrap;gap:0;">';
   var rangeBgs=['#FFF1F2','#FEE2E2','#FFE4E6','#FFF7ED'];
   var rangeTc=['#BE123C','#DC2626','#E11D48','#C2410C'];
@@ -1468,14 +1501,14 @@ function buildDashboard(){
     html += '<div style="font-size:9px;color:#9CA3AF;font-family:var(--fh);">Outstanding</div>';
     html += '</div>';
   });
-  html += '</div></div>';
+  html += '</div></div></div>';
 
   // Substation-wise table
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
-  html += '<div style="background:#1E3A5F;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">'+
+  html += '<div style="background:#1E3A5F;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;" onclick="dashToggle('dash-ss-body')">'+
     '<span>🏛 SUBSTATION-WISE SUMMARY</span>'+
     (ssList.length>16?'<span style="font-size:10px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">Top 16 of '+ssList.length+' by Outstanding</span>':'')+
-  '</div>';
+  '<span id="dash-ss-body-arrow" style="font-size:14px;opacity:0.8;">&#9654;</span></div><div id="dash-ss-body" style="display:none;">';
   html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr style="background:#F8FAFC;">';
   ['SUBSTATION','BILLED','UNBILLED','TOTAL','OUTSTANDING','CA','DEFAULTERS','DEF OUTSTANDING'].forEach(function(h){
@@ -1506,11 +1539,11 @@ function buildDashboard(){
   html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#DC2626;">'+cr(totalCA)+'</td>';
   html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#D97706;">'+tDef.toLocaleString()+'</td>';
   html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#F43F5E;">'+cr(defOut)+'</td>';
-  html += '</tr></tbody></table></div></div>';
+  html += '</tr></tbody></table></div></div></div>';
 
   // Tariff-wise table
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;overflow:hidden;">';
-  html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">📋 TARIFF-WISE BREAKUP</div>';
+  html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle('dash-tariff-body')">📋 TARIFF-WISE BREAKUP<span id="dash-tariff-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-tariff-body" style="display:none;">';
   html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead>';
   html += '<tr style="background:#F0FDF4;">';
@@ -1545,11 +1578,11 @@ function buildDashboard(){
     html += '<td style="padding:6px 8px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=10000000?'₹'+(v/10000000).toFixed(1)+'Cr':v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(td.r1lo||0)+'</td>';
     html += '</tr>';
   });
-  html += '</tbody></table></div></div>';
+  html += '</tbody></table></div></div></div>';
 
   // Bill Basis-wise table
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-  html += '<div style="background:#7C3AED;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">📑 BILL BASIS-WISE REPORT</div>';
+  html += '<div style="background:#7C3AED;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle('dash-basis-body')">📑 BILL BASIS-WISE REPORT<span id="dash-basis-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-basis-body" style="display:none;">';
   html += '<div style="padding:10px 16px;font-size:11px;color:#6B7280;background:#F5F3FF;border-bottom:1px solid #DDD6FE;">MU = Actual meter reading | ASS = Assessed | PROV = Provisional | CEIL = Ceiling. Applies to billed consumers only.</div>';
   html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr style="background:#F5F3FF;">';
@@ -1569,7 +1602,7 @@ function buildDashboard(){
     html += '<td style="padding:8px 10px;text-align:right;color:#F43F5E;font-weight:700;">'+cr(bd.defOut||0)+'</td>';
     html += '</tr>';
   });
-  html += '</tbody></table></div></div>';
+  html += '</tbody></table></div></div></div>';
 
   // Feeder Recovery Score + Revenue Leakage Score table
   function scoreBadge(sc, goodHigh){
@@ -1580,7 +1613,7 @@ function buildDashboard(){
     return '<span style="font-size:11px;font-weight:800;padding:3px 9px;border-radius:6px;background:'+bg+';color:'+tc+';">'+sc+'</span>';
   }
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-  html += '<div style="background:#7C2D12;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;">⚡ FEEDER RECOVERY &amp; REVENUE LEAKAGE SCORE</div>';
+  html += '<div style="background:#7C2D12;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle('dash-feeder-body')">⚡ FEEDER RECOVERY &amp; REVENUE LEAKAGE SCORE<span id="dash-feeder-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-feeder-body" style="display:none;">';
   html += '<div style="padding:10px 16px;font-size:11px;color:#6B7280;background:#FFF7ED;border-bottom:1px solid #FED7AA;">Recovery Score: higher = better collection health. Leakage Score: higher = lower revenue leakage risk. Sorted by worst leakage first.</div>';
   html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr style="background:#FFF7ED;">';
@@ -1599,7 +1632,7 @@ function buildDashboard(){
     html += '<td style="padding:8px 10px;text-align:right;">'+scoreBadge(f.leakageScore,true)+'</td>';
     html += '</tr>';
   });
-  html += '</tbody></table></div></div>';
+  html += '</tbody></table></div></div></div>';
 
   // ── ATR PROGRESS (SS-wise, day-wise) ─────────────────────────────────
   var atrDef = {}; try{ atrDef = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
@@ -1647,10 +1680,11 @@ function buildDashboard(){
                       + Object.values(atrSm).filter(function(e){return (typeof e==='object'?e.atr:e)!=='PENDING';}).length;
 
     html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-    html += '<div style="background:#1E40AF;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;">';
+    html += '<div style="background:#1E40AF;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-atr-body\')">';
     html += '<span>📋 ATR PROGRESS — SS-WISE DAY-WISE</span>';
-    html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">Total Actioned: '+totalActioned+'</span>';
+    html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">'+totalActioned+' actioned &nbsp;&#9654;</span>';
     html += '</div>';
+    html += '<div id="dash-atr-body" style="display:none;">';
 
     if(sortedDays.length===0){
       html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No ATR entries recorded yet. Field staff should mark ATR status in Defaulter tab.</div>';
@@ -1711,7 +1745,7 @@ function buildDashboard(){
       html += '</td></tr>';
       html += '</tbody></table></div>';
     }
-    html += '</div>';
+    html += '</div></div>'; // close dash-atr-body + card
   }
 
 
@@ -1719,6 +1753,35 @@ function buildDashboard(){
 
   html += '</div>'; // end container
   el.innerHTML = html;
+}
+
+function dashDivUpdate(){
+  var div = gel('dash-div-sel') ? gel('dash-div-sel').value : '';
+  var ssSel = gel('dash-ss-sel');
+  if(!ssSel) return;
+  ssSel.innerHTML = '<option value="">— All —</option>';
+  if(div && window._dashDivSsMap && window._dashDivSsMap[div]){
+    window._dashDivSsMap[div].forEach(function(ss){
+      var opt = document.createElement('option');
+      opt.value = ss; opt.textContent = ss;
+      ssSel.appendChild(opt);
+    });
+  } else {
+    // Show all SS
+    var allSs = new Set();
+    Object.keys(window._dashDivSsMap||{}).forEach(function(d){
+      (window._dashDivSsMap[d]||[]).forEach(function(ss){ allSs.add(ss); });
+    });
+    Array.from(allSs).sort().forEach(function(ss){
+      var opt = document.createElement('option');
+      opt.value = ss; opt.textContent = ss;
+      ssSel.appendChild(opt);
+    });
+  }
+  // Reset feeder when division changes
+  var feedSel = gel('dash-feed-sel');
+  if(feedSel){ feedSel.innerHTML = '<option value="">— All —</option>'; }
+  dashRenderFiltered();
 }
 
 function dashFeederUpdate(){
@@ -1747,9 +1810,10 @@ function dashFeederUpdate(){
 }
 
 function dashResetFilter(){
+  if(gel('dash-div-sel'))   gel('dash-div-sel').value='';
   if(gel('dash-ss-sel'))    gel('dash-ss-sel').value='';
   if(gel('dash-basis-sel')) gel('dash-basis-sel').value='';
-  dashFeederUpdate();
+  dashDivUpdate();
   if(gel('dash-feed-sel')) gel('dash-feed-sel').value='';
   dashRenderFiltered();
 }
@@ -1757,26 +1821,34 @@ function dashResetFilter(){
 function dashNorm(s){ return String(s||'').trim().toUpperCase(); }
 
 function dashRenderFiltered(){
+  var div = gel('dash-div-sel') ? gel('dash-div-sel').value : '';
   var ss = gel('dash-ss-sel') ? gel('dash-ss-sel').value : '';
   var fd = gel('dash-feed-sel') ? gel('dash-feed-sel').value : '';
   var basis = gel('dash-basis-sel') ? gel('dash-basis-sel').value : '';
   var resultEl = gel('dash-filtered-result');
   if(!resultEl) return;
 
-  if(!ss && !fd && !basis){
-    resultEl.innerHTML = '<div style="padding:14px 16px;font-size:12px;color:#9CA3AF;font-family:var(--fh);border-top:1px solid #E5E7EB;">Select Substation, Feeder, and/or Bill Basis above, then click APPLY.</div>';
+  if(!div && !ss && !fd && !basis){
+    resultEl.innerHTML = '<div style="padding:14px 16px;font-size:12px;color:#9CA3AF;font-family:var(--fh);border-top:1px solid #E5E7EB;">Select Division, Substation, Feeder, and/or Bill Basis above, then click APPLY.</div>';
     return;
   }
 
   var ssN = dashNorm(ss), fdN = dashNorm(fd), basisN = dashNorm(basis);
+  // Division filter: get SS set for selected division
+  var divSsSet = null;
+  if(div && window._dashDivSsMap && window._dashDivSsMap[div]){
+    divSsSet = new Set(window._dashDivSsMap[div].map(function(s){ return dashNorm(s); }));
+  }
 
   var scopeD = D.filter(function(r){
+    if(divSsSet && !divSsSet.has(dashNorm(r.SUBSTATION))) return false;
     if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
     if(fd && dashNorm(r.FEEDER)!==fdN) return false;
     if(basis && dashNorm(r.BILL_BASIS)!==basisN) return false;
     return true;
   });
   var scopeDef = DEF_ALL.filter(function(r){
+    if(divSsSet && !divSsSet.has(dashNorm(r.SUBSTATION))) return false;
     if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
     if(fd && dashNorm(r.FEEDER)!==fdN) return false;
     if(basis){ var rb=dashNorm(r.BILL_BASIS)||(window._basisLookupGlobal&&window._basisLookupGlobal[String(r.ACCT_ID)])||''; if(rb!==basisN) return false; }
@@ -1824,7 +1896,9 @@ function dashRenderFiltered(){
     fBasisMap[b].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
   });
   scopeDef.forEach(function(r){
-    var b = String(r.BILL_BASIS||'').trim().toUpperCase()||'UNKNOWN';
+    var rb = String(r.BILL_BASIS||'').trim().toUpperCase();
+    if(!rb && window._basisLookupGlobal) rb = window._basisLookupGlobal[String(r.ACCT_ID)]||'';
+    var b = rb || 'UNKNOWN';
     if(!fBasisMap[b]) fBasisMap[b]={count:0,out:0,defCount:0,defOut:0};
     fBasisMap[b].defCount++;
     fBasisMap[b].defOut += r.OUTSTANDING||0;
@@ -1836,7 +1910,7 @@ function dashRenderFiltered(){
     return ia-ib;
   });
 
-  var scopeLabel = (ss?ss:'All Substations') + (fd?' &rarr; '+fd:'');
+  var scopeLabel = (div?div+' → ':'') + (ss?ss:'All Substations') + (fd?' → '+fd:'');
 
   var h = '<div style="padding:14px 16px;border-top:1px solid #E5E7EB;">';
   h += '<div style="font-family:var(--fh);font-weight:700;font-size:13px;color:#4338CA;margin-bottom:12px;">📍 '+scopeLabel+'</div>';
@@ -2288,38 +2362,57 @@ function processAndUpload(){
 }
 
 function expDefaulterAtr(){
-  // Local ATR report from localStorage + DEF_ALL
-  var saved = {};
-  try{ saved = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
-  var rows = DEF_ALL.map(function(r){
-    var e = saved[String(r.ACCT_ID)] || {};
-    var sc = collectionProbability(r), lb = collectionLabel(sc);
-    return {
-      ACCT_ID:     r.ACCT_ID,
-      NAME:        r.NAME,
-      MOBILE:      r.MOBILE||r.MOBILE_NO||'',
-      ADDRESS:     r.ADDRESS||'',
-      METER_NO:    METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'',
-      TARIFF:      r.SUPPLY_TYPE||'',
-      LOAD_KW:     r.LOAD||0,
-      SUBSTATION:  r.SUBSTATION,
-      FEEDER:      r.FEEDER,
-      LP_DATE:     r.PAY_DATE||'',
-      LP_AMT:      Math.round(r.PAY_AMT||0),
-      OUTSTANDING: Math.round(r.OUTSTANDING||0),
-      BILL_BASIS:  billBasisInfo(r.BILL_BASIS).label,
-      AI_COLLECTION_PROB: sc,
-      AI_LABEL:    lb.label,
-      ATR_STATUS:  typeof e==='object'?(e.atr||r.ATR_STATUS||'PENDING'):(e||r.ATR_STATUS||'PENDING'),
-      COMMENT:     typeof e==='object'?(e.comment||r.ATR_COMMENT||''):'',
-      TIMESTAMP:   typeof e==='object'?(e.ts||''):''
-    };
-  });
-  if(!rows.length){ alert('No defaulter data loaded.'); return; }
+  var saved = {}; try{ saved = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+  var curMonth = (function(){ var n=new Date(); return n.getFullYear()+'-'+(n.getMonth()+1).toString().padStart(2,'0'); })();
+  var curMonthLabel = new Date().toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+
+  function buildRows(data){
+    return DEF_ALL.map(function(r){
+      var e = data[String(r.ACCT_ID)] || {};
+      var sc = collectionProbability(r), lb = collectionLabel(sc);
+      return {
+        ACCT_ID:     r.ACCT_ID,
+        NAME:        r.NAME,
+        MOBILE:      r.MOBILE||r.MOBILE_NO||'',
+        ADDRESS:     r.ADDRESS||'',
+        METER_NO:    METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'',
+        TARIFF:      r.SUPPLY_TYPE||'',
+        LOAD_KW:     r.LOAD||0,
+        SUBSTATION:  r.SUBSTATION,
+        FEEDER:      r.FEEDER,
+        LP_DATE:     r.PAY_DATE||'',
+        LP_AMT:      Math.round(r.PAY_AMT||0),
+        OUTSTANDING: Math.round(r.OUTSTANDING||0),
+        BILL_BASIS:  billBasisInfo(r.BILL_BASIS).label,
+        AI_COLLECTION_PROB: sc,
+        AI_LABEL:    lb.label,
+        ATR_STATUS:  typeof e==='object'?(e.atr||r.ATR_STATUS||'PENDING'):(e||r.ATR_STATUS||'PENDING'),
+        COMMENT:     typeof e==='object'?(e.comment||r.ATR_COMMENT||''):'',
+        TIMESTAMP:   typeof e==='object'?(e.ts||''):''
+      };
+    });
+  }
+
+  if(!DEF_ALL.length){ alert('No defaulter data loaded.'); return; }
   var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Defaulter_ATR');
+
+  // Current month sheet
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildRows(saved)), curMonth+'_ATR');
+
+  // Archive sheets from localStorage (previous months)
+  for(var i=0; i<localStorage.length; i++){
+    var k = localStorage.key(i);
+    if(k && k.startsWith('def_atr_archive_')){
+      var monthKey = k.replace('def_atr_archive_','');
+      try{
+        var archData = JSON.parse(localStorage.getItem(k)||'{}');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildRows(archData)), monthKey+'_ATR');
+      }catch(ex){}
+    }
+  }
+
   var date = new Date().toLocaleDateString('en-IN').replace(/\//g,'-');
-  XLSX.writeFile(wb, 'Defaulter_ATR_Local_'+date+'.xlsx');
+  XLSX.writeFile(wb, 'Defaulter_ATR_'+curMonth+'_'+date+'.xlsx');
 }
 
 function downloadAtrFromSheet(){
@@ -2549,6 +2642,11 @@ window.addEventListener('DOMContentLoaded',function(){
       console.log('New month detected. Archiving ATR for:', lastMonth);
       var smData  = {}; try{smData  = JSON.parse(localStorage.getItem('atr_data')||'{}');    }catch(e){}
       var defData = {}; try{defData = JSON.parse(localStorage.getItem('def_atr_data')||'{}');}catch(e){}
+
+      // Save archive to localStorage for XLSX access
+      if(Object.keys(defData).length) localStorage.setItem('def_atr_archive_'+lastMonth, JSON.stringify(defData));
+      if(Object.keys(smData).length)  localStorage.setItem('sm_atr_archive_'+lastMonth,  JSON.stringify(smData));
+
       var url = localStorage.getItem('atr_script_url');
       if(url && (Object.keys(smData).length || Object.keys(defData).length)){
         // Push archive to sheet with month label
@@ -3419,12 +3517,15 @@ function saveModalAtr(){
       outstanding: defRec ? defRec.OUTSTANDING : 0,
       role: CURRENT_ROLE || 'USER'
     });
-    // Freeze
+    // Remove from pushed accts — lock until pushed to sheet again
+    var _pushed = getPushedAccts();
+    _pushed.delete(String(modalCurrentAcct));
+    localStorage.setItem('atr_pushed_accts', JSON.stringify(Array.from(_pushed)));
+    // Lock UI
     sel.disabled=true; sel.style.opacity='0.7';
     var sb=gel('modal-atr-section').querySelectorAll('.save-atr-btn');
-    sb.forEach(function(b){b.disabled=true;b.style.opacity='0.5';b.style.background='#9CA3AF';b.textContent='✅ ATR ALREADY SUBMITTED';});
+    sb.forEach(function(b){b.disabled=true;b.style.opacity='0.7';b.style.cursor='not-allowed';b.style.background='#9CA3AF';b.textContent='🔒 PUSH TO SHEET TO UNLOCK';b.style.fontSize='11px';});
     renderDefaulters(defPage);
-    // Auto-sync from sheet after 2s to confirm save
     setTimeout(autoSyncAtr, 2000);
     return;
   }
@@ -3435,6 +3536,10 @@ function saveModalAtr(){
   var comment = gel('modal-atr-comment') ? gel('modal-atr-comment').value.trim() : '';
   if(r){r.ATR_STATUS=newAtr; r.ATR_COMMENT=comment; ATR_DATA[String(modalCurrentAcct)]={atr:newAtr,comment:comment};}
   try{var a=JSON.parse(localStorage.getItem('atr_data')||'{}');a[String(modalCurrentAcct)]={atr:newAtr,comment:comment,ts:new Date().toISOString()};localStorage.setItem('atr_data',JSON.stringify(a));}catch(e){}
+  // Remove from pushed accts — lock until pushed to sheet again
+  var _pushed2 = getPushedAccts();
+  _pushed2.delete(String(modalCurrentAcct));
+  localStorage.setItem('atr_pushed_accts', JSON.stringify(Array.from(_pushed2)));
   // Freeze ATR select, comment and button after save
   var sel3 = gel('modal-atr-sel');
   if(sel3){ sel3.disabled=true; sel3.style.opacity='0.7'; sel3.style.cursor='not-allowed'; }
@@ -3443,8 +3548,8 @@ function saveModalAtr(){
   setTimeout(autoSyncAtr, 2000);
   var allBtns = gel('modal-atr-section') ? gel('modal-atr-section').querySelectorAll('.save-atr-btn') : [];
   allBtns.forEach(function(b){
-    b.disabled=true; b.style.opacity='0.5'; b.style.cursor='not-allowed';
-    b.style.background='#9CA3AF'; b.textContent='✅ ATR ALREADY SUBMITTED';
+    b.disabled=true; b.style.opacity='0.7'; b.style.cursor='not-allowed';
+    b.style.background='#9CA3AF'; b.textContent='🔒 PUSH TO SHEET TO UNLOCK'; b.style.fontSize='11px';
   });
 
   // Sync to Google Sheet
