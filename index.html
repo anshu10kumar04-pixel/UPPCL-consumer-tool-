@@ -1118,54 +1118,7 @@ function dashToggle(id){
 }
 
 // Dashboard PDF export using print
-function dashExportPDF(sectionId, title){
-  var el = document.getElementById(sectionId+'-body');
-  if(!el || el.style.display==='none'){
-    // Expand if collapsed
-    if(el) el.style.display='block';
-  }
-  var card = el ? el.parentElement : null;
-  if(!card) return;
-  var w = window.open('','_blank','width=900,height=700');
-  w.document.write('<html><head><title>'+title+'</title>');
-  w.document.write('<style>body{font-family:Arial,sans-serif;font-size:11px;margin:20px;}');
-  w.document.write('table{border-collapse:collapse;width:100%;font-size:10px;}');
-  w.document.write('th,td{border:1px solid #ddd;padding:5px 8px;text-align:left;}');
-  w.document.write('th{background:#1E3A5F;color:#fff;font-weight:bold;}');
-  w.document.write('tr:nth-child(even){background:#f9f9f9;}');
-  w.document.write('h2{color:#1E3A5F;font-size:14px;margin-bottom:10px;}');
-  w.document.write('@media print{.no-print{display:none}}');
-  w.document.write('</style></head><body>');
-  w.document.write('<h2>'+title+'</h2>');
-  w.document.write(el.innerHTML);
-  w.document.write('<script>window.onload=function(){window.print();window.close();}<\/script>');
-  w.document.write('</body></html>');
-  w.document.close();
-}
-
 // Dashboard Excel export
-function dashExportXLSX(sectionId, title){
-  var el = document.getElementById(sectionId+'-body');
-  if(!el) return;
-  var tables = el.querySelectorAll('table');
-  if(!tables.length){ alert('No table data to export.'); return; }
-  var wb = XLSX.utils.book_new();
-  tables.forEach(function(tbl, i){
-    var ws = XLSX.utils.table_to_sheet(tbl);
-    var sheetName = (title+(tables.length>1?' '+(i+1):'')).substring(0,31);
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  });
-  var fname = title.replace(/[^a-zA-Z0-9_\s]/g,'_').replace(/\s+/g,'_')+'_'+new Date().toLocaleDateString('en-IN').replace(/\//g,'-')+'.xlsx';
-  XLSX.writeFile(wb, fname);
-}
-
-
-function dashExportBtns(secId, title){
-  return '<div style="display:flex;gap:6px;margin:10px 16px 0;">' +
-    '<button onclick="dashExportXLSX(\''+secId+'\',\''+title+'\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button>' +
-    '<button onclick="dashExportPDF(\''+secId+'\',\''+title+'\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button>' +
-    '</div>';
-}
 function buildDashboard(){
   var el = gel('panel-dashboard');
   if(!el) return;
@@ -1446,24 +1399,35 @@ function buildDashboard(){
   html += card('🔴','DEF OUTSTANDING',cr(defOut),'Total recoverable','#FFF1F2','#F43F5E');
   html += '</div>';
 
-  // ── DEFAULTER RECOVERY — WHO PAID (Yesterday + Current Month) ─────────
+  // ── DEFAULTER RECOVERY — WHO PAID (Yesterday + Current Month + Prev Month) ─────────
   var today   = new Date();
-  var yyyyMM  = today.getFullYear()+'-'+(today.getMonth()+1).toString().padStart(2,'0');
   var yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
   var yDay = yesterday.getDate(), yMon = yesterday.getMonth(), yYear = yesterday.getFullYear();
+  var curMon = today.getMonth(), curYear = today.getFullYear();
+  var prevMon = curMon===0?11:curMon-1, prevYear = curMon===0?curYear-1:curYear;
 
-  // Match consumers who were ever in DEF_ALL and have recent PAY_DATE in D
-  var defAcctSet = new Set(DEF_ALL.map(function(r){return String(r.ACCT_ID);}));
+  // Use DEF_ALL acct set if available, otherwise use all D consumers (fallback)
+  var defAcctSet;
+  if(DEF_ALL.length){
+    defAcctSet = new Set(DEF_ALL.map(function(r){return String(r.ACCT_ID);}));
+  } else {
+    // Fallback: all consumers with outstanding > 0 (likely defaulters)
+    defAcctSet = new Set(D.filter(function(r){
+      return Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0) > 2000;
+    }).map(function(r){return String(r.ACCT_ID);}));
+  }
+
   var recYest=[], recMonth=[];
 
   D.forEach(function(r){
     if(!defAcctSet.has(String(r.ACCT_ID))) return;
     var pd = parseDate(r.LAST_PAY_DATE||r.PAY_DATE);
     if(!pd) return;
-    var isYest = pd.getDate()===yDay && pd.getMonth()===yMon && pd.getFullYear()===yYear;
-    var isMon  = pd.getFullYear()===today.getFullYear() && pd.getMonth()===today.getMonth();
-    if(isYest) recYest.push(r);
-    if(isMon)  recMonth.push(r);
+    var pday=pd.getDate(), pmon=pd.getMonth(), pyear=pd.getFullYear();
+    var isYest   = pday===yDay && pmon===yMon && pyear===yYear;
+    var isCurMon = pyear===curYear && pmon===curMon;
+    if(isYest)    recYest.push(r);
+    if(isCurMon)  recMonth.push(r);
   });
 
   function buildRecoveryTable(records, label){
@@ -1519,7 +1483,7 @@ function buildDashboard(){
 
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
   html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-recovery-body\')">💰 DEFAULTER RECOVERY REPORT — WHO PAID<span id="dash-recovery-body-arrow" style="font-size:14px;opacity:0.8;">\u25bc</span></div><div id="dash-recovery-body" style="display:block;">';
-  html += dashExportBtns('dash-recovery', 'Defaulter_Recovery');
+  html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-recovery-body\',\'Defaulter_Recovery\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-recovery-body\',\'Defaulter Recovery Report\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
   html += '<div style="padding:0;">';
 
   // Yesterday
@@ -1537,7 +1501,7 @@ function buildDashboard(){
     // Defaulter Outstanding Range-wise
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
   html += '<div style="background:#B91C1C;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-ranges-body\')">🎯 DEFAULTER — OUTSTANDING RANGE ANALYSIS<span id="dash-ranges-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-ranges-body" style="display:none;">';
-  html += dashExportBtns('dash-ranges', 'Range_Analysis');
+  html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-ranges-body\',\'Range_Analysis\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-ranges-body\',\'Defaulter Range Analysis\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
   html += '<div style="display:flex;flex-wrap:wrap;gap:0;">';
   var rangeBgs=['#FFF1F2','#FEE2E2','#FFE4E6','#FFF7ED'];
   var rangeTc=['#BE123C','#DC2626','#E11D48','#C2410C'];
@@ -1559,7 +1523,7 @@ function buildDashboard(){
     '<span>🏛 SUBSTATION-WISE SUMMARY</span>'+
     (ssList.length>16?'<span style="font-size:10px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">Top 16 of '+ssList.length+' by Outstanding</span>':'')+
   '<span id="dash-ss-body-arrow" style="font-size:14px;opacity:0.8;">&#9654;</span></div><div id="dash-ss-body" style="display:none;">';
-  html += dashExportBtns('dash-ss', 'SS_Summary');
+  html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-ss-body\',\'SS_Summary\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-ss-body\',\'Substation Summary\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
   html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr style="background:#F8FAFC;">';
   ['SUBSTATION','BILLED','UNBILLED','TOTAL','OUTSTANDING','CA','DEFAULTERS','DEF OUTSTANDING'].forEach(function(h){
@@ -1595,7 +1559,7 @@ function buildDashboard(){
   // Tariff-wise table
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;overflow:hidden;">';
   html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-tariff-body\')">📋 TARIFF-WISE BREAKUP<span id="dash-tariff-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-tariff-body" style="display:none;">';
-  html += dashExportBtns('dash-tariff', 'Tariff_Breakup');
+  html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-tariff-body\',\'Tariff_Breakup\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-tariff-body\',\'Tariff-wise Breakup\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
   html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead>';
   html += '<tr style="background:#F0FDF4;">';
@@ -1635,7 +1599,7 @@ function buildDashboard(){
   // Bill Basis-wise table
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
   html += '<div style="background:#7C3AED;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-basis-body\')">📑 BILL BASIS-WISE REPORT<span id="dash-basis-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-basis-body" style="display:none;">';
-  html += dashExportBtns('dash-basis', 'Bill_Basis');
+  html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-basis-body\',\'Bill_Basis\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-basis-body\',\'Bill Basis Report\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
   html += '<div style="padding:10px 16px;font-size:11px;color:#6B7280;background:#F5F3FF;border-bottom:1px solid #DDD6FE;">MU = Actual meter reading | ASS = Assessed | PROV = Provisional | CEIL = Ceiling. Applies to billed consumers only.</div>';
   html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr style="background:#F5F3FF;">';
@@ -1666,27 +1630,7 @@ function buildDashboard(){
     return '<span style="font-size:11px;font-weight:800;padding:3px 9px;border-radius:6px;background:'+bg+';color:'+tc+';">'+sc+'</span>';
   }
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-  html += '<div style="background:#7C2D12;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-feeder-body\')">⚡ FEEDER RECOVERY &amp; REVENUE LEAKAGE SCORE<span id="dash-feeder-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-feeder-body" style="display:none;">';
-  html += dashExportBtns('dash-feeder', 'Feeder_Recovery');
-  html += '<div style="padding:10px 16px;font-size:11px;color:#6B7280;background:#FFF7ED;border-bottom:1px solid #FED7AA;">Recovery Score: higher = better collection health. Leakage Score: higher = lower revenue leakage risk. Sorted by worst leakage first.</div>';
-  html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  html += '<thead><tr style="background:#FFF7ED;">';
-  ['FEEDER','CONSUMERS','DEFAULTERS','OUTSTANDING','DEF OUTSTANDING','RECOVERY SCORE','LEAKAGE SCORE'].forEach(function(h){
-    html += '<th style="padding:8px 10px;text-align:'+(h==='FEEDER'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #FED7AA;white-space:nowrap;">'+h+'</th>';
-  });
-  html += '</tr></thead><tbody>';
-  feederRows.forEach(function(f,i){
-    html += '<tr style="background:'+(i%2?'#FFFBF5':'#fff')+'">';
-    html += '<td style="padding:8px 10px;font-weight:700;color:#7C2D12;font-family:var(--fh);white-space:nowrap;">'+f.feeder+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;font-weight:600;">'+f.total.toLocaleString()+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#D97706;font-weight:700;">'+f.defCount.toLocaleString()+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#EA580C;font-weight:700;">'+cr(f.out)+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#F43F5E;font-weight:700;">'+cr(f.defOut)+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;">'+scoreBadge(f.recoveryScore,true)+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;">'+scoreBadge(f.leakageScore,true)+'</td>';
-    html += '</tr>';
-  });
-  html += '</tbody></table></div></div></div>';
+
 
   // ── ATR PROGRESS (SS-wise, day-wise) ─────────────────────────────────
   var atrDef = {}; try{ atrDef = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
@@ -1696,7 +1640,8 @@ function buildDashboard(){
     // Build SS-wise, day-wise ATR summary
     var atrSsDay = {}; // {SS: {day: {PAID:0,LOCK:0,THEFT:0,OTHER:0}}}
     var atrDays  = new Set();
-    var atrStatuses = ['PAID','LOCK','THEFT','DISPUTE','PROMISE','OTHER'];
+    var atrStatuses = ['PAID','LOCK','THEFT','DISPUTE','PROMISE','TD','OTHER'];
+    var atrLabels = {PAID:'Paid',LOCK:'Lock',THEFT:'Theft',DISPUTE:'Dispute',PROMISE:'Promise',TD:'T.Disc',OTHER:'Other'};
 
     function processAtrEntry(acct, e, lookup){
       var status = (typeof e==='object'?e.atr:e)||'PENDING';
@@ -1739,64 +1684,75 @@ function buildDashboard(){
     html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">'+totalActioned+' actioned &nbsp;&#9654;</span>';
     html += '</div>';
     html += '<div id="dash-atr-body" style="display:none;">';
-  html += dashExportBtns('dash-atr', 'ATR_Progress');
+  html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-atr-body\',\'ATR_Progress\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-atr-body\',\'ATR Progress\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
 
     if(sortedDays.length===0){
       html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No ATR entries recorded yet. Field staff should mark ATR status in Defaulter tab.</div>';
     } else {
-      html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+      html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
       html += '<thead><tr style="background:#EFF6FF;">';
-      html += '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;min-width:130px;">SUBSTATION</th>';
+      html += '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;min-width:140px;position:sticky;left:0;background:#EFF6FF;z-index:2;box-shadow:2px 0 4px rgba(0,0,0,0.08);">SUBSTATION</th>';
       sortedDays.forEach(function(day){
         html += '<th colspan="2" style="padding:7px 8px;text-align:center;font-family:var(--fh);font-size:10px;color:#1D4ED8;border-bottom:1px solid #BFDBFE;border-left:1px solid #BFDBFE;white-space:nowrap;">'+day+'</th>';
       });
       html += '<th colspan="2" style="padding:7px 8px;text-align:center;font-family:var(--fh);font-size:10px;color:#065F46;border-bottom:1px solid #BFDBFE;border-left:1px solid #BFDBFE;">TOTAL</th>';
       html += '</tr>';
       html += '<tr style="background:#F8FAFC;">';
-      html += '<th style="padding:5px 10px;font-family:var(--fh);font-size:9px;color:#9CA3AF;border-bottom:1px solid #E5E7EB;"></th>';
+      html += '<th style="padding:5px 10px;font-family:var(--fh);font-size:9px;color:#9CA3AF;border-bottom:1px solid #E5E7EB;position:sticky;left:0;background:#F8FAFC;z-index:2;box-shadow:2px 0 4px rgba(0,0,0,0.08);"></th>';
       sortedDays.forEach(function(){
-        html += '<th style="padding:5px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#059669;border-bottom:1px solid #E5E7EB;border-left:1px solid #E5E7EB;">Entries</th>';
-        html += '<th style="padding:5px 6px;text-align:left;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #E5E7EB;">Breakdown</th>';
+        html += '<th style="padding:5px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#059669;border-bottom:1px solid #E5E7EB;border-left:1px solid #E5E7EB;">Count</th>';
+        html += '<th style="padding:5px 6px;text-align:left;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #E5E7EB;min-width:120px;">Status Breakdown</th>';
       });
       html += '<th style="padding:5px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#059669;border-bottom:1px solid #E5E7EB;border-left:1px solid #E5E7EB;">Count</th>';
-      html += '<th style="padding:5px 6px;text-align:left;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #E5E7EB;">Breakdown</th>';
+      html += '<th style="padding:5px 6px;text-align:left;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #E5E7EB;min-width:140px;">Status Breakdown</th>';
       html += '</tr></thead><tbody>';
 
-      var statusColors = {PAID:'#059669',LOCK:'#7C3AED',THEFT:'#DC2626',DISPUTE:'#D97706',PROMISE:'#0EA5E9',OTHER:'#6B7280'};
+      var statusColors = {PAID:'#059669',LOCK:'#7C3AED',THEFT:'#DC2626',DISPUTE:'#D97706',PROMISE:'#0EA5E9',TD:'#0891B2',OTHER:'#6B7280'};
 
       atrSsList.forEach(function(ss,i){
         var grand=0, grandBreak={};
-        html += '<tr style="background:'+(i%2?'#F9FAFB':'#fff')+'">';
-        html += '<td style="padding:7px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+ss+'</td>';
+        var rowBg = i%2?'#F9FAFB':'#fff';
+        html += '<tr style="background:'+rowBg+'">';
+        html += '<td style="padding:7px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;position:sticky;left:0;background:'+rowBg+';z-index:1;box-shadow:2px 0 4px rgba(0,0,0,0.06);">'+ss+'</td>';
         sortedDays.forEach(function(day){
           var d = atrSsDay[ss]&&atrSsDay[ss][day];
-          html += '<td style="padding:6px 6px;text-align:right;font-weight:700;color:#1D4ED8;border-left:1px solid #F0F0F0;">'+(d?d.total:'-')+'</td>';
-          html += '<td style="padding:6px 6px;font-size:10px;">';
-          if(d){ atrStatuses.forEach(function(s){if(d[s]>0){html+='<span style="color:'+statusColors[s]+';font-weight:600;">'+s[0]+':'+d[s]+'</span> ';}});
-            grand+=d.total; atrStatuses.forEach(function(s){grandBreak[s]=(grandBreak[s]||0)+(d[s]||0);}); }
+          html += '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#1D4ED8;border-left:1px solid #F0F0F0;">'+(d?d.total:'-')+'</td>';
+          html += '<td style="padding:6px 8px;font-size:10px;">';
+          if(d){
+            atrStatuses.forEach(function(s){
+              if(d[s]>0){ html+='<span style="color:'+statusColors[s]+';font-weight:600;margin-right:4px;">'+atrLabels[s]+':'+d[s]+'</span>'; }
+            });
+            grand+=d.total; atrStatuses.forEach(function(s){grandBreak[s]=(grandBreak[s]||0)+(d[s]||0);});
+          }
           html += '</td>';
         });
-        html += '<td style="padding:6px 6px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #BBF7D0;">'+(grand||'-')+'</td>';
-        html += '<td style="padding:6px 6px;font-size:10px;">';
-        atrStatuses.forEach(function(s){if(grandBreak[s]>0){html+='<span style="color:'+statusColors[s]+';font-weight:600;">'+s[0]+':'+grandBreak[s]+'</span> ';}});
+        html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #BBF7D0;">'+(grand||'-')+'</td>';
+        html += '<td style="padding:6px 8px;font-size:10px;">';
+        atrStatuses.forEach(function(s){
+          if(grandBreak[s]>0){ html+='<span style="color:'+statusColors[s]+';font-weight:600;margin-right:4px;">'+atrLabels[s]+':'+grandBreak[s]+'</span>'; }
+        });
         html += '</td></tr>';
       });
       // Grand total row
       var gt=0, gtb={};
       html += '<tr style="background:#EFF6FF;border-top:2px solid #BFDBFE;">';
-      html += '<td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#1E40AF;">TOTAL</td>';
+      html += '<td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#1E40AF;position:sticky;left:0;background:#EFF6FF;z-index:1;box-shadow:2px 0 4px rgba(0,0,0,0.06);">TOTAL</td>';
       sortedDays.forEach(function(day){
         var dayTotal=0,dayBreak={};
         atrSsList.forEach(function(ss){var d=atrSsDay[ss]&&atrSsDay[ss][day];if(d){dayTotal+=d.total;atrStatuses.forEach(function(s){dayBreak[s]=(dayBreak[s]||0)+(d[s]||0);});}});
-        html += '<td style="padding:6px 6px;text-align:right;font-weight:800;color:#1D4ED8;border-left:1px solid #BFDBFE;">'+(dayTotal||'-')+'</td>';
-        html += '<td style="padding:6px 6px;font-size:10px;">';
-        atrStatuses.forEach(function(s){if(dayBreak[s]>0){html+='<span style="color:'+statusColors[s]+';font-weight:600;">'+s[0]+':'+dayBreak[s]+'</span> ';}});
+        html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#1D4ED8;border-left:1px solid #BFDBFE;">'+(dayTotal||'-')+'</td>';
+        html += '<td style="padding:6px 8px;font-size:10px;">';
+        atrStatuses.forEach(function(s){
+          if(dayBreak[s]>0){ html+='<span style="color:'+statusColors[s]+';font-weight:700;margin-right:4px;">'+atrLabels[s]+':'+dayBreak[s]+'</span>'; }
+        });
         gt+=dayTotal; atrStatuses.forEach(function(s){gtb[s]=(gtb[s]||0)+(dayBreak[s]||0);});
         html += '</td>';
       });
-      html += '<td style="padding:6px 6px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #BBF7D0;">'+gt+'</td>';
-      html += '<td style="padding:6px 6px;font-size:10px;">';
-      atrStatuses.forEach(function(s){if(gtb[s]>0){html+='<span style="color:'+statusColors[s]+';font-weight:600;">'+s+':<b>'+gtb[s]+'</b></span> ';}});
+      html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #BBF7D0;">'+gt+'</td>';
+      html += '<td style="padding:6px 8px;font-size:10px;">';
+      atrStatuses.forEach(function(s){
+        if(gtb[s]>0){ html+='<span style="color:'+statusColors[s]+';font-weight:700;margin-right:4px;">'+atrLabels[s]+':<b>'+gtb[s]+'</b></span>'; }
+      });
       html += '</td></tr>';
       html += '</tbody></table></div>';
     }
@@ -1986,7 +1942,7 @@ function dashRenderFiltered(){
   h += '</div>';
 
   // Category-wise table with defaulter range breakdown
-  h += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  h += '<div id="filt-cat-tbl" style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   h += '<thead>';
   h += '<tr style="background:#F8FAFC;">';
   h += '<th rowspan="2" style="padding:7px 9px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">TARIFF</th>';
@@ -2022,11 +1978,15 @@ function dashRenderFiltered(){
     h += '</tr>';
   });
   h += '</tbody></table></div>';
+  h += '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;">';
+  h += '<button onclick="filtSecXLSX(\'filt-cat-tbl\',\'Category_Breakup\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button>';
+  h += '<button onclick="filtSecPDF(\'filt-cat-tbl\',\'Category-wise Breakup\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button>';
+  h += '</div>';
 
   // Bill Basis-wise table for this scope
   if(fBasisList.length){
     h += '<div style="margin-top:14px;font-family:var(--fh);font-weight:700;font-size:12px;color:#7C3AED;">📑 BILL BASIS BREAKUP</div>';
-    h += '<div style="overflow-x:auto;margin-top:6px;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+    h += '<div id="filt-basis-tbl" style="overflow-x:auto;margin-top:6px;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
     h += '<thead><tr style="background:#F5F3FF;">';
     ['BILL BASIS','CONSUMERS','OUTSTANDING','DEFAULTERS','DEF OUTSTANDING'].forEach(function(hd){
       h += '<th style="padding:7px 9px;text-align:'+(hd==='BILL BASIS'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #DDD6FE;">'+hd+'</th>';
@@ -2043,6 +2003,10 @@ function dashRenderFiltered(){
       h += '</tr>';
     });
     h += '</tbody></table></div>';
+    h += '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;">';
+    h += '<button onclick="filtSecXLSX(\'filt-basis-tbl\',\'Bill_Basis_Breakup\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button>';
+    h += '<button onclick="filtSecPDF(\'filt-basis-tbl\',\'Bill Basis Breakup\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button>';
+    h += '</div>';
   }
 
   // ── CROSS ANALYSIS 1: Categories under each Feeder (show when SS selected, no specific feeder) ──
@@ -2120,11 +2084,184 @@ function dashRenderFiltered(){
   }
 
   h += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">';
-  h += '<button onclick="dashExportFiltered()" style="background:#059669;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:11px;cursor:pointer;">\u2b07 EXPORT THIS REPORT (XLSX)</button>';
+    h += '<button onclick="dashExportFiltered()" style="background:#059669;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:11px;cursor:pointer;">\u2b07 XLSX</button>';
+  h += '<button onclick="dashPrintFiltered()" style="background:#DC2626;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:11px;cursor:pointer;">\ud83d\uddb8 PDF</button>';
   h += '</div>';
 
   h += '</div>';
   resultEl.innerHTML = h;
+}
+
+
+function dashSecXLSX(bodyId, filename){
+  var el = document.getElementById(bodyId);
+  if(!el){ alert('Section not found.'); return; }
+  if(el.style.display==='none') el.style.display='block';
+  var tables = el.querySelectorAll('table');
+  if(!tables.length){ alert('No table data to export.'); return; }
+  var wb = XLSX.utils.book_new();
+  tables.forEach(function(tbl, i){
+    var ws = XLSX.utils.table_to_sheet(tbl);
+    var name = (filename+(tables.length>1?'_'+(i+1):'')).substring(0,31);
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  });
+  XLSX.writeFile(wb, filename+'_'+new Date().toLocaleDateString('en-IN').replace(/\//g,'-')+'.xlsx');
+}
+
+function filtSecXLSX(tblId, filename){
+  var el = document.getElementById(tblId);
+  if(!el){ alert('Table not found.'); return; }
+  var tbl = el.querySelector('table');
+  if(!tbl){ alert('No table data.'); return; }
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet(tbl), filename.substring(0,31));
+  XLSX.writeFile(wb, filename+'_'+new Date().toLocaleDateString('en-IN').replace(/\//g,'-')+'.xlsx');
+}
+
+function filtSecPDF(tblId, title){
+  var el = document.getElementById(tblId);
+  if(!el){ alert('Table not found.'); return; }
+  var tbl = el.querySelector('table');
+  if(!tbl){ alert('No table data.'); return; }
+  // Build clean table html
+  var cleanHtml = '<table>';
+  tbl.querySelectorAll('tr').forEach(function(row){
+    cleanHtml += '<tr>';
+    row.querySelectorAll('th,td').forEach(function(cell){
+      var tag = cell.tagName.toLowerCase();
+      var cs = cell.getAttribute('colspan') ? ' colspan="'+cell.getAttribute('colspan')+'"' : '';
+      var rs = cell.getAttribute('rowspan') ? ' rowspan="'+cell.getAttribute('rowspan')+'"' : '';
+      cleanHtml += '<'+tag+cs+rs+'>'+cell.textContent.trim().replace(/\s+/g,' ')+'</'+tag+'>';
+    });
+    cleanHtml += '</tr>';
+  });
+  cleanHtml += '</table>';
+  var w = window.open('','_blank','width=900,height=650');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+title+'</title>');
+  w.document.write('<style>*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:10px;margin:0;color:#000;}');
+  w.document.write('h2{color:#1E3A5F;font-size:13px;margin:0 0 2px;}.sub{font-size:9px;color:#555;margin-bottom:8px;border-bottom:1px solid #ccc;padding-bottom:3px;}');
+  w.document.write('table{border-collapse:collapse;width:100%;font-size:9px;}thead{display:table-header-group;}');
+  w.document.write('th{background:#1E3A5F;color:#fff;padding:4px 6px;text-align:left;border:1px solid #1E3A5F;font-size:8px;}');
+  w.document.write('td{border:1px solid #ccc;padding:3px 6px;}tr:nth-child(even) td{background:#f5f5f5;}tr{page-break-inside:avoid;}');
+  w.document.write('@page{size:A4 landscape;margin:10mm;}@media print{body{margin:0;}}');
+  w.document.write('</style></head><body>');
+  w.document.write('<h2>'+title+'</h2>');
+  w.document.write('<div class="sub">DVVNL JHANSI | Generated: '+new Date().toLocaleString('en-IN')+'</div>');
+  w.document.write(cleanHtml);
+  w.document.write('<scr'+'ipt>window.onload=function(){window.print();};<'+'/scr'+'ipt>');
+  w.document.write('</body></html>');
+  w.document.close();
+}
+
+function dashSecPDF(bodyId, title){
+  var el = document.getElementById(bodyId);
+  if(!el){ alert('Section not found.'); return; }
+  if(el.style.display==='none') el.style.display='block';
+
+  // Extract all tables as clean HTML (text only, no color spans)
+  var tables = el.querySelectorAll('table');
+  if(!tables.length){ alert('No table data to export.'); return; }
+
+  var cleanTablesHtml = '';
+  tables.forEach(function(tbl){
+    cleanTablesHtml += '<table>';
+    var rows = tbl.querySelectorAll('tr');
+    rows.forEach(function(row, ri){
+      cleanTablesHtml += '<tr>';
+      row.querySelectorAll('th,td').forEach(function(cell){
+        var tag = cell.tagName.toLowerCase();
+        var colspan = cell.getAttribute('colspan') ? ' colspan="'+cell.getAttribute('colspan')+'"' : '';
+        var rowspan = cell.getAttribute('rowspan') ? ' rowspan="'+cell.getAttribute('rowspan')+'"' : '';
+        // Get text content (strips all spans/colors)
+        var txt = cell.textContent.trim().replace(/\s+/g,' ');
+        cleanTablesHtml += '<'+tag+colspan+rowspan+'>'+txt+'</'+tag+'>';
+      });
+      cleanTablesHtml += '</tr>';
+    });
+    cleanTablesHtml += '</table>';
+  });
+
+  var w = window.open('','_blank','width=1100,height=750');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+title+'</title>');
+  w.document.write('<style>');
+  w.document.write('*{box-sizing:border-box;}');
+  w.document.write('body{font-family:Arial,sans-serif;font-size:10px;margin:12mm;color:#000;}');
+  w.document.write('h2{color:#1E3A5F;font-size:13px;margin:0 0 2px;font-weight:bold;}');
+  w.document.write('.sub{font-size:9px;color:#555;margin-bottom:10px;border-bottom:1px solid #ccc;padding-bottom:4px;}');
+  w.document.write('table{border-collapse:collapse;width:100%;font-size:9px;margin-bottom:12px;page-break-inside:auto;}');
+  w.document.write('thead{display:table-header-group;}');
+  w.document.write('th{background:#1E3A5F;color:#fff;padding:4px 6px;text-align:left;font-size:8px;border:1px solid #1E3A5F;}');
+  w.document.write('td{border:1px solid #ccc;padding:3px 6px;}');
+  w.document.write('tr:nth-child(even) td{background:#f5f5f5;}');
+  w.document.write('tr{page-break-inside:avoid;}');
+  w.document.write('@page{size:A4 landscape;margin:12mm;}');
+  w.document.write('@media print{body{margin:0;}thead{display:table-header-group;}}');
+  w.document.write('</style></head><body>');
+  w.document.write('<h2>'+title+'</h2>');
+  w.document.write('<div class="sub">DVVNL JHANSI &nbsp;&nbsp;|&nbsp;&nbsp; Generated: '+new Date().toLocaleString('en-IN')+'</div>');
+  w.document.write(cleanTablesHtml);
+  w.document.write('<script>window.onload=function(){window.print();};<\/script>');
+  w.document.write('</body></html>');
+  w.document.close();
+}
+
+function dashPrintFiltered(){
+  var resultEl = gel('dash-filtered-result');
+  if(!resultEl || !resultEl.innerHTML.trim()){ alert('Pehle filters apply karo.'); return; }
+  var div = gel('dash-div-sel') ? gel('dash-div-sel').value : '';
+  var ss  = gel('dash-ss-sel')  ? gel('dash-ss-sel').value  : '';
+  var fd  = gel('dash-feed-sel')? gel('dash-feed-sel').value: '';
+  var basis = gel('dash-basis-sel') ? gel('dash-basis-sel').value : '';
+  var title = (div?div+' -> ':'')+(ss||'All SS')+(fd?' -> '+fd:'')+(basis?' | Basis: '+basis:'');
+
+  // Extract KPI cards
+  var kpiHtml = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">';
+  resultEl.querySelectorAll('div[style*="border-radius:10px"],div[style*="min-width:120px"]').forEach(function(card){
+    var vals = card.querySelectorAll('[style*="font-weight:8"],[style*="font-size:2"]');
+    var lbl  = card.querySelector('[style*="font-size:10px"]');
+    if(vals.length && lbl){
+      kpiHtml += '<div style="border:1px solid #ccc;padding:5px 8px;min-width:90px;">';
+      kpiHtml += '<div style="font-size:13px;font-weight:bold;">'+vals[0].textContent.trim()+'</div>';
+      kpiHtml += '<div style="font-size:8px;color:#555;">'+lbl.textContent.trim()+'</div></div>';
+    }
+  });
+  kpiHtml += '</div>';
+
+  // Extract all tables as clean text
+  var cleanHtml = '';
+  resultEl.querySelectorAll('table').forEach(function(tbl){
+    cleanHtml += '<table>';
+    tbl.querySelectorAll('tr').forEach(function(row){
+      cleanHtml += '<tr>';
+      row.querySelectorAll('th,td').forEach(function(cell){
+        var tag = cell.tagName.toLowerCase();
+        var cs  = cell.getAttribute('colspan') ? ' colspan="'+cell.getAttribute('colspan')+'"' : '';
+        var rs  = cell.getAttribute('rowspan') ? ' rowspan="'+cell.getAttribute('rowspan')+'"' : '';
+        var txt = cell.textContent.trim().replace(/\s+/g,' ');
+        cleanHtml += '<'+tag+cs+rs+'>'+txt+'</'+tag+'>';
+      });
+      cleanHtml += '</tr>';
+    });
+    cleanHtml += '</table><br>';
+  });
+
+  var w = window.open('','_blank','width=1200,height=800');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+title+'</title>');
+  w.document.write('<style>*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:10px;margin:0;color:#000;}');
+  w.document.write('h2{color:#1E3A5F;font-size:13px;margin:0 0 2px;}');
+  w.document.write('.sub{font-size:9px;color:#555;margin-bottom:8px;border-bottom:1px solid #ccc;padding-bottom:3px;}');
+  w.document.write('table{border-collapse:collapse;width:100%;font-size:9px;margin-bottom:10px;page-break-inside:auto;}');
+  w.document.write('thead{display:table-header-group;}th{background:#1E3A5F;color:#fff;padding:4px 6px;text-align:left;border:1px solid #1E3A5F;font-size:8px;}');
+  w.document.write('td{border:1px solid #ccc;padding:3px 6px;}tr:nth-child(even) td{background:#f5f5f5;}tr{page-break-inside:avoid;}');
+  w.document.write('@page{size:A4 landscape;margin:10mm;}@media print{body{margin:0;}thead{display:table-header-group;}}');
+  w.document.write('</style></head><body>');
+  w.document.write('<h2>FILTERED REPORT - '+title+'</h2>');
+  w.document.write('<div class="sub">DVVNL JHANSI | Generated: '+new Date().toLocaleString('en-IN')+'</div>');
+  w.document.write(kpiHtml);
+  w.document.write(cleanHtml);
+  w.document.write('<scr'+'ipt>window.onload=function(){window.print();};<'+'/scr'+'ipt>');
+  w.document.write('</body></html>');
+  w.document.close();
 }
 
 function dashExportFiltered(){
@@ -3269,7 +3406,7 @@ function buildDCPanel(){
       '</select></div></div>'+
       '<div><div class="lbl">FEEDER</div><div class="sw"><select id="dc-feed" onchange="dcFilter()"><option value="">ALL FEEDERS</option></select></div></div>'+
       '<div><div class="lbl">ATR STATUS</div><div class="sw"><select id="dc-atr-filter" onchange="dcFilter()">'+
-        '<option value="">ALL STATUS</option><option>DISCONNECTED</option><option>PAID</option><option>LOCK</option><option>THEFT</option><option>OTHER</option>'+
+        '<option value="">ALL STATUS</option><option>DISCONNECTED</option><option>PAID</option><option>LOCK</option><option>THEFT</option><option>TD</option><option>OTHER</option>'+
       '</select></div></div>'+
     '</div>'+
     '<div class="btn-group" style="margin-bottom:14px;">'+
@@ -3425,7 +3562,7 @@ function openDcDetail(acctId){
     '<div style="text-align:center;padding:8px 12px;background:#E8EAF6;border-radius:8px;cursor:pointer" onclick=\"filterDcByAtr(&#39;OTHER&#39;)\"><div style="font-size:18px;font-weight:700;color:#283593;">'+(counts.OTHER||0)+'</div><div style="font-size:10px;color:#283593;font-weight:700;">OTHER</div></div>';
 
   var sel=gel('modal-atr-sel');
-  sel.innerHTML='<option value="DISCONNECTED">🔴 SM UNRECHARGE</option><option value="PAID">✅ PAID</option><option value="LOCK">🔒 LOCK</option><option value="THEFT">⚡ THEFT</option><option value="OTHER">📝 OTHER</option>';
+  sel.innerHTML='<option value="DISCONNECTED">🔴 SM UNRECHARGE</option><option value="PAID">✅ PAID</option><option value="LOCK">🔒 LOCK</option><option value="THEFT">⚡ THEFT</option><option value="TD">🔌 TEMP DISCONNECTED</option><option value="OTHER">📝 OTHER</option>';
   sel.value=r.ATR_STATUS||'DISCONNECTED';
   updateAtrSelectStyle();
 
@@ -4358,8 +4495,8 @@ function renderDefaulters(page){
     var mapUrl=(lat&&lon&&lat>20&&lat<30)?'https://www.google.com/maps?q='+lat+','+lon:'';
     var meterNo=METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'-';
     var atr=r.ATR_STATUS||'PENDING';
-    var atrColors={'PAID':'#059669','LOCK':'#7C3AED','THEFT':'#DC2626','OTHER':'#374151','PENDING':'#9CA3AF'};
-    var atrBgs={'PAID':'#D1FAE5','LOCK':'#EDE9FE','THEFT':'#FEE2E2','OTHER':'#F3F4F6','PENDING':'#F9FAFB'};
+    var atrColors={'PAID':'#059669','LOCK':'#7C3AED','THEFT':'#DC2626','TD':'#0891B2','OTHER':'#374151','PENDING':'#9CA3AF'};
+    var atrBgs={'PAID':'#D1FAE5','LOCK':'#EDE9FE','THEFT':'#FEE2E2','TD':'#CFFAFE','OTHER':'#F3F4F6','PENDING':'#F9FAFB'};
     var rowJson=encodeURIComponent(JSON.stringify({
       ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE,ADDRESS:r.ADDRESS,
       SUPPLY_TYPE:r.SUPPLY_TYPE,OUTSTANDING:r.OUTSTANDING,
@@ -4441,7 +4578,7 @@ function openDefaulterModal(acctId){
   atrSec.style.display = 'block';
   atrSec.querySelector('div:first-child').textContent = '📋 ATR STATUS — DEFAULTER ACTION REPORT';
   var sel = gel('modal-atr-sel');
-  sel.innerHTML = '<option value="PENDING">⏳ PENDING</option><option value="PAID">✅ PAID</option><option value="PARTIAL">💰 PARTIAL PAYMENT</option><option value="PROMISE">🤝 PROMISE TO PAY</option><option value="LOCK">🔒 LOCK / AWAY</option><option value="DISPUTE">⚖️ DISPUTE</option><option value="OTHER">📝 OTHER</option>';
+  sel.innerHTML = '<option value="PENDING">⏳ PENDING</option><option value="PAID">✅ PAID</option><option value="PARTIAL">💰 PARTIAL PAYMENT</option><option value="PROMISE">🤝 PROMISE TO PAY</option><option value="LOCK">🔒 LOCK / AWAY</option><option value="DISPUTE">⚖️ DISPUTE</option><option value="TD">🔌 TEMP DISCONNECTED</option><option value="OTHER">📝 OTHER</option>';
   var currentAtr = defRec.ATR_STATUS || 'PENDING';
   sel.value = currentAtr;
   updateAtrSelectStyle();
@@ -4557,7 +4694,7 @@ function openDefaulterModalDirect(d){
   atrSec.style.display='block';
   atrSec.querySelector('div:first-child').textContent='📋 ATR STATUS — DEFAULTER ACTION REPORT';
   var sel=gel('modal-atr-sel');
-  sel.innerHTML='<option value="PENDING">⏳ PENDING</option><option value="PAID">✅ PAID</option><option value="PARTIAL">💰 PARTIAL PAYMENT</option><option value="PROMISE">🤝 PROMISE TO PAY</option><option value="LOCK">🔒 LOCK / AWAY</option><option value="DISPUTE">⚖️ DISPUTE</option><option value="OTHER">📝 OTHER</option>';
+  sel.innerHTML='<option value="PENDING">⏳ PENDING</option><option value="PAID">✅ PAID</option><option value="PARTIAL">💰 PARTIAL PAYMENT</option><option value="PROMISE">🤝 PROMISE TO PAY</option><option value="LOCK">🔒 LOCK / AWAY</option><option value="DISPUTE">⚖️ DISPUTE</option><option value="TD">🔌 TEMP DISCONNECTED</option><option value="OTHER">📝 OTHER</option>';
   var currentAtr=d.ATR_STATUS||'PENDING';
   sel.value=currentAtr;
   updateAtrSelectStyle();
@@ -4707,7 +4844,7 @@ function openMainDetail(acctId){
     atrSec.style.display = 'block';
     atrSec.querySelector('div:first-child').textContent = '📋 ATR STATUS — DEFAULTER ACTION REPORT';
     var sel = gel('modal-atr-sel');
-    sel.innerHTML = '<option value="PENDING">⏳ PENDING</option><option value="PAID">✅ PAID</option><option value="PARTIAL">💰 PARTIAL PAYMENT</option><option value="PROMISE">🤝 PROMISE TO PAY</option><option value="LOCK">🔒 LOCK / AWAY</option><option value="DISPUTE">⚖️ DISPUTE</option><option value="OTHER">📝 OTHER</option>';
+    sel.innerHTML = '<option value="PENDING">⏳ PENDING</option><option value="PAID">✅ PAID</option><option value="PARTIAL">💰 PARTIAL PAYMENT</option><option value="PROMISE">🤝 PROMISE TO PAY</option><option value="LOCK">🔒 LOCK / AWAY</option><option value="DISPUTE">⚖️ DISPUTE</option><option value="TD">🔌 TEMP DISCONNECTED</option><option value="OTHER">📝 OTHER</option>';
     var currentAtr = defRec.ATR_STATUS || 'PENDING';
     sel.value = currentAtr;
     updateAtrSelectStyle();
