@@ -548,7 +548,7 @@ select option{background:#fff;color:#1E1B4B;}
 
   <!-- SETTINGS PANEL -->
   <div class="panel" id="panel-settings"></div>
-  <div class="panel" id="panel-dashboard"></div>
+  <div class="panel" id="panel-dashboard" style="overflow-x:hidden;max-width:100%;"></div>
 
 </div><!-- end #app -->
 
@@ -1116,6 +1116,56 @@ function dashToggle(id){
   if(btn)btn.textContent=isOpen?'\u25b6':'\u25bc';
   try{var s=JSON.parse(localStorage.getItem('dash_sections')||'{}');s[id]=!isOpen;localStorage.setItem('dash_sections',JSON.stringify(s));}catch(e){}
 }
+
+// Dashboard PDF export using print
+function dashExportPDF(sectionId, title){
+  var el = document.getElementById(sectionId+'-body');
+  if(!el || el.style.display==='none'){
+    // Expand if collapsed
+    if(el) el.style.display='block';
+  }
+  var card = el ? el.parentElement : null;
+  if(!card) return;
+  var w = window.open('','_blank','width=900,height=700');
+  w.document.write('<html><head><title>'+title+'</title>');
+  w.document.write('<style>body{font-family:Arial,sans-serif;font-size:11px;margin:20px;}');
+  w.document.write('table{border-collapse:collapse;width:100%;font-size:10px;}');
+  w.document.write('th,td{border:1px solid #ddd;padding:5px 8px;text-align:left;}');
+  w.document.write('th{background:#1E3A5F;color:#fff;font-weight:bold;}');
+  w.document.write('tr:nth-child(even){background:#f9f9f9;}');
+  w.document.write('h2{color:#1E3A5F;font-size:14px;margin-bottom:10px;}');
+  w.document.write('@media print{.no-print{display:none}}');
+  w.document.write('</style></head><body>');
+  w.document.write('<h2>'+title+'</h2>');
+  w.document.write(el.innerHTML);
+  w.document.write('<script>window.onload=function(){window.print();window.close();}<\/script>');
+  w.document.write('</body></html>');
+  w.document.close();
+}
+
+// Dashboard Excel export
+function dashExportXLSX(sectionId, title){
+  var el = document.getElementById(sectionId+'-body');
+  if(!el) return;
+  var tables = el.querySelectorAll('table');
+  if(!tables.length){ alert('No table data to export.'); return; }
+  var wb = XLSX.utils.book_new();
+  tables.forEach(function(tbl, i){
+    var ws = XLSX.utils.table_to_sheet(tbl);
+    var sheetName = (title+(tables.length>1?' '+(i+1):'')).substring(0,31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  });
+  var fname = title.replace(/[^a-zA-Z0-9_\s]/g,'_').replace(/\s+/g,'_')+'_'+new Date().toLocaleDateString('en-IN').replace(/\//g,'-')+'.xlsx';
+  XLSX.writeFile(wb, fname);
+}
+
+
+function dashExportBtns(secId, title){
+  return '<div style="display:flex;gap:6px;margin:10px 16px 0;">' +
+    '<button onclick="dashExportXLSX(\''+secId+'\',\''+title+'\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button>' +
+    '<button onclick="dashExportPDF(\''+secId+'\',\''+title+'\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button>' +
+    '</div>';
+}
 function buildDashboard(){
   var el = gel('panel-dashboard');
   if(!el) return;
@@ -1317,7 +1367,7 @@ function buildDashboard(){
   }
 
   // ── Build HTML ───────────────────────────────────────────────────────
-  var html = '<div style="padding:16px;max-width:900px;margin:0 auto;">';
+  var html = '<div style="padding:16px;max-width:100%;box-sizing:border-box;">';
 
   // Header
   html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">';
@@ -1431,7 +1481,7 @@ function buildDashboard(){
     });
     var h2='';
     // SS-wise + category breakdown
-    h2 += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+    h2 += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
     h2 += '<thead><tr style="background:#F0FDF4;"><th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">SUBSTATION</th>';
     h2 += '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">TARIFF</th>';
     h2 += '<th style="padding:7px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">CONSUMERS PAID</th>';
@@ -1469,6 +1519,7 @@ function buildDashboard(){
 
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
   html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-recovery-body\')">💰 DEFAULTER RECOVERY REPORT — WHO PAID<span id="dash-recovery-body-arrow" style="font-size:14px;opacity:0.8;">\u25bc</span></div><div id="dash-recovery-body" style="display:block;">';
+  html += dashExportBtns('dash-recovery', 'Defaulter_Recovery');
   html += '<div style="padding:0;">';
 
   // Yesterday
@@ -1486,6 +1537,7 @@ function buildDashboard(){
     // Defaulter Outstanding Range-wise
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
   html += '<div style="background:#B91C1C;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-ranges-body\')">🎯 DEFAULTER — OUTSTANDING RANGE ANALYSIS<span id="dash-ranges-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-ranges-body" style="display:none;">';
+  html += dashExportBtns('dash-ranges', 'Range_Analysis');
   html += '<div style="display:flex;flex-wrap:wrap;gap:0;">';
   var rangeBgs=['#FFF1F2','#FEE2E2','#FFE4E6','#FFF7ED'];
   var rangeTc=['#BE123C','#DC2626','#E11D48','#C2410C'];
@@ -1507,7 +1559,8 @@ function buildDashboard(){
     '<span>🏛 SUBSTATION-WISE SUMMARY</span>'+
     (ssList.length>16?'<span style="font-size:10px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">Top 16 of '+ssList.length+' by Outstanding</span>':'')+
   '<span id="dash-ss-body-arrow" style="font-size:14px;opacity:0.8;">&#9654;</span></div><div id="dash-ss-body" style="display:none;">';
-  html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += dashExportBtns('dash-ss', 'SS_Summary');
+  html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr style="background:#F8FAFC;">';
   ['SUBSTATION','BILLED','UNBILLED','TOTAL','OUTSTANDING','CA','DEFAULTERS','DEF OUTSTANDING'].forEach(function(h){
     html += '<th style="padding:8px 10px;text-align:'+(h==='SUBSTATION'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;white-space:nowrap;">'+h+'</th>';
@@ -1542,7 +1595,8 @@ function buildDashboard(){
   // Tariff-wise table
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;overflow:hidden;">';
   html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-tariff-body\')">📋 TARIFF-WISE BREAKUP<span id="dash-tariff-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-tariff-body" style="display:none;">';
-  html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += dashExportBtns('dash-tariff', 'Tariff_Breakup');
+  html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead>';
   html += '<tr style="background:#F0FDF4;">';
   html += '<th rowspan="2" style="padding:8px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;border-right:1px solid #BBF7D0;">TARIFF</th>';
@@ -1581,8 +1635,9 @@ function buildDashboard(){
   // Bill Basis-wise table
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
   html += '<div style="background:#7C3AED;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-basis-body\')">📑 BILL BASIS-WISE REPORT<span id="dash-basis-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-basis-body" style="display:none;">';
+  html += dashExportBtns('dash-basis', 'Bill_Basis');
   html += '<div style="padding:10px 16px;font-size:11px;color:#6B7280;background:#F5F3FF;border-bottom:1px solid #DDD6FE;">MU = Actual meter reading | ASS = Assessed | PROV = Provisional | CEIL = Ceiling. Applies to billed consumers only.</div>';
-  html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr style="background:#F5F3FF;">';
   ['BILL BASIS','CONSUMERS','% SHARE','OUTSTANDING','DEFAULTERS','DEF OUTSTANDING'].forEach(function(h){
     html += '<th style="padding:8px 10px;text-align:'+(h==='BILL BASIS'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #DDD6FE;white-space:nowrap;">'+h+'</th>';
@@ -1612,8 +1667,9 @@ function buildDashboard(){
   }
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
   html += '<div style="background:#7C2D12;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-feeder-body\')">⚡ FEEDER RECOVERY &amp; REVENUE LEAKAGE SCORE<span id="dash-feeder-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-feeder-body" style="display:none;">';
+  html += dashExportBtns('dash-feeder', 'Feeder_Recovery');
   html += '<div style="padding:10px 16px;font-size:11px;color:#6B7280;background:#FFF7ED;border-bottom:1px solid #FED7AA;">Recovery Score: higher = better collection health. Leakage Score: higher = lower revenue leakage risk. Sorted by worst leakage first.</div>';
-  html += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr style="background:#FFF7ED;">';
   ['FEEDER','CONSUMERS','DEFAULTERS','OUTSTANDING','DEF OUTSTANDING','RECOVERY SCORE','LEAKAGE SCORE'].forEach(function(h){
     html += '<th style="padding:8px 10px;text-align:'+(h==='FEEDER'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #FED7AA;white-space:nowrap;">'+h+'</th>';
@@ -1683,6 +1739,7 @@ function buildDashboard(){
     html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">'+totalActioned+' actioned &nbsp;&#9654;</span>';
     html += '</div>';
     html += '<div id="dash-atr-body" style="display:none;">';
+  html += dashExportBtns('dash-atr', 'ATR_Progress');
 
     if(sortedDays.length===0){
       html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No ATR entries recorded yet. Field staff should mark ATR status in Defaulter tab.</div>';
@@ -1929,7 +1986,7 @@ function dashRenderFiltered(){
   h += '</div>';
 
   // Category-wise table with defaulter range breakdown
-  h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  h += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
   h += '<thead>';
   h += '<tr style="background:#F8FAFC;">';
   h += '<th rowspan="2" style="padding:7px 9px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">TARIFF</th>';
@@ -4222,6 +4279,26 @@ function runDefaulterFilter(){
     if(sortDir==='tariff_asc') return String(a.SUPPLY_TYPE||'').localeCompare(String(b.SUPPLY_TYPE||''));
     if(sortDir==='ai_high') return collectionProbability(b)-collectionProbability(a);
     if(sortDir==='ai_low')  return collectionProbability(a)-collectionProbability(b);
+    if(sortDir==='proximity'){
+      var aLat=parseFloat(a.LAT)||0, aLon=parseFloat(a.LON)||0;
+      var bLat=parseFloat(b.LAT)||0, bLon=parseFloat(b.LON)||0;
+      var aHasCoord=(aLat>20&&aLat<30&&aLon>70), bHasCoord=(bLat>20&&bLat<30&&bLon>70);
+      // Consumers with coordinates come first
+      if(aHasCoord && !bHasCoord) return -1;
+      if(!aHasCoord && bHasCoord) return 1;
+      // Both have coords — sort by distance from first consumer with coord
+      if(aHasCoord && bHasCoord && DEF_DATA.length>0){
+        var ref = DEF_DATA.find(function(r){var lt=parseFloat(r.LAT)||0,lo=parseFloat(r.LON)||0;return lt>20&&lt<30&&lo>70;});
+        if(ref){
+          var refLat=parseFloat(ref.LAT),refLon=parseFloat(ref.LON);
+          var da=haversine(refLat,refLon,aLat,aLon);
+          var db=haversine(refLat,refLon,bLat,bLon);
+          return da-db;
+        }
+      }
+      // Both no coords — sort by outstanding
+      return b.OUTSTANDING-a.OUTSTANDING;
+    }
     return b.OUTSTANDING-a.OUTSTANDING; // default desc
   });
   DEF_DATA = all;
@@ -4268,67 +4345,46 @@ function renderDefaulters(page){
   var tbody=gel('def-tbody'); if(!tbody)return;
   var slice=DEF_DATA.slice((page-1)*PS,page*PS);
 
-  // Group by outstanding range
-  var ranges=[
-    {label:'🔴 Above ₹1 Lakh',  min:100000, max:Infinity, rows:[]},
-    {label:'🟠 ₹50K – ₹1 Lakh', min:50000,  max:100000,  rows:[]},
-    {label:'🟡 ₹10K – ₹50K',    min:10000,  max:50000,   rows:[]},
-    {label:'🟢 ₹2K – ₹5K',      min:2000,   max:5000,    rows:[]},
-    {label:'🔵 ₹5K – ₹10K',     min:5000,   max:10000,   rows:[]}
-  ];
-  slice.forEach(function(r){
-    var o=Math.round(r.OUTSTANDING||0);
-    for(var i=0;i<ranges.length;i++){
-      if(o>=ranges[i].min && o<ranges[i].max){ ranges[i].rows.push(r); break; }
-    }
-  });
-
   var html='';
   var globalRank=(page-1)*PS;
-  ranges.forEach(function(rng){
-    if(!rng.rows.length) return;
-    var rngTotal=rng.rows.reduce(function(s,r){return s+Math.round(r.OUTSTANDING||0);},0);
-    html+='<tr><td colspan="16" style="background:#1E3A5F;color:#fff;padding:6px 12px;font-family:var(--fh);font-size:12px;font-weight:700;">'+
-      rng.label+'&ensp;<span style="font-weight:400;font-size:11px;opacity:0.85;">'+rng.rows.length+' consumers &nbsp;|&nbsp; ₹'+Math.round(rngTotal).toLocaleString()+' outstanding</span></td></tr>';
-    rng.rows.forEach(function(r){
-      globalRank++;
-      var rIcon=globalRank===1?'🥇':globalRank===2?'🥈':globalRank===3?'🥉':globalRank;
-      var out=Math.round(r.OUTSTANDING);
-      var outColor=out>100000?'#F43F5E':out>25000?'#EA580C':'#F59E0B';
-      var paid=Math.round(r.PAY_AMT||0);
-      var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
-      if(lat>50){var t=lat;lat=lon;lon=t;}
-      var mapUrl=(lat&&lon)?'https://www.google.com/maps?q='+lat+','+lon:'';
-      var meterNo=METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'-';
-      var atr=r.ATR_STATUS||'PENDING';
-      var atrColors={'PAID':'#059669','LOCK':'#7C3AED','THEFT':'#DC2626','OTHER':'#374151','PENDING':'#9CA3AF'};
-      var atrBgs={'PAID':'#D1FAE5','LOCK':'#EDE9FE','THEFT':'#FEE2E2','OTHER':'#F3F4F6','PENDING':'#F9FAFB'};
-      var rowJson=encodeURIComponent(JSON.stringify({
-        ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE,ADDRESS:r.ADDRESS,
-        SUPPLY_TYPE:r.SUPPLY_TYPE,OUTSTANDING:r.OUTSTANDING,
-        PAY_AMT:r.PAY_AMT,PAY_DATE:r.PAY_DATE,
-        SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,
-        LAT:r.LAT,LON:r.LON,ATR_STATUS:r.ATR_STATUS||'PENDING',METER_NO:meterNo
-      }));
-      html+='<tr>'+
-        '<td class="mob-hide" style="font-family:var(--fh);font-size:14px;font-weight:700;text-align:center;">'+rIcon+'</td>'+
-        '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;cursor:pointer;" data-id="'+r.ACCT_ID+'" data-row="'+rowJson+'" onclick="openFromDefRow(this)">'+r.ACCT_ID+'</td>'+
-        '<td style="font-weight:700;">'+r.NAME+'</td>'+
-        '<td>'+r.MOBILE+'</td>'+
-        '<td style="font-family:var(--fh);font-size:11px;color:#1D4ED8;font-weight:700;">'+meterNo+'</td>'+
-        '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD?r.LOAD+' kW':'-')+'</td>'+
-        '<td><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:#EEF2FF;color:#4338CA;">'+r.SUPPLY_TYPE+'</span></td>'+
-        '<td style="font-size:11px;color:#374151;" title="'+r.ADDRESS+'">'+r.ADDRESS+'</td>'+
-        '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';font-size:13px;">₹'+out.toLocaleString()+'</td>'+
-        '<td style="font-size:11px;color:var(--muted);">'+r.PAY_DATE+'</td>'+
-        '<td style="font-family:var(--fh);color:#059669;font-weight:700;">'+(paid>0?'₹'+paid.toLocaleString():'-')+'</td>'+
-        '<td>'+(function(){var sc=collectionProbability(r),lb=collectionLabel(sc);return '<span style="font-size:11px;font-weight:800;padding:2px 7px;border-radius:5px;background:'+lb.bg+';color:'+lb.color+';">'+sc+'%</span>';})()+'</td>'+
-        '<td class="mob-hide"><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:'+(atrBgs[atr]||'#F9FAFB')+';color:'+(atrColors[atr]||'#9CA3AF')+';">'+atr+'</span></td>'+
-        '<td>'+r.SUBSTATION+'</td>'+
-        '<td style="display:none">'+r.FEEDER+'</td>'+
-        '<td>'+(mapUrl?'<a class="ml" href="#" data-id="'+r.ACCT_ID+'" onclick="event.preventDefault();openDefaulterMap(this.dataset.id)">📍</a>':'')+'</td>'+
-      '</tr>';
-    });
+  slice.forEach(function(r){
+    globalRank++;
+    var rIcon=globalRank===1?'🥇':globalRank===2?'🥈':globalRank===3?'🥉':globalRank;
+    var out=Math.round(r.OUTSTANDING);
+    var outColor=out>100000?'#F43F5E':out>25000?'#EA580C':'#F59E0B';
+    var paid=Math.round(r.PAY_AMT||0);
+    var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
+    if(lat>50){var t=lat;lat=lon;lon=t;}
+    var mapUrl=(lat&&lon&&lat>20&&lat<30)?'https://www.google.com/maps?q='+lat+','+lon:'';
+    var meterNo=METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'-';
+    var atr=r.ATR_STATUS||'PENDING';
+    var atrColors={'PAID':'#059669','LOCK':'#7C3AED','THEFT':'#DC2626','OTHER':'#374151','PENDING':'#9CA3AF'};
+    var atrBgs={'PAID':'#D1FAE5','LOCK':'#EDE9FE','THEFT':'#FEE2E2','OTHER':'#F3F4F6','PENDING':'#F9FAFB'};
+    var rowJson=encodeURIComponent(JSON.stringify({
+      ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE,ADDRESS:r.ADDRESS,
+      SUPPLY_TYPE:r.SUPPLY_TYPE,OUTSTANDING:r.OUTSTANDING,
+      PAY_AMT:r.PAY_AMT,PAY_DATE:r.PAY_DATE,
+      SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,
+      LAT:r.LAT,LON:r.LON,ATR_STATUS:r.ATR_STATUS||'PENDING',METER_NO:meterNo
+    }));
+    html+='<tr>'+
+      '<td class="mob-hide" style="font-family:var(--fh);font-size:14px;font-weight:700;text-align:center;">'+rIcon+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;cursor:pointer;" data-id="'+r.ACCT_ID+'" data-row="'+rowJson+'" onclick="openFromDefRow(this)">'+r.ACCT_ID+'</td>'+
+      '<td style="font-weight:700;">'+r.NAME+'</td>'+
+      '<td>'+r.MOBILE+'</td>'+
+      '<td style="font-family:var(--fh);font-size:11px;color:#1D4ED8;font-weight:700;">'+meterNo+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD?r.LOAD+' kW':'-')+'</td>'+
+      '<td><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:#EEF2FF;color:#4338CA;">'+r.SUPPLY_TYPE+'</span></td>'+
+      '<td style="font-size:11px;color:#374151;" title="'+r.ADDRESS+'">'+r.ADDRESS+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';font-size:13px;">₹'+out.toLocaleString()+'</td>'+
+      '<td style="font-size:11px;color:var(--muted);">'+r.PAY_DATE+'</td>'+
+      '<td style="font-family:var(--fh);color:#059669;font-weight:700;">'+(paid>0?'₹'+paid.toLocaleString():'-')+'</td>'+
+      '<td>'+(function(){var sc=collectionProbability(r),lb=collectionLabel(sc);return '<span style="font-size:11px;font-weight:800;padding:2px 7px;border-radius:5px;background:'+lb.bg+';color:'+lb.color+';">'+sc+'%</span>';})()+'</td>'+
+      '<td class="mob-hide"><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:'+(atrBgs[atr]||'#F9FAFB')+';color:'+(atrColors[atr]||'#9CA3AF')+';">'+atr+'</span></td>'+
+      '<td>'+r.SUBSTATION+'</td>'+
+      '<td style="display:none">'+r.FEEDER+'</td>'+
+      '<td>'+(mapUrl?'<a class="ml" href="#" data-id="'+r.ACCT_ID+'" onclick="event.preventDefault();openDefaulterMap(this.dataset.id)">📍</a>':'')+'</td>'+
+    '</tr>';
   });
   tbody.innerHTML=html;
   rp('def-pg',page,Math.ceil(DEF_DATA.length/PS),renderDefaulters);
