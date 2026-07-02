@@ -1362,6 +1362,14 @@ function buildDashboard(){
   html += '</div>';
   html += '<div id="dash-filtered-result"></div>';
   html += '</div></div>'; // close dash-filtered-body + card
+
+  // Export buttons for billed/unbilled data
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">';
+  html += '<button onclick="dashExportBilled()" style="background:#1D4ED8;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:12px;cursor:pointer;">⬇ EXPORT BILLED (XLSX)</button>';
+  html += '<button onclick="dashExportUnbilled()" style="background:#D97706;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:12px;cursor:pointer;">⬇ EXPORT UNBILLED (XLSX)</button>';
+  html += '<button onclick="dashExportAll()" style="background:#065F46;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:12px;cursor:pointer;">⬇ EXPORT ALL CONSUMERS (XLSX)</button>';
+  html += '</div>';
+
   // KPI cards
   html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">';
   html += card('👥','TOTAL CONSUMERS',D.length.toLocaleString(),'Billed: '+billed.length+' | Unbilled: '+unbilled.length,'#EFF6FF','#1D4ED8');
@@ -2064,6 +2072,49 @@ function dashRenderFiltered(){
   resultEl.innerHTML = h;
 }
 
+
+function dashExportBilled(){
+  var rows = D.filter(function(r){ return r.SOURCE==='billed'; }).map(function(r){
+    return {ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE_NO||r.MOBILE,ADDRESS:r.ADDRESS,
+      SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,TARIFF:r.CATEGORY,
+      OUTSTANDING:Math.max(0,parseFloat(r.AMOUNT_PAYABLE||0)||0),
+      CA:r.CA||'',BILLED_UNITS:r.BILLED_UNITS||'',BILL_DATE:r.BILL_DATE||'',
+      DUE_DATE:r.DUE_DATE||'',BILL_BASIS:r.BILL_BASIS||'',
+      LP_DATE:r.LAST_PAY_DATE||'',LP_AMT:Math.round(r.LAST_PAYMENT_AMOUNT||0)};
+  });
+  if(!rows.length){alert('No billed data.'); return;}
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Billed');
+  XLSX.writeFile(wb,'Billed_'+new Date().toLocaleDateString('en-IN').replace(/\//g,'-')+'.xlsx');
+}
+function dashExportUnbilled(){
+  var rows = D.filter(function(r){ return r.SOURCE==='unbilled'; }).map(function(r){
+    return {ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE_NO||r.MOBILE,ADDRESS:r.ADDRESS,
+      SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,TARIFF:r.CATEGORY,
+      OUTSTANDING:Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0),
+      LP_DATE:r.LAST_PAY_DATE||'',LP_AMT:Math.round(r.LAST_PAYMENT_AMOUNT||0)};
+  });
+  if(!rows.length){alert('No unbilled data.'); return;}
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Unbilled');
+  XLSX.writeFile(wb,'Unbilled_'+new Date().toLocaleDateString('en-IN').replace(/\//g,'-')+'.xlsx');
+}
+function dashExportAll(){
+  function toRow(r){
+    return {ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE_NO||r.MOBILE,ADDRESS:r.ADDRESS,
+      SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,TARIFF:r.CATEGORY,SOURCE:r.SOURCE,
+      OUTSTANDING:Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0),
+      CA:r.CA||'',BILL_BASIS:r.BILL_BASIS||'',
+      LP_DATE:r.LAST_PAY_DATE||'',LP_AMT:Math.round(r.LAST_PAYMENT_AMOUNT||0)};
+  }
+  if(!D.length){alert('No data.'); return;}
+  var wb=XLSX.utils.book_new();
+  var billed=D.filter(function(r){return r.SOURCE==='billed';});
+  var unbilled=D.filter(function(r){return r.SOURCE==='unbilled';});
+  if(billed.length)   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(billed.map(toRow)),'Billed');
+  if(unbilled.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(unbilled.map(toRow)),'Unbilled');
+  XLSX.writeFile(wb,'All_Consumers_'+new Date().toLocaleDateString('en-IN').replace(/\//g,'-')+'.xlsx');
+}
 
 function dashSecXLSX(bodyId, filename){
   var el = document.getElementById(bodyId);
@@ -3223,6 +3274,10 @@ function ia(){
       window._basisLookupGlobal = {};
       D.forEach(function(r){ window._basisLookupGlobal[String(r.ACCT_ID)] = String(r.BILL_BASIS||'').trim().toUpperCase(); });
 
+      // Build global TARIFF lookup {ACCT_ID: 'LMV1'/'HV1'/...} for defaulter filter
+      window._tariffLookup = {};
+      D.forEach(function(r){ if(r.CATEGORY) window._tariffLookup[String(r.ACCT_ID)] = r.CATEGORY; });
+
       setTimeout(autoSyncAtr,1500);
     // Load location.xlsx for GPS fallback
     if(!Object.keys(LOCATION_MAP).length) loadLocationXlsx();
@@ -4033,8 +4088,15 @@ function tariffLabel(code){
   return stToTariff(code);
 }
 function getAllSupplyValues(){
-  var vals = [...new Set(DEF_ALL.map(function(r){return r.SUPPLY_TYPE;}).filter(Boolean))];
-  return vals.sort(function(a,b){ return a.localeCompare(b, undefined, {numeric:true}); });
+  // Prefer TARIFF_TYPE from D array (LMV1, HV1 etc.) over raw SUPPLY_TYPE codes
+  var tariffLookup = {};
+  D.forEach(function(r){ if(r.ACCT_ID && r.CATEGORY) tariffLookup[String(r.ACCT_ID)] = r.CATEGORY; });
+  var vals = new Set();
+  DEF_ALL.forEach(function(r){
+    var t = tariffLookup[String(r.ACCT_ID)] || r.SUPPLY_TYPE || '';
+    if(t) vals.add(t);
+  });
+  return Array.from(vals).sort(function(a,b){ return a.localeCompare(b, undefined, {numeric:true}); });
 }
 
 function refreshFeedOptions(){
@@ -4348,7 +4410,10 @@ function runDefaulterFilter(){
     if(r.OUTSTANDING < minOut) return false;
     if(sub.length    && sub.indexOf(r.SUBSTATION)<0)    return false;
     if(feed.length   && feed.indexOf(r.FEEDER)<0)        return false;
-    if(supply.length && supply.indexOf(r.SUPPLY_TYPE)<0) return false;
+    if(supply.length){
+      var rTariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || r.SUPPLY_TYPE || '';
+      if(supply.indexOf(rTariff)<0) return false;
+    }
     // Load filter — multi-select ranges
     if(selLoads.length){
       var matched=selLoads.some(function(range){
