@@ -1701,10 +1701,10 @@ function buildDashboard(){
       html += '<th style="padding:5px 10px;font-family:var(--fh);font-size:9px;color:#9CA3AF;border-bottom:1px solid #E5E7EB;position:sticky;left:0;background:#F8FAFC;z-index:2;box-shadow:2px 0 4px rgba(0,0,0,0.08);"></th>';
       sortedDays.forEach(function(){
         html += '<th style="padding:5px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#059669;border-bottom:1px solid #E5E7EB;border-left:1px solid #E5E7EB;">Count</th>';
-        html += '<th style="padding:5px 6px;text-align:left;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #E5E7EB;min-width:120px;">Status Breakdown</th>';
+        html += '<th style="padding:5px 6px;text-align:left;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #E5E7EB;min-width:130px;max-width:200px;white-space:normal;">Status Breakdown</th>';
       });
       html += '<th style="padding:5px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#059669;border-bottom:1px solid #E5E7EB;border-left:1px solid #E5E7EB;">Count</th>';
-      html += '<th style="padding:5px 6px;text-align:left;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #E5E7EB;min-width:140px;">Status Breakdown</th>';
+      html += '<th style="padding:5px 6px;text-align:left;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #E5E7EB;min-width:130px;max-width:200px;white-space:normal;">Status Breakdown</th>';
       html += '</tr></thead><tbody>';
 
       var statusColors = {PAID:'#059669',LOCK:'#7C3AED',THEFT:'#DC2626',DISPUTE:'#D97706',PROMISE:'#0EA5E9',TD:'#0891B2',OTHER:'#6B7280'};
@@ -1717,7 +1717,7 @@ function buildDashboard(){
         sortedDays.forEach(function(day){
           var d = atrSsDay[ss]&&atrSsDay[ss][day];
           html += '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#1D4ED8;border-left:1px solid #F0F0F0;">'+(d?d.total:'-')+'</td>';
-          html += '<td style="padding:6px 8px;font-size:10px;">';
+          html += '<td style="padding:6px 8px;font-size:10px;white-space:normal;word-break:break-word;min-width:130px;max-width:200px;">';
           if(d){
             atrStatuses.forEach(function(s){
               if(d[s]>0){ html+='<span style="color:'+statusColors[s]+';font-weight:600;margin-right:4px;">'+atrLabels[s]+':'+d[s]+'</span>'; }
@@ -1727,7 +1727,7 @@ function buildDashboard(){
           html += '</td>';
         });
         html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #BBF7D0;">'+(grand||'-')+'</td>';
-        html += '<td style="padding:6px 8px;font-size:10px;">';
+        html += '<td style="padding:6px 8px;font-size:10px;white-space:normal;word-break:break-word;min-width:130px;max-width:200px;">';
         atrStatuses.forEach(function(s){
           if(grandBreak[s]>0){ html+='<span style="color:'+statusColors[s]+';font-weight:600;margin-right:4px;">'+atrLabels[s]+':'+grandBreak[s]+'</span>'; }
         });
@@ -1741,7 +1741,7 @@ function buildDashboard(){
         var dayTotal=0,dayBreak={};
         atrSsList.forEach(function(ss){var d=atrSsDay[ss]&&atrSsDay[ss][day];if(d){dayTotal+=d.total;atrStatuses.forEach(function(s){dayBreak[s]=(dayBreak[s]||0)+(d[s]||0);});}});
         html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#1D4ED8;border-left:1px solid #BFDBFE;">'+(dayTotal||'-')+'</td>';
-        html += '<td style="padding:6px 8px;font-size:10px;">';
+        html += '<td style="padding:6px 8px;font-size:10px;white-space:normal;word-break:break-word;min-width:130px;max-width:200px;">';
         atrStatuses.forEach(function(s){
           if(dayBreak[s]>0){ html+='<span style="color:'+statusColors[s]+';font-weight:700;margin-right:4px;">'+atrLabels[s]+':'+dayBreak[s]+'</span>'; }
         });
@@ -1749,7 +1749,7 @@ function buildDashboard(){
         html += '</td>';
       });
       html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #BBF7D0;">'+gt+'</td>';
-      html += '<td style="padding:6px 8px;font-size:10px;">';
+      html += '<td style="padding:6px 8px;font-size:10px;white-space:normal;word-break:break-word;min-width:130px;max-width:200px;">';
       atrStatuses.forEach(function(s){
         if(gtb[s]>0){ html+='<span style="color:'+statusColors[s]+';font-weight:700;margin-right:4px;">'+atrLabels[s]+':<b>'+gtb[s]+'</b></span>'; }
       });
