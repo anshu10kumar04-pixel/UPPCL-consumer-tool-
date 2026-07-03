@@ -1388,8 +1388,7 @@ function loadPrevYearData(callback){
       .then(function(r){ return r.ok?r.text():''; })
       .then(function(text){
         if(text){
-          var lines = text.split('
-').filter(Boolean);
+          var lines = text.split(String.fromCharCode(10)).filter(Boolean);
           var hdrs = lines[0].split(',').map(function(h){return h.trim().replace(/"/g,'');});
           var iAcct=hdrs.indexOf('ACCT_ID'), iSS=hdrs.indexOf('SUBSTATION'),
               iST=hdrs.indexOf('SUPPLY_TYPE'), iMR=hdrs.indexOf('MR_SOURCE_CD'),
