@@ -1304,7 +1304,18 @@ function buildProgressReport(){
   h += '</tr>';
 
   h += '</tbody></table></div></div>';
+  // YoY Comparison Section
+  h += '<div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;margin-top:20px;">';
+  h += '<div style="background:#1E3A5F;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">';
+  h += '<div style="font-family:var(--fh);font-weight:700;font-size:13px;">📊 SS-WISE REVENUE COMPARISON — JUL 2025 vs JUL 2026</div>';
+  h += '<span style="font-size:10px;opacity:0.7;">SM/Non-SM + Tariff-wise. Click ➕ to expand.</span>';
+  h += '</div>';
+  h += '<div id="yoy-section"><div style="padding:20px;text-align:center;color:#6B7280;font-family:var(--fh);">Click to load Jul 2025 data → <button onclick="buildYoYReport()" style="background:#1D4ED8;color:#fff;border:none;padding:6px 16px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:12px;cursor:pointer;">📊 LOAD COMPARISON</button></div></div>';
+  h += '</div>';
+
   el.innerHTML = h;
+  // Auto-load YoY if prev year data already cached
+  if(PY_LOADED) setTimeout(buildYoYReport, 100);
 }
 
 function toggleFeeder(si){
@@ -1360,6 +1371,211 @@ function progressExportPDF(){
   w.document.write('<scr'+'ipt>window.onload=function(){window.print();};<'+'/scr'+'ipt>');
   w.document.write('</body></html>');
   w.document.close();
+}
+
+
+// ─── JULY YoY COMPARISON ──────────────────────────────────────────────────────
+var PY_DATA = {};  // {ACCT_ID: {ss, supply_type, mr_source_cd, pay_amt, pay_date}}
+var PY_LOADED = false;
+
+function loadPrevYearData(callback){
+  if(PY_LOADED){ if(callback) callback(); return; }
+  var RAW = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/UPPCL-consumer-tool-/main/';
+  var files = ['prev_year/jul2025_eudd1.csv','prev_year/jul2025_eudd2.csv'];
+  var done = 0;
+  files.forEach(function(f){
+    fetch(RAW+f)
+      .then(function(r){ return r.ok?r.text():''; })
+      .then(function(text){
+        if(text){
+          var lines = text.split('
+').filter(Boolean);
+          var hdrs = lines[0].split(',').map(function(h){return h.trim().replace(/"/g,'');});
+          var iAcct=hdrs.indexOf('ACCT_ID'), iSS=hdrs.indexOf('SUBSTATION'),
+              iST=hdrs.indexOf('SUPPLY_TYPE'), iMR=hdrs.indexOf('MR_SOURCE_CD'),
+              iPay=hdrs.indexOf('PAY_AMT'), iDate=hdrs.indexOf('PAY_DATE'),
+              iCA=hdrs.indexOf('CURRENT_ASSESSMENT');
+          for(var i=1;i<lines.length;i++){
+            var v=lines[i].split(',').map(function(x){return x.trim().replace(/^"|"$/g,'');});
+            var acct=v[iAcct]||''; if(!acct) continue;
+            PY_DATA[acct]={
+              ss:    v[iSS]||'',
+              st:    v[iST]||'',
+              mr:    v[iMR]||'',
+              pay:   parseFloat(v[iPay]||0)||0,
+              date:  v[iDate]||'',
+              ca:    parseFloat(v[iCA]||0)||0
+            };
+          }
+        }
+        done++;
+        if(done===files.length){ PY_LOADED=true; if(callback) callback(); }
+      })
+      .catch(function(){ done++; if(done===files.length){ PY_LOADED=true; if(callback) callback(); } });
+  });
+}
+
+function buildYoYReport(){
+  var el = gel('yoy-section');
+  if(!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:#6B7280;font-family:var(--fh);">⏳ Loading Jul 2025 data...</div>';
+
+  loadPrevYearData(function(){
+    // Current year: use _smLookup for SM/NonSM classification
+    // Build SS-wise aggregation for Jul 2026 (current month from D array)
+    var today = new Date();
+    var cy = {}; // current year {ss: {sm_rev,sm_cnt,nsm_rev,nsm_cnt,total_rev,total_cnt, by_tariff:{t:{...}}}}
+    var py = {}; // prev year same structure
+
+    // Current year - consumers who paid in current month (July 2026)
+    D.forEach(function(r){
+      var ss = r.SUBSTATION||''; if(!ss) return;
+      var lpDate = parseDate(r.LAST_PAY_DATE||r.PAY_DATE||'');
+      var lpAmt  = parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0;
+      if(!lpDate || lpDate.getMonth()!==today.getMonth() || lpDate.getFullYear()!==today.getFullYear()) return;
+      if(lpAmt<=0) return;
+
+      var mrSrc = String(r.MR_SOURCE_CD||'').toUpperCase();
+      if(!mrSrc && window._smLookup) mrSrc = window._smLookup[String(r.ACCT_ID)]||'';
+      var isSM = mrSrc==='SM';
+      var tariff = r.CATEGORY||stToTariff(r.SUPPLY_TYPE)||r.SUPPLY_TYPE||'OTHER';
+
+      if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
+      cy[ss].total_rev+=lpAmt; cy[ss].total_cnt++;
+      if(isSM){cy[ss].sm_rev+=lpAmt; cy[ss].sm_cnt++;}
+      else    {cy[ss].nsm_rev+=lpAmt; cy[ss].nsm_cnt++;}
+      if(!cy[ss].tariff[tariff]) cy[ss].tariff[tariff]={rev:0,cnt:0};
+      cy[ss].tariff[tariff].rev+=lpAmt; cy[ss].tariff[tariff].cnt++;
+    });
+
+    // Previous year - July 2025
+    Object.values(PY_DATA).forEach(function(r){
+      var ss = r.ss||''; if(!ss) return;
+      var lpAmt = r.pay||0; if(lpAmt<=0) return;
+      var isSM = String(r.mr||'').toUpperCase()==='SM';
+      // Use current year SM classification if available (use ACCT_ID not available here - use mr field)
+      var tariff = stToTariff(r.st)||r.st||'OTHER';
+
+      if(!py[ss]) py[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
+      py[ss].total_rev+=lpAmt; py[ss].total_cnt++;
+      if(isSM){py[ss].sm_rev+=lpAmt; py[ss].sm_cnt++;}
+      else    {py[ss].nsm_rev+=lpAmt; py[ss].nsm_cnt++;}
+      if(!py[ss].tariff[tariff]) py[ss].tariff[tariff]={rev:0,cnt:0};
+      py[ss].tariff[tariff].rev+=lpAmt; py[ss].tariff[tariff].cnt++;
+    });
+
+    // All SS (union of both years)
+    var allSS = [...new Set([...Object.keys(cy),...Object.keys(py)])].sort();
+
+    function fL(n){ if(!n) return '0'; n=Math.abs(n); return n>=10000000?(n/10000000).toFixed(2)+' Cr':n>=100000?(n/100000).toFixed(2)+' L':'₹'+Math.round(n).toLocaleString(); }
+    function dEl(cy,py){ var d=cy-py; var pct=py>0?((d/py)*100).toFixed(1):'—'; var c=d>=0?'#059669':'#DC2626'; return '<span style="color:'+c+';font-size:10px;font-weight:700;">'+(d>=0?'▲':'▼')+fL(d)+'<br>('+pct+'%)</span>'; }
+
+    var h='';
+    h += '<div style="overflow-x:auto;"><table id="yoy-table" style="width:100%;border-collapse:collapse;font-size:11px;min-width:900px;">';
+    h += '<thead>';
+    // Header row 1
+    h += '<tr style="background:#1E3A5F;color:#fff;">';
+    h += '<th rowspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;min-width:40px;"></th>';
+    h += '<th rowspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:left;min-width:160px;">SUBSTATION</th>';
+    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1D4ED8;">JUL 2025</th>';
+    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#059669;">JUL 2026</th>';
+    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#7C3AED;">GROWTH</th>';
+    h += '</tr>';
+    // Header row 2
+    h += '<tr style="background:#1E3A5F;color:#fff;">';
+    ['REVENUE','PAID CNT','REVENUE','PAID CNT','REVENUE','COUNT'].forEach(function(hd,i){
+      var bg=['#1D4ED8','#1D4ED8','#059669','#059669','#7C3AED','#7C3AED'][i];
+      h += '<th style="padding:5px 6px;border:1px solid #374151;font-family:var(--fh);font-size:9px;text-align:right;background:'+bg+';">'+hd+'</th>';
+    });
+    h += '</tr></thead><tbody>';
+
+    var grandPY={rev:0,cnt:0}, grandCY={rev:0,cnt:0};
+    allSS.forEach(function(ss, si){
+      var c=cy[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
+      var p=py[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
+      grandPY.rev+=p.total_rev; grandPY.cnt+=p.total_cnt;
+      grandCY.rev+=c.total_rev; grandCY.cnt+=c.total_cnt;
+      var rowBg=si%2?'#fff':'#F9FAFB';
+
+      // SS row
+      h += '<tr style="background:'+rowBg+';" id="yoy-ss-'+si+'">';
+      h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:center;">';
+      h += '<span style="cursor:pointer;color:#1D4ED8;font-weight:700;" onclick="toggleYoY('+si+')" id="yoy-btn-'+si+'">➕</span></td>';
+      h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;font-weight:700;color:#1E3A5F;">'+ss+'</td>';
+      h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#1D4ED8;font-weight:600;">'+fL(p.total_rev)+'</td>';
+      h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#1D4ED8;">'+p.total_cnt+'</td>';
+      h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#059669;font-weight:600;">'+fL(c.total_rev)+'</td>';
+      h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#059669;">'+c.total_cnt+'</td>';
+      h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+dEl(c.total_rev,p.total_rev)+'</td>';
+      h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+dEl(c.total_cnt,p.total_cnt)+'</td>';
+      h += '</tr>';
+
+      // Expandable: SM / Non-SM + Tariff rows
+      var allTariffs = [...new Set([...Object.keys(c.tariff||{}),...Object.keys(p.tariff||{})])].sort();
+
+      // SM row
+      h += '<tr class="yoy-sub-'+si+'" style="display:none;background:#EFF6FF;">';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;"></td>';
+      h += '<td style="padding:4px 6px 4px 20px;border:1px solid #BFDBFE;font-size:10px;font-weight:700;color:#1D4ED8;">📶 SM (Smart Meter)</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+fL(p.sm_rev)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+p.sm_cnt+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;color:#059669;">'+fL(c.sm_rev)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;color:#059669;">'+c.sm_cnt+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+dEl(c.sm_rev,p.sm_rev)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+dEl(c.sm_cnt,p.sm_cnt)+'</td>';
+      h += '</tr>';
+
+      // Non-SM row
+      h += '<tr class="yoy-sub-'+si+'" style="display:none;background:#FFF7ED;">';
+      h += '<td style="padding:4px 6px;border:1px solid #FED7AA;"></td>';
+      h += '<td style="padding:4px 6px 4px 20px;border:1px solid #FED7AA;font-size:10px;font-weight:700;color:#EA580C;">📊 Non-SM</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;">'+fL(p.nsm_rev)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;">'+p.nsm_cnt+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;color:#059669;">'+fL(c.nsm_rev)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;color:#059669;">'+c.nsm_cnt+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;">'+dEl(c.nsm_rev,p.nsm_rev)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;">'+dEl(c.nsm_cnt,p.nsm_cnt)+'</td>';
+      h += '</tr>';
+
+      // Tariff breakdown rows
+      allTariffs.forEach(function(t){
+        var ct=c.tariff[t]||{rev:0,cnt:0};
+        var pt=p.tariff[t]||{rev:0,cnt:0};
+        h += '<tr class="yoy-sub-'+si+'" style="display:none;background:#F0FDF4;">';
+        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;"></td>';
+        h += '<td style="padding:3px 6px 3px 28px;border:1px solid #BBF7D0;font-size:10px;color:#374151;">↳ '+t+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;">'+fL(pt.rev)+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;">'+pt.cnt+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;color:#059669;">'+fL(ct.rev)+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;color:#059669;">'+ct.cnt+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;">'+dEl(ct.rev,pt.rev)+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;">'+dEl(ct.cnt,pt.cnt)+'</td>';
+        h += '</tr>';
+      });
+    });
+
+    // Grand total
+    h += '<tr style="background:#1E3A5F;color:#fff;font-weight:700;">';
+    h += '<td colspan="2" style="padding:6px 10px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#93C5FD;">'+fL(grandPY.rev)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#93C5FD;">'+grandPY.cnt+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+fL(grandCY.rev)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+grandCY.cnt+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+dEl(grandCY.rev,grandPY.rev)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+dEl(grandCY.cnt,grandPY.cnt)+'</td>';
+    h += '</tr>';
+    h += '</tbody></table></div>';
+
+    el.innerHTML = h;
+  });
+}
+
+function toggleYoY(si){
+  var rows = document.querySelectorAll('.yoy-sub-'+si);
+  var btn  = gel('yoy-btn-'+si);
+  var open = rows.length && rows[0].style.display !== 'none';
+  rows.forEach(function(r){ r.style.display = open ? 'none' : ''; });
+  if(btn) btn.textContent = open ? '➕' : '➖';
 }
 
 function buildDashboard(){
