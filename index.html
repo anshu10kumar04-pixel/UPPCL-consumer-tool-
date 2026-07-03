@@ -3318,12 +3318,14 @@ function parseFileInto(text, type){
     var rawAmt = '', rawDate = '', outValue = '';
 
     if(type==='master'){
-      // Master files often have unquoted commas in middle fields, 
-      // but financial info is always in the last columns.
-      outValue = v[v.length - 1] || '0';
-      rawAmt   = v[v.length - 2] || '0';
-      rawDate  = v[v.length - 3] || '-';
-      
+      // Use proper column names (was using broken positional trick v[v.length-1])
+      var iTotOutM = findCol(hdrs, ['TOTAL_OUTSTANDING','TOTAL OUTSTANDING']);
+      var iPayAmtM = findCol(hdrs, ['PAY_AMT','LP AMT','LAST_PAY_AMT']);
+      var iPayDateM= findCol(hdrs, ['PAY_DATE','LP DATE','LAST_PAY_DATE']);
+      outValue = iTotOutM>=0 ? (v[iTotOutM]||'0') : '0';
+      rawAmt   = iPayAmtM>=0 ? (v[iPayAmtM]||'0') : '0';
+      rawDate  = iPayDateM>=0? (v[iPayDateM]||'-') : '-';
+
       MASTER_MAP[key] = {
         TOTAL_OUTSTANDING: outValue,
         LP_DATE: rawDate,
