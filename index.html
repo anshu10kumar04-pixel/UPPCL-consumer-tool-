@@ -3211,24 +3211,25 @@ function startDownloads(){
     .then(function(t){ if(t) parseMeterData(t); })
     .catch(function(){});
 
-  FILES.forEach(function(item,idx){
-    var url = typeof item === 'string' ? item : item.url;
+  function fetchOne(url, attempt){
     var ctrl = typeof AbortController!=='undefined' ? new AbortController() : null;
-    var timer = ctrl ? setTimeout(function(){ctrl.abort();}, 45000) : null;
-    fetch(url, ctrl ? {signal:ctrl.signal} : {})
+    var timer = ctrl ? setTimeout(function(){ctrl.abort();}, 120000) : null;
+    return fetch(url, ctrl ? {signal:ctrl.signal} : {})
       .then(function(r){ if(timer)clearTimeout(timer); return r.ok?r.text():''; })
-      .then(function(t){
-        allTexts[idx]=t||''; fetched++;
-        sl('DOWNLOADING '+fetched+'/'+total+'…', Math.round(fetched/total*60)+5);
-        if(fetched===total) setTimeout(parseAll,20);
-      })
       .catch(function(e){
         if(timer)clearTimeout(timer);
-        console.warn('Skipped:',url.split('/').pop());
-        allTexts[idx]=''; fetched++;
-        sl('DOWNLOADING '+fetched+'/'+total+'…', Math.round(fetched/total*60)+5);
-        if(fetched===total) setTimeout(parseAll,20);
+        if(attempt < 2){ console.warn('Retry '+(attempt+1)+':', url.split('/').pop()); return fetchOne(url, attempt+1); }
+        console.warn('Failed after retries:', url.split('/').pop());
+        return '';
       });
+  }
+  FILES.forEach(function(item,idx){
+    var url = typeof item === 'string' ? item : item.url;
+    fetchOne(url, 0).then(function(t){
+      allTexts[idx]=t||''; fetched++;
+      sl('DOWNLOADING '+fetched+'/'+total+'…', Math.round(fetched/total*60)+5);
+      if(fetched===total) setTimeout(parseAll,20);
+    });
   });
 
   function parseAll(){
