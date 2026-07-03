@@ -1228,7 +1228,7 @@ function buildProgressReport(){
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;font-weight:700;color:#1E3A5F;">';
     h += '<span style="cursor:pointer;color:#1D4ED8;font-weight:700;margin-right:4px;" onclick="toggleFeeder('+si+')" id="ss-btn-'+si+'">➕</span>'+ss;
     h += '</td>';
-    var gap = t.billable - t.billed;
+    var gap = t.billed - t.muCnt;  // GAP = Billed - MU (metering gap: non-metered billed consumers)
     var pctBilledExProv = pct(t.billed-t.provCnt, t.billable);
     var pctCollEff = pct(t.uptoRev, t.currAsst);   // Upto Rev / Curr Asst
     var pctTurnUp  = pct(t.uptoPaid, t.billed);     // Upto Paid / Billed
@@ -1253,7 +1253,7 @@ function buildProgressReport(){
     var feeders = Object.keys(ssMap[ss].feeders).sort();
     feeders.forEach(function(fd, fi){
       var f = ssMap[ss].feeders[fd];
-      var fgap = f.billable - f.billed;
+      var fgap = f.billed - f.muCnt;  // GAP = Billed - MU
       var fpctBilledExProv = pct(f.billed-f.provCnt,f.billable);
       h += '<tr style="display:none;background:#EFF6FF;" class="feeder-row-'+si+'">';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:center;font-size:10px;color:#6B7280;"></td>';
@@ -1282,7 +1282,7 @@ function buildProgressReport(){
   // Grand Total row
   h += '<tr style="background:#1E3A5F;color:#fff;font-weight:700;">';
   h += '<td colspan="2" style="padding:6px 10px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL</td>';
-  var ggap = grand.billable - grand.billed;
+  var ggap = grand.billed - grand.muCnt;  // GAP = Billed - MU
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.billable.toLocaleString()+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.meterBillable.toLocaleString()+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.billed.toLocaleString()+'</td>';
