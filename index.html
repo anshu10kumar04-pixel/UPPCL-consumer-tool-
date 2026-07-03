@@ -3416,7 +3416,9 @@ function buildConsumerCard(r, q){
   if(pay){
     lpAmt = pf(pay.PAY_AMT);
     lpDateStr = pay.PAY_DATE || '-';
-    out = pf(pay.TOTAL_OUTSTANDING);
+    // Use r.AMOUNT_PAYABLE from D array (already correctly calculated for unbilled via MASTER_MAP)
+    // PAY_DATA.TOTAL_OUTSTANDING may be stale — D array is authoritative
+    out = pf(r.AMOUNT_PAYABLE) || pf(r.OUTSTANDING) || pf(pay.TOTAL_OUTSTANDING);
     
     payHtml = '<div style="margin-top:12px;padding:12px;background:linear-gradient(135deg,#EFF6FF,#F0FDF4);border-radius:10px;border:1px solid #BFDBFE;">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'+
