@@ -3325,6 +3325,7 @@ function loadLocationXlsx(){
 }
 
 function ia(){
+  window._dOutMap = null;  // Reset live outstanding cache
   var subSet=new Set(),feedSet=new Set(),catSet=new Set();
   fetch(RAW_BASE+'geo_mapping.json').then(r=>r.ok?r.json():{}).then(function(map){
     GEO_MAP=map;applyGeoAndStats();
@@ -4402,6 +4403,11 @@ function buildDefAllFromD() {
 
 
 function runDefaulterFilter(){
+  // Build live outstanding map if not exists
+  if(!window._dOutMap){
+    window._dOutMap={};
+    D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
+  }
   if(!gel('def-tbody')){buildDefaulterPanel();return;}
   if(!DEF_ALL.length) buildDefAll();
 
@@ -4440,7 +4446,9 @@ function runDefaulterFilter(){
 
   // Fast filter on pre-built array
   var all = DEF_ALL.filter(function(r){
-    if(r.OUTSTANDING < minOut) return false;
+    // Use live outstanding from D array if available
+    var liveOut = window._dOutMap ? (window._dOutMap[String(r.ACCT_ID)] || 0) : (r.OUTSTANDING || 0);
+    if(liveOut < minOut) return false;
     if(sub.length    && sub.indexOf(r.SUBSTATION)<0)    return false;
     if(feed.length   && feed.indexOf(r.FEEDER)<0)        return false;
     if(supply.length){
@@ -4572,12 +4580,19 @@ function renderDefaulters(page){
   var tbody=gel('def-tbody'); if(!tbody)return;
   var slice=DEF_DATA.slice((page-1)*PS,page*PS);
 
+  // Build live outstanding lookup from D array
+  if(!window._dOutMap){
+    window._dOutMap={};
+    D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
+  }
+
   var html='';
   var globalRank=(page-1)*PS;
   slice.forEach(function(r){
     globalRank++;
     var rIcon=globalRank===1?'🥇':globalRank===2?'🥈':globalRank===3?'🥉':globalRank;
-    var out=Math.round(r.OUTSTANDING);
+    var liveOut = window._dOutMap[String(r.ACCT_ID)];
+    var out=Math.round(liveOut !== undefined ? liveOut : (r.OUTSTANDING||0));
     var outColor=out>100000?'#F43F5E':out>25000?'#EA580C':'#F59E0B';
     var paid=Math.round(r.PAY_AMT||0);
     var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
