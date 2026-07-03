@@ -3473,7 +3473,7 @@ function ia(){
         if(t && /^(LMV|HV|EHV)/i.test(t)) window._tariffLookup[String(r.ACCT_ID)] = t;
       });
 
-      // Build SM lookup from D array MR_SOURCE_CD
+      // Build SM lookup from master data MR_SOURCE_CD
       window._smLookup = {};
       D.forEach(function(r){
         if(r.MR_SOURCE_CD) window._smLookup[String(r.ACCT_ID)] = String(r.MR_SOURCE_CD).trim().toUpperCase();
@@ -4413,6 +4413,7 @@ function parseDefFile(text){
       iBDate  = hdrs.indexOf('BILL_DATE'),
       iDDate  = hdrs.indexOf('DUE_DATE'),
       iBBasis = hdrs.indexOf('BILL_BASIS'),
+      iMrSrc  = hdrs.indexOf('MR_SOURCE_CD'),
       iSrc    = hdrs.indexOf('SOURCE');
   if(iOut<0) iOut=8; // fallback to col index if not found
   var defSaved={};
@@ -4449,6 +4450,7 @@ function parseDefFile(text){
       BILL_DATE: iBDate>=0 ? (v[iBDate]||'').replace(/"/g,'')       : '',
       DUE_DATE:  iDDate>=0 ? (v[iDDate]||'').replace(/"/g,'')       : '',
       BILL_BASIS: iBBasis>=0 ? (v[iBBasis]||'').replace(/"/g,'').trim() : '',
+      MR_SOURCE_CD: iMrSrc>=0 ? (v[iMrSrc]||'').replace(/"/g,'').trim() : '',
       SOURCE:    iSrc>=0   ? (v[iSrc]||'billed').replace(/"/g,'').trim() : 'billed',
       ATR_STATUS:typeof ae==='object'?(ae.atr||'PENDING'):ae,
       ATR_COMMENT:typeof ae==='object'?(ae.comment||''):''
@@ -4558,15 +4560,15 @@ function runDefaulterFilter(){
       });
       if(!matched) return false;
     }
-    // SM filter — use MR_SOURCE_CD from DEF record or _smLookup from master
+    // SM filter — use MR_SOURCE_CD directly from DEF_ALL record
     if(selSm.length){
       var mrSrc = String(r.MR_SOURCE_CD||'').trim().toUpperCase();
-      // Fallback to _smLookup built from master file
       if(!mrSrc && window._smLookup) mrSrc = String(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
       var isSm = mrSrc === 'SM';
-      var wantSm=selSm.indexOf('sm')>=0, wantNon=selSm.indexOf('nonsm')>=0;
-      if(wantSm && !wantNon && !isSm) return false;
-      if(wantNon && !wantSm && isSm) return false;
+      var wantSm  = selSm.indexOf('sm')>=0;
+      var wantNon = selSm.indexOf('nonsm')>=0;
+      if(wantSm  && !wantNon && !isSm) return false;
+      if(wantNon && !wantSm  &&  isSm) return false;
     }
     // Bill Basis filter
     if(selBasis.length){
@@ -4597,12 +4599,9 @@ function runDefaulterFilter(){
       return as-bs || b.OUTSTANDING-a.OUTSTANDING;
     }
     if(sortDir==='nonsm_first'){
-      // SM = MR_SOURCE_CD='SM', Non-SM first
-      var aIsSM = String(a.MR_SOURCE_CD||a.METER_NO||'').toUpperCase()==='SM' ||
-                  String(a.METER_NO||'').toUpperCase().startsWith('GE') ? 1 : 0;
-      var bIsSM = String(b.MR_SOURCE_CD||b.METER_NO||'').toUpperCase()==='SM' ||
-                  String(b.METER_NO||'').toUpperCase().startsWith('GE') ? 1 : 0;
-      return aIsSM-bIsSM || b.OUTSTANDING-a.OUTSTANDING;
+      var aIsSM = String(a.MR_SOURCE_CD||'').trim().toUpperCase()==='SM';
+      var bIsSM = String(b.MR_SOURCE_CD||'').trim().toUpperCase()==='SM';
+      return (aIsSM?1:0)-(bIsSM?1:0) || b.OUTSTANDING-a.OUTSTANDING;
     }
     if(sortDir==='tariff_asc') return String(a.SUPPLY_TYPE||'').localeCompare(String(b.SUPPLY_TYPE||''));
     if(sortDir==='ai_high') return collectionProbability(b)-collectionProbability(a);
