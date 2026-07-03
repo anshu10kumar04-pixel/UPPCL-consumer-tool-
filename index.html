@@ -3129,16 +3129,7 @@ function startDownloads(){
       if(idx>=FILES.length){
         allTexts=null;
         sl('BUILDING INDEX…',93);
-        console.log('[DEBUG] MASTER_MAP size:', Object.keys(MASTER_MAP).length);
-        console.log('[DEBUG] D array size:', D.length);
-        // Check specific consumers
-        var testAccts = ['5043772000','6731529483','1549043000'];
-        testAccts.forEach(function(a){
-          var m = MASTER_MAP[a];
-          var d = D.find(function(r){return r.ACCT_ID===a;});
-          console.log('[DEBUG]',a,'master:',m?JSON.stringify(m):'MISSING','D_row AMOUNT_PAYABLE:',d?d.AMOUNT_PAYABLE:'NOT IN D');
-        });
-        console.log('[DEBUG] MASTER_CUTOFF:', MASTER_CUTOFF);
+        sl('BUILDING INDEX…',93);
         setTimeout(function(){ ia(); hl2(); },20);
         return;
       }
@@ -3303,16 +3294,8 @@ function parseFileInto(text, type){
     };
     var dp=({billed:3,unbilled:2,master:1})[type]||0;
     if(!D_PRI[acct]||dp>D_PRI[acct]){ D_PRI[acct]=dp; D.push(row); }
-    // Store billed LAT/LON
     if(type==='billed'){var pLat=parseFloat(lat),pLon=parseFloat(lon);if(pLat>20&&pLat<30&&pLon>70&&!BILLED_LOC[acct])BILLED_LOC[acct]={lat:pLat,lon:pLon};}
-    // Master records handled above via continue (MASTER_MAP populated with correct TOTAL_OUTSTANDING)
-    // PAY_DATA priority
-    var priMap={billed:3,unbilled:2,master:1};
-    var existPri=PAY_DATA[acct]?(priMap[PAY_DATA[acct].SOURCE]||0):0;
-    var thisPri=priMap[type]||0;
-    if(iPayAmt>=0&&thisPri>=existPri) PAY_DATA[acct]={PAY_AMT:rawAmt,PAY_DATE:rawDate,
-      TOTAL_OUTSTANDING:iTotOut>=0?(v[iTotOut]||'0').replace(/"/g,''):'0',
-      SOURCE:type,STATUS:'INSERVICE',NAME:row.NAME,SUPPLY_TYPE:row.CATEGORY||'-'};
+    // PAY_DATA already has correct outValue from above - no duplicate write
   }
 }
 
