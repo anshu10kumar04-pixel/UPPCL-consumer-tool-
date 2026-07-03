@@ -846,7 +846,7 @@ function billBasisInfo(code){
 }
 
 function ac(id){
-  return String(id||'').replace(/^0+/,'').trim();
+  return String(id||'').trim();  // Keep leading zeros - consistent key across all sources
 }
 
 function catBadge(cat){
@@ -1603,33 +1603,54 @@ function buildDashboard(){
 
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
   html += '<div style="background:#4338CA;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-filtered-body\')">🔍 FILTERED REPORT — SELECT FILTERS<span id="dash-filtered-body-arrow" style="font-size:14px;opacity:0.8;">\u25bc</span></div><div id="dash-filtered-body" style="display:block;">';
-  html += '<div style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">';
-  // Division (cascade level 1)
-  html += '<div style="flex:1;min-width:130px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">DIVISION</div>';
-  html += '<select id="dash-div-sel" onchange="dashDivUpdate()" style="width:100%;padding:8px 10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:12px;font-family:var(--fb);">';
-  html += '<option value="">— All —</option>';
-  Object.keys(window._dashDivSsMap||{}).sort().forEach(function(d){ html += '<option value="'+d+'">'+d+'</option>'; });
-  html += '</select></div>';
-  // SS
-  html += '<div style="flex:1;min-width:150px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">SUBSTATION</div>';
-  html += '<select id="dash-ss-sel" onchange="dashFeederUpdate()" style="width:100%;padding:8px 10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:12px;font-family:var(--fb);">';
-  html += '<option value="">— All —</option>';
-  ssList.forEach(function(ss){ html += '<option value="'+ss+'">'+ss+'</option>'; });
-  html += '</select></div>';
-  // Feeder
-  html += '<div style="flex:1;min-width:150px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">FEEDER</div>';
-  html += '<select id="dash-feed-sel" onchange="dashRenderFiltered()" style="width:100%;padding:8px 10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:12px;font-family:var(--fb);">';
-  html += '<option value="">— All —</option>';
-  html += '</select></div>';
-  // Bill Basis
-  html += '<div style="flex:1;min-width:140px;"><div style="font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:4px;">BILL BASIS</div>';
-  html += '<select id="dash-basis-sel" onchange="dashRenderFiltered()" style="width:100%;padding:8px 10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:12px;font-family:var(--fb);">';
-  html += '<option value="">— All —</option>';
-  allBasisVals.forEach(function(b){ var bi=billBasisInfo(b); html += '<option value="'+b+'">'+bi.label+'</option>'; });
-  html += '</select></div>';
+  // Build SS + Feeder maps from D array for dropdown options
+  var dashSSSet = new Set(), dashFeederMap = {};
+  D.forEach(function(r){
+    var s=r.SUBSTATION||'', f=r.FEEDER||'';
+    if(s){ dashSSSet.add(s); if(f){if(!dashFeederMap[s])dashFeederMap[s]=new Set(); dashFeederMap[s].add(f);} }
+  });
+  var dashAllSS = Array.from(dashSSSet).sort();
+  window._dashFeederBySS = {};
+  Object.keys(dashFeederMap).forEach(function(s){ window._dashFeederBySS[s]=Array.from(dashFeederMap[s]).sort(); });
+
+  var lbl='font-size:10px;font-family:var(--fh);font-weight:700;color:#6B7280;margin-bottom:6px;';
+  html += '<div style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;">';
+
+  // SUBSTATION ms-wrap
+  html += '<div style="flex:1;min-width:150px;"><div style="'+lbl+'">SUBSTATION</div>';
+  html += '<div class="ms-wrap" id="dash-ss-wrap">';
+  html += '<button class="ms-btn" id="dash-ss-btn" onclick="toggleMs(\'dash-ss-dd\')">ALL SUBSTATIONS</button>';
+  html += '<div class="ms-dropdown" id="dash-ss-dd">';
+  html += '<div class="ms-search"><input type="text" placeholder="Search…" oninput="filterMsOptions(\'dash-ss-dd\',this.value)"/></div>';
+  html += '<div id="dash-ss-opts">';
+  dashAllSS.forEach(function(ss){ html += '<label class="ms-option"><input type="checkbox" value="'+ss+'" onchange="dashSSChange()"> '+ss+'</label>'; });
+  html += '</div><div class="ms-clear" onclick="dashClearSS()">Clear All</div>';
+  html += '</div></div></div>';
+
+  // FEEDER ms-wrap
+  html += '<div style="flex:1;min-width:150px;"><div style="'+lbl+'">FEEDER</div>';
+  html += '<div class="ms-wrap" id="dash-feed-wrap">';
+  html += '<button class="ms-btn" id="dash-feed-btn" onclick="toggleMs(\'dash-feed-dd\')">ALL FEEDERS</button>';
+  html += '<div class="ms-dropdown" id="dash-feed-dd">';
+  html += '<div class="ms-search"><input type="text" placeholder="Search…" oninput="filterMsOptions(\'dash-feed-dd\',this.value)"/></div>';
+  html += '<div id="dash-feed-opts"></div>';
+  html += '<div class="ms-clear" onclick="dashClearFeed()">Clear All</div>';
+  html += '</div></div></div>';
+
+  // BILL BASIS ms-wrap
+  html += '<div style="flex:1;min-width:130px;"><div style="'+lbl+'">BILL BASIS</div>';
+  html += '<div class="ms-wrap" id="dash-basis-wrap">';
+  html += '<button class="ms-btn" id="dash-basis-btn" onclick="toggleMs(\'dash-basis-dd\')">ALL BASIS</button>';
+  html += '<div class="ms-dropdown" id="dash-basis-dd">';
+  allBasisVals.forEach(function(b){ var bi=billBasisInfo(b); html += '<label class="ms-option"><input type="checkbox" value="'+b+'" onchange="dashRenderFiltered()"> '+bi.label+'</label>'; });
+  html += '<div class="ms-clear" onclick="dashClearBasis()">Clear All</div>';
+  html += '</div></div></div>';
+
   // Buttons
+  html += '<div style="display:flex;flex-direction:column;gap:6px;padding-top:22px;">';
   html += '<button onclick="dashRenderFiltered()" style="background:#4338CA;color:#fff;border:none;padding:9px 18px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:12px;cursor:pointer;">APPLY</button>';
   html += '<button onclick="dashResetFilter()" style="background:#F3F4F6;color:#374151;border:none;padding:9px 14px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:12px;cursor:pointer;">RESET</button>';
+  html += '</div>';
   html += '</div>';
   html += '<div id="dash-filtered-result"></div>';
   html += '</div></div>'; // close dash-filtered-body + card
@@ -1768,121 +1789,6 @@ function buildDashboard(){
   });
   html += '</div></div></div>';
 
-  // Substation-wise table
-  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
-  html += '<div style="background:#1E3A5F;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-ss-body\')">'+
-    '<span>🏛 SUBSTATION-WISE SUMMARY</span>'+
-    (ssList.length>16?'<span style="font-size:10px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">Top 16 of '+ssList.length+' by Outstanding</span>':'')+
-  '<span id="dash-ss-body-arrow" style="font-size:14px;opacity:0.8;">&#9654;</span></div><div id="dash-ss-body" style="display:none;">';
-  html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-ss-body\',\'SS_Summary\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-ss-body\',\'Substation Summary\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
-  html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  html += '<thead><tr style="background:#F8FAFC;">';
-  ['SUBSTATION','BILLED','UNBILLED','TOTAL','OUTSTANDING','CA','DEFAULTERS','DEF OUTSTANDING'].forEach(function(h){
-    html += '<th style="padding:8px 10px;text-align:'+(h==='SUBSTATION'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;white-space:nowrap;">'+h+'</th>';
-  });
-  html += '</tr></thead><tbody>';
-  ssListTop16.forEach(function(ss,i){
-    var s=ssMap[ss], ds=defSsMap[ss]||{count:0,out:0};
-    html += '<tr style="background:'+(i%2?'#F9FAFB':'#fff')+'">';
-    html += '<td style="padding:8px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+ss+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#059669;font-weight:600;">'+s.billed.toLocaleString()+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#F59E0B;font-weight:600;">'+s.unbilled.toLocaleString()+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;font-weight:700;">'+(s.billed+s.unbilled).toLocaleString()+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#EA580C;font-weight:700;">'+cr(s.out)+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#DC2626;">'+cr(s.ca)+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#D97706;font-weight:700;">'+ds.count.toLocaleString()+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#F43F5E;font-weight:700;">'+cr(ds.out)+'</td>';
-    html += '</tr>';
-  });
-  // Totals row
-  var tDef=DEF_ALL.length;
-  html += '<tr style="background:#EEF2FF;border-top:2px solid #C7D2FE;">';
-  html += '<td style="padding:8px 10px;font-weight:800;font-family:var(--fh);color:#4338CA;">TOTAL</td>';
-  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#059669;">'+billed.length.toLocaleString()+'</td>';
-  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#F59E0B;">'+unbilled.length.toLocaleString()+'</td>';
-  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;">'+D.length.toLocaleString()+'</td>';
-  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#EA580C;">'+cr(totalOut)+'</td>';
-  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#DC2626;">'+cr(totalCA)+'</td>';
-  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#D97706;">'+tDef.toLocaleString()+'</td>';
-  html += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#F43F5E;">'+cr(defOut)+'</td>';
-  html += '</tr></tbody></table></div></div></div>';
-
-  // Tariff-wise table
-  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;overflow:hidden;">';
-  html += '<div style="background:#065F46;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-tariff-body\')">📋 TARIFF-WISE BREAKUP<span id="dash-tariff-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-tariff-body" style="display:none;">';
-  html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-tariff-body\',\'Tariff_Breakup\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-tariff-body\',\'Tariff-wise Breakup\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
-  html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  html += '<thead>';
-  html += '<tr style="background:#F0FDF4;">';
-  html += '<th rowspan="2" style="padding:8px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;border-right:1px solid #BBF7D0;">TARIFF</th>';
-  html += '<th rowspan="2" style="padding:8px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">CONSUMERS</th>';
-  html += '<th rowspan="2" style="padding:8px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">% SHARE</th>';
-  html += '<th rowspan="2" style="padding:8px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">OUTSTANDING</th>';
-  html += '<th colspan="4" style="padding:6px 10px;text-align:center;font-family:var(--fh);font-size:10px;color:#B91C1C;border-bottom:1px solid #BBF7D0;border-left:1px solid #BBF7D0;background:#FFF1F2;">⚠ DEFAULTER COUNT &amp; AMOUNT BY OUTSTANDING RANGE</th>';
-  html += '</tr>';
-  html += '<tr style="background:#FFF1F2;">';
-  ['₹2K–5K','Amt','₹5K–10K','Amt','₹10K–50K','Amt','₹50K–1L','Amt','Above ₹1L','Amt'].forEach(function(rh,ri){
-    html += '<th style="padding:5px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:'+(ri%2?'#9CA3AF':'#B91C1C')+';border-bottom:1px solid #FECACA;border-left:'+(ri===0?'1px solid #FECACA':'none')+';white-space:nowrap;">'+rh+'</th>';
-  });
-  html += '</tr>';
-  html += '</thead><tbody>';
-  tarList.forEach(function(t,i){
-    var td=tarMap[t], pct=(td.count/D.length*100).toFixed(1);
-    html += '<tr style="background:'+(i%2?'#F9FAFB':'#fff')+'">';
-    html += '<td style="padding:8px 10px;font-weight:700;color:#065F46;font-family:var(--fh);border-right:1px solid #F0FDF4;">'+t+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;font-weight:600;">'+td.count.toLocaleString()+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#6B7280;">'+pct+'%</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#EA580C;font-weight:700;">'+cr(td.out)+'</td>';
-    html += '<td style="padding:6px 8px;text-align:right;color:#BE123C;font-weight:700;border-left:1px solid #FEE2E2;">'+(td.r2||0)+'</td>';
-    html += '<td style="padding:6px 8px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(td.r2o||0)+'</td>';
-    html += '<td style="padding:6px 8px;text-align:right;color:#DC2626;font-weight:700;">'+(td.r5||0)+'</td>';
-    html += '<td style="padding:6px 8px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(td.r5o||0)+'</td>';
-    html += '<td style="padding:6px 8px;text-align:right;color:#E11D48;font-weight:700;">'+(td.r10||0)+'</td>';
-    html += '<td style="padding:6px 8px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(td.r10o||0)+'</td>';
-    html += '<td style="padding:6px 8px;text-align:right;color:#9A3412;font-weight:700;">'+(td.r50||0)+'</td>';
-    html += '<td style="padding:6px 8px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(td.r50o||0)+'</td>';
-    html += '<td style="padding:6px 8px;text-align:right;color:#C2410C;font-weight:800;">'+(td.r1l||0)+'</td>';
-    html += '<td style="padding:6px 8px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=10000000?'₹'+(v/10000000).toFixed(1)+'Cr':v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(td.r1lo||0)+'</td>';
-    html += '</tr>';
-  });
-  html += '</tbody></table></div></div></div>';
-
-  // Bill Basis-wise table
-  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-  html += '<div style="background:#7C3AED;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-basis-body\')">📑 BILL BASIS-WISE REPORT<span id="dash-basis-body-arrow" style="font-size:14px;opacity:0.8;">\u25b6</span></div><div id="dash-basis-body" style="display:none;">';
-  html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-basis-body\',\'Bill_Basis\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-basis-body\',\'Bill Basis Report\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
-  html += '<div style="padding:10px 16px;font-size:11px;color:#6B7280;background:#F5F3FF;border-bottom:1px solid #DDD6FE;">MU = Actual meter reading | ASS = Assessed | PROV = Provisional | CEIL = Ceiling. Applies to billed consumers only.</div>';
-  html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-  html += '<thead><tr style="background:#F5F3FF;">';
-  ['BILL BASIS','CONSUMERS','% SHARE','OUTSTANDING','DEFAULTERS','DEF OUTSTANDING'].forEach(function(h){
-    html += '<th style="padding:8px 10px;text-align:'+(h==='BILL BASIS'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #DDD6FE;white-space:nowrap;">'+h+'</th>';
-  });
-  html += '</tr></thead><tbody>';
-  basisList.forEach(function(b,i){
-    var bd=basisMap[b], pct=billedTotal>0?(bd.count/billedTotal*100).toFixed(1):'0.0';
-    var bi=billBasisInfo(b);
-    html += '<tr style="background:'+(i%2?'#FAFAFA':'#fff')+'">';
-    html += '<td style="padding:8px 10px;"><span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;background:'+bi.bg+';color:'+bi.color+';">'+bi.label+'</span></td>';
-    html += '<td style="padding:8px 10px;text-align:right;font-weight:600;">'+bd.count.toLocaleString()+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#6B7280;">'+pct+'%</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#EA580C;font-weight:700;">'+cr(bd.out)+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#D97706;font-weight:700;">'+(bd.defCount||0).toLocaleString()+'</td>';
-    html += '<td style="padding:8px 10px;text-align:right;color:#F43F5E;font-weight:700;">'+cr(bd.defOut||0)+'</td>';
-    html += '</tr>';
-  });
-  html += '</tbody></table></div></div></div>';
-
-  // Feeder Recovery Score + Revenue Leakage Score table
-  function scoreBadge(sc, goodHigh){
-    var good = goodHigh ? sc>=70 : sc>=70;
-    var mid  = sc>=40 && sc<70;
-    var bg = good?'#D1FAE5':mid?'#FEF3C7':'#FEE2E2';
-    var tc = good?'#059669':mid?'#D97706':'#DC2626';
-    return '<span style="font-size:11px;font-weight:800;padding:3px 9px;border-radius:6px;background:'+bg+';color:'+tc+';">'+sc+'</span>';
-  }
-  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-
-
   // ── ATR PROGRESS (SS-wise, day-wise) ─────────────────────────────────
   var atrDef = {}; try{ atrDef = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
   var atrSm  = {}; try{ atrSm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
@@ -2015,85 +1921,66 @@ function buildDashboard(){
   el.innerHTML = html;
 }
 
-function dashDivUpdate(){
-  var div = gel('dash-div-sel') ? gel('dash-div-sel').value : '';
-  var ssSel = gel('dash-ss-sel');
-  if(!ssSel) return;
-  ssSel.innerHTML = '<option value="">— All —</option>';
-  if(div && window._dashDivSsMap && window._dashDivSsMap[div]){
-    window._dashDivSsMap[div].forEach(function(ss){
-      var opt = document.createElement('option');
-      opt.value = ss; opt.textContent = ss;
-      ssSel.appendChild(opt);
-    });
+function dashGetChecked(optsId){
+  var el=gel(optsId); if(!el) return [];
+  return Array.from(el.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
+}
+function dashUpdateBtn(btnId, optsId, allLabel){
+  var sel=dashGetChecked(optsId);
+  var btn=gel(btnId); if(!btn) return;
+  btn.textContent = sel.length===0?allLabel:(sel.length===1?sel[0]:sel.length+' selected');
+}
+function dashSSChange(){
+  // Update feeder options based on selected SS
+  var selSS = dashGetChecked('dash-ss-opts');
+  dashUpdateBtn('dash-ss-btn','dash-ss-opts','ALL SUBSTATIONS');
+  var feedOptsEl = gel('dash-feed-opts'); if(!feedOptsEl) return;
+  var feedMap = window._dashFeederBySS||{};
+  var feeds = new Set();
+  if(selSS.length){
+    selSS.forEach(function(ss){ (feedMap[ss]||[]).forEach(function(f){ feeds.add(f); }); });
   } else {
-    // Show all SS
-    var allSs = new Set();
-    Object.keys(window._dashDivSsMap||{}).forEach(function(d){
-      (window._dashDivSsMap[d]||[]).forEach(function(ss){ allSs.add(ss); });
-    });
-    Array.from(allSs).sort().forEach(function(ss){
-      var opt = document.createElement('option');
-      opt.value = ss; opt.textContent = ss;
-      ssSel.appendChild(opt);
-    });
+    Object.keys(feedMap).forEach(function(ss){ (feedMap[ss]||[]).forEach(function(f){ feeds.add(f); }); });
   }
-  // Reset feeder when division changes
-  var feedSel = gel('dash-feed-sel');
-  if(feedSel){ feedSel.innerHTML = '<option value="">— All —</option>'; }
+  feedOptsEl.innerHTML='';
+  Array.from(feeds).sort().forEach(function(f){
+    feedOptsEl.innerHTML+='<label class="ms-option"><input type="checkbox" value="'+f+'" onchange="dashFeedChange()"> '+f+'</label>';
+  });
   dashRenderFiltered();
 }
+function dashFeedChange(){ dashUpdateBtn('dash-feed-btn','dash-feed-opts','ALL FEEDERS'); dashRenderFiltered(); }
+function dashClearSS(){ gel('dash-ss-opts').querySelectorAll('input').forEach(function(cb){cb.checked=false;}); dashSSChange(); }
+function dashClearFeed(){ gel('dash-feed-opts').querySelectorAll('input').forEach(function(cb){cb.checked=false;}); dashFeedChange(); }
+function dashClearBasis(){ gel('dash-basis-dd').querySelectorAll('input').forEach(function(cb){cb.checked=false;}); dashUpdateBtn('dash-basis-btn','dash-basis-dd','ALL BASIS'); dashRenderFiltered(); }
+function dashDivUpdate(){ dashSSChange(); }
 
-function dashFeederUpdate(){
-  var ss = gel('dash-ss-sel').value;
-  var feedSel = gel('dash-feed-sel');
-  feedSel.innerHTML = '<option value="">— All Feeders —</option>';
-  if(ss && window._dashFeederBySS && window._dashFeederBySS[ss]){
-    window._dashFeederBySS[ss].forEach(function(fd){
-      var opt = document.createElement('option');
-      opt.value = fd; opt.textContent = fd;
-      feedSel.appendChild(opt);
-    });
-  } else if(!ss){
-    // all feeders across all SS
-    var allFeeders = new Set();
-    Object.keys(window._dashFeederBySS||{}).forEach(function(s){
-      (window._dashFeederBySS[s]||[]).forEach(function(fd){ allFeeders.add(fd); });
-    });
-    Array.from(allFeeders).sort().forEach(function(fd){
-      var opt = document.createElement('option');
-      opt.value = fd; opt.textContent = fd;
-      feedSel.appendChild(opt);
-    });
-  }
-  dashRenderFiltered();
-}
+// dashFeederUpdate replaced by dashSSChange
 
 function dashResetFilter(){
-  if(gel('dash-div-sel'))   gel('dash-div-sel').value='';
-  if(gel('dash-ss-sel'))    gel('dash-ss-sel').value='';
-  if(gel('dash-basis-sel')) gel('dash-basis-sel').value='';
-  dashDivUpdate();
-  if(gel('dash-feed-sel')) gel('dash-feed-sel').value='';
-  dashRenderFiltered();
+  ['dash-ss-opts','dash-feed-opts'].forEach(function(id){
+    var el=gel(id); if(el) el.querySelectorAll('input').forEach(function(cb){cb.checked=false;});
+  });
+  gel('dash-basis-dd')&&gel('dash-basis-dd').querySelectorAll('input').forEach(function(cb){cb.checked=false;});
+  gel('dash-ss-btn')&&(gel('dash-ss-btn').textContent='ALL SUBSTATIONS');
+  gel('dash-feed-btn')&&(gel('dash-feed-btn').textContent='ALL FEEDERS');
+  gel('dash-basis-btn')&&(gel('dash-basis-btn').textContent='ALL BASIS');
+  dashSSChange();
 }
 
 function dashNorm(s){ return String(s||'').trim().toUpperCase(); }
 
 function dashRenderFiltered(){
-  var div = gel('dash-div-sel') ? gel('dash-div-sel').value : '';
-  var ss = gel('dash-ss-sel') ? gel('dash-ss-sel').value : '';
-  var fd = gel('dash-feed-sel') ? gel('dash-feed-sel').value : '';
-  var basis = gel('dash-basis-sel') ? gel('dash-basis-sel').value : '';
+  var selSS    = dashGetChecked('dash-ss-opts');
+  var selFeed  = dashGetChecked('dash-feed-opts');
+  var selBasis = dashGetChecked('dash-basis-dd');
+  var selDiv   = [];  // Division filter removed
   var resultEl = gel('dash-filtered-result');
   if(!resultEl) return;
 
-  if(!div && !ss && !fd && !basis){
-    resultEl.innerHTML = '<div style="padding:14px 16px;font-size:12px;color:#9CA3AF;font-family:var(--fh);border-top:1px solid #E5E7EB;">Select Division, Substation, Feeder, and/or Bill Basis above, then click APPLY.</div>';
+  if(!selSS.length && !selFeed.length && !selBasis.length){
+    resultEl.innerHTML = '<div style="padding:14px 16px;font-size:12px;color:#9CA3AF;font-family:var(--fh);border-top:1px solid #E5E7EB;">Select Substation, Feeder, and/or Bill Basis above, then click APPLY.</div>';
     return;
   }
-
-  var ssN = dashNorm(ss), fdN = dashNorm(fd), basisN = dashNorm(basis);
   // Division filter: get SS set for selected division
   var divSsSet = null;
   if(div && window._dashDivSsMap && window._dashDivSsMap[div]){
