@@ -3448,9 +3448,12 @@ function ia(){
       window._basisLookupGlobal = {};
       D.forEach(function(r){ window._basisLookupGlobal[String(r.ACCT_ID)] = String(r.BILL_BASIS||'').trim().toUpperCase(); });
 
-      // Build global TARIFF lookup {ACCT_ID: 'LMV1'/'HV1'/...} for defaulter filter
+      // Build global TARIFF lookup {ACCT_ID: 'LMV1'/'HV1'/...} from TARIFF_TYPE in billed
       window._tariffLookup = {};
-      D.forEach(function(r){ if(r.CATEGORY) window._tariffLookup[String(r.ACCT_ID)] = r.CATEGORY; });
+      D.forEach(function(r){
+        var t = r.CATEGORY || r.TARIFF_TYPE || '';
+        if(t) window._tariffLookup[String(r.ACCT_ID)] = t;
+      });
 
       setTimeout(autoSyncAtr,1500);
     // Load location.xlsx for GPS fallback
@@ -4182,37 +4185,47 @@ var TARIFF_MAP = {
 // ST → Tariff: remove last digit from ST code → tariff number
 // e.g. ST=10 → tariff=1 (LMV-1), ST=100 → tariff=10 (LMV-10), ST=200 → tariff=20 (HV-2)
 function stToTariff(st){
-  var s = String(st||'').trim();
-  if(!s) return '-';
-  if(isNaN(s)) return s; // already a string label, return as-is
-  // ST code → Tariff: remove last digit → tariff number
-  // ST=10→LMV1, ST=20→LMV2, ST=60→LMV6, ST=90→LMV9, ST=92→LMV9A,
-  // ST=100→LMV10, ST=110→LMV11, ST=200→HV2, ST=210→HV2A, ST=220→HV3, ST=400→EHV1
+  var s = String(st||'').trim().toUpperCase();
+  if(!s || s==='-') return '';
+  // Complete UPPCL SUPPLY_TYPE → TARIFF_TYPE mapping
   var exact = {
-    '10':'LMV1','20':'LMV2','30':'LMV3','40':'LMV4','50':'LMV5',
-    '60':'LMV6','70':'LMV7','80':'LMV8','90':'LMV9','92':'LMV9A',
-    '100':'LMV10','110':'LMV11','120':'LMV12',
-    '200':'HV2','210':'HV2A','220':'HV3','400':'EHV1'
+    '10':'LMV1','11':'LMV1',
+    '20':'LMV2','22':'LMV2',
+    '30':'LMV3',
+    '40':'LMV4','41':'LMV4','41A':'LMV4','42':'LMV4','42A':'LMV4',
+    '50':'LMV5',
+    '60':'LMV6',
+    '70':'LMV7',
+    '80':'LMV8',
+    '90':'LMV9','92':'LMV9','93':'LMV9',
+    '100':'LMV10','101':'LMV10','103':'LMV10','105':'LMV10',
+    '110':'LMV11',
+    '120':'LMV12',
+    'H11':'HV1','H13':'HV1','H14':'HV1','24B':'HV1',
+    'H21A':'HV2','H21':'HV2','H22':'HV2','H23':'HV2',
+    '200':'HV2','210':'HV2A','220':'HV3',
+    '400':'EHV1'
   };
   if(exact[s]) return exact[s];
-  // Fallback: remove last digit
-  var tariffNum = s.slice(0,-1);
-  if(!tariffNum) return s;
-  var labels = {
-    '1':'LMV1','2':'LMV2','3':'LMV3','4':'LMV4','5':'LMV5',
-    '6':'LMV6','7':'LMV7','8':'LMV8','9':'LMV9','10':'LMV10',
-    '11':'LMV11','12':'LMV12','20':'HV2','21':'HV2A','22':'HV3','40':'EHV1'
-  };
-  return labels[tariffNum] || s;
+  // Already a label like LMV1, HV2 etc.
+  if(/^(LMV|HV|EHV)\d/.test(s)) return s;
+  return s;
 }
 function getAllSupplyValues(){
   var vals = new Set();
+  // From D array — CATEGORY = TARIFF_TYPE directly from billed CSV (LMV1, HV1 etc.)
   D.forEach(function(r){ if(r.CATEGORY) vals.add(r.CATEGORY); });
-  DEF_ALL.forEach(function(r){
-    var t=(window._tariffLookup&&window._tariffLookup[String(r.ACCT_ID)])||stToTariff(r.SUPPLY_TYPE)||r.SUPPLY_TYPE;
-    if(t) vals.add(t);
-  });
-  return Array.from(vals).filter(Boolean).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+  // From DEF_ALL — use _tariffLookup (built from D) or stToTariff conversion
+  if(window._tariffLookup){
+    DEF_ALL.forEach(function(r){
+      var t = window._tariffLookup[String(r.ACCT_ID)] || stToTariff(r.SUPPLY_TYPE);
+      if(t && t!=='-') vals.add(t);
+    });
+  }
+  // Filter only valid LMV/HV/EHV labels
+  return Array.from(vals).filter(function(v){
+    return v && /^(LMV|HV|EHV)\d/.test(v);
+  }).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
 }
 
 function refreshFeedOptions(){
@@ -4509,8 +4522,8 @@ function runDefaulterFilter(){
     if(sub.length    && sub.indexOf(r.SUBSTATION)<0)    return false;
     if(feed.length   && feed.indexOf(r.FEEDER)<0)        return false;
     if(supply.length){
-      var rTariff = (window._tariffLookup&&window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || r.SUPPLY_TYPE || '';
-      if(supply.indexOf(rTariff)<0) return false;
+      var rTariff = (window._tariffLookup&&window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
+      if(!rTariff || supply.indexOf(rTariff)<0) return false;
     }
     // Load filter — multi-select ranges
     if(selLoads.length){
@@ -4555,13 +4568,20 @@ function runDefaulterFilter(){
       return as-bs || b.OUTSTANDING-a.OUTSTANDING;
     }
     if(sortDir==='nonsm_first'){
-      var an=String(a.METER_NO||'').toUpperCase().startsWith('GE')?1:0;
-      var bn=String(b.METER_NO||'').toUpperCase().startsWith('GE')?1:0;
-      return an-bn || b.OUTSTANDING-a.OUTSTANDING;
+      // SM = MR_SOURCE_CD='SM', Non-SM first
+      var aIsSM = String(a.MR_SOURCE_CD||a.METER_NO||'').toUpperCase()==='SM' ||
+                  String(a.METER_NO||'').toUpperCase().startsWith('GE') ? 1 : 0;
+      var bIsSM = String(b.MR_SOURCE_CD||b.METER_NO||'').toUpperCase()==='SM' ||
+                  String(b.METER_NO||'').toUpperCase().startsWith('GE') ? 1 : 0;
+      return aIsSM-bIsSM || b.OUTSTANDING-a.OUTSTANDING;
     }
     if(sortDir==='tariff_asc') return String(a.SUPPLY_TYPE||'').localeCompare(String(b.SUPPLY_TYPE||''));
     if(sortDir==='ai_high') return collectionProbability(b)-collectionProbability(a);
     if(sortDir==='ai_low')  return collectionProbability(a)-collectionProbability(b);
+    if(sortDir==='bill_basis'){
+      var ba=String(a.BILL_BASIS||''), bb2=String(b.BILL_BASIS||'');
+      return ba.localeCompare(bb2) || b.OUTSTANDING-a.OUTSTANDING;
+    }
     if(sortDir==='proximity'){
       var aLat=parseFloat(a.LAT)||0, aLon=parseFloat(a.LON)||0;
       var bLat=parseFloat(b.LAT)||0, bLon=parseFloat(b.LON)||0;
