@@ -98,11 +98,15 @@
       "unbilled_date": "03072026"
     }
   },
-  "updated": "2026-07-03T05:24:00.124399Z",
+  "updated": "2026-07-03T05:55:28.512912Z",
   "defaulters_eudd1": [
-    "defaulters/def_eudd1a.csv"
+    "defaulters/def_eudd1a.csv",
+    "defaulters/def_eudd1b.csv",
+    "defaulters/def_eudd1c.csv"
   ],
   "defaulters_eudd2": [
-    "defaulters/def_eudd2a.csv"
+    "defaulters/def_eudd2a.csv",
+    "defaulters/def_eudd2b.csv",
+    "defaulters/def_eudd2c.csv"
   ]
 }
