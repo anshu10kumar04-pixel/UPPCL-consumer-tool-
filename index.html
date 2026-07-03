@@ -3131,9 +3131,14 @@ function startDownloads(){
         sl('BUILDING INDEX…',93);
         console.log('[DEBUG] MASTER_MAP size:', Object.keys(MASTER_MAP).length);
         console.log('[DEBUG] D array size:', D.length);
-        // Check a sample unbilled consumer
-        var sampleKey = Object.keys(PAY_DATA).find(function(k){ return PAY_DATA[k] && PAY_DATA[k].SOURCE==='unbilled'; });
-        if(sampleKey) console.log('[DEBUG] Sample unbilled outstanding:', sampleKey, PAY_DATA[sampleKey].TOTAL_OUTSTANDING, 'master entry:', MASTER_MAP[sampleKey]);
+        // Check specific consumers
+        var testAccts = ['5043772000','6731529483','1549043000'];
+        testAccts.forEach(function(a){
+          var m = MASTER_MAP[a];
+          var d = D.find(function(r){return r.ACCT_ID===a;});
+          console.log('[DEBUG]',a,'master:',m?JSON.stringify(m):'MISSING','D_row AMOUNT_PAYABLE:',d?d.AMOUNT_PAYABLE:'NOT IN D');
+        });
+        console.log('[DEBUG] MASTER_CUTOFF:', MASTER_CUTOFF);
         setTimeout(function(){ ia(); hl2(); },20);
         return;
       }
@@ -3269,14 +3274,18 @@ function parseFileInto(text, type){
       var master = MASTER_MAP[key];
       if(master){
         var mOut = pf(master.TOTAL_OUTSTANDING);
-        // If consumer paid after master snapshot date, subtract that payment
+        // If consumer paid AFTER master snapshot date, subtract that payment from outstanding
         var curLpDate = parseDate(rawDate);
-        if(curLpDate && MASTER_CUTOFF && curLpDate > MASTER_CUTOFF && pf(rawAmt)>0){
-          mOut -= pf(rawAmt);
+        var masterLpDate = parseDate(master.LP_DATE);
+        // Use unbilled LP if it's more recent than master LP
+        if(curLpDate && masterLpDate && curLpDate > masterLpDate && pf(rawAmt) > 0){
+          mOut = Math.max(0, mOut - pf(rawAmt));
+        } else if(curLpDate && MASTER_CUTOFF && curLpDate > MASTER_CUTOFF && pf(rawAmt) > 0){
+          mOut = Math.max(0, mOut - pf(rawAmt));
         }
-        outValue = Math.max(0, mOut).toString();
+        outValue = mOut.toString();
       } else {
-        // No master record - use 0 (cannot determine outstanding)
+        // No master record - use 0 (cannot determine outstanding without master data)
         outValue = '0';
       }
       // CRITICAL: update row.AMOUNT_PAYABLE with calculated outstanding
