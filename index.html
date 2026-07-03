@@ -1837,9 +1837,8 @@ function buildDashboard(){
   html += '<button class="ms-btn" id="dash-ss-btn" onclick="toggleMs(\'dash-ss-dd\')">ALL SUBSTATIONS</button>';
   html += '<div class="ms-dropdown" id="dash-ss-dd">';
   html += '<div class="ms-search"><input type="text" placeholder="Search…" oninput="filterMsOptions(\'dash-ss-dd\',this.value)"/></div>';
-  html += '<div id="dash-ss-opts">';
-  dashAllSS.forEach(function(ss){ html += '<label class="ms-option"><input type="checkbox" value="'+ss+'" onchange="dashSSChange()"> '+ss+'</label>'; });
-  html += '</div><div class="ms-clear" onclick="dashClearSS()">Clear All</div>';
+  html += '<div id="dash-ss-opts"></div>';
+  html += '<div class="ms-clear" onclick="dashClearSS()">Clear All</div>';
   html += '</div></div></div>';
 
   // FEEDER ms-wrap
@@ -2134,6 +2133,20 @@ function buildDashboard(){
 
   html += '</div>'; // end container
   el.innerHTML = html;
+
+  // Populate SS dropdown after render
+  var ssOptsEl = gel('dash-ss-opts');
+  if(ssOptsEl && dashAllSS && dashAllSS.length){
+    ssOptsEl.innerHTML = '';
+    dashAllSS.forEach(function(ss){
+      var lbl = document.createElement('label');
+      lbl.className = 'ms-option';
+      lbl.innerHTML = '<input type="checkbox" value="'+ss+'" onchange="dashSSChange()"> '+ss;
+      ssOptsEl.appendChild(lbl);
+    });
+    // Populate feeder dropdown with all feeders initially
+    dashSSChange();
+  }
 }
 
 function dashGetChecked(optsId){
