@@ -3129,6 +3129,11 @@ function startDownloads(){
       if(idx>=FILES.length){
         allTexts=null;
         sl('BUILDING INDEX…',93);
+        console.log('[DEBUG] MASTER_MAP size:', Object.keys(MASTER_MAP).length);
+        console.log('[DEBUG] D array size:', D.length);
+        // Check a sample unbilled consumer
+        var sampleKey = Object.keys(PAY_DATA).find(function(k){ return PAY_DATA[k] && PAY_DATA[k].SOURCE==='unbilled'; });
+        if(sampleKey) console.log('[DEBUG] Sample unbilled outstanding:', sampleKey, PAY_DATA[sampleKey].TOTAL_OUTSTANDING, 'master entry:', MASTER_MAP[sampleKey]);
         setTimeout(function(){ ia(); hl2(); },20);
         return;
       }
