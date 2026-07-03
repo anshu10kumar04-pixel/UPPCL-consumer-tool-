@@ -3283,6 +3283,7 @@ function parseFileInto(text, type){
   var iSub  = findCol(hdrs, ['SUBSTATION', 'SUB_STATION']);
   var iFeed = findCol(hdrs, ['FEEDER']);
   var iSerl = findCol(hdrs, ['SERIAL_NBR', 'METER_SERIAL_NBR', 'MTR_SRL_NO', 'METER_NO']);
+  var iMrSrc = findCol(hdrs, ['MR_SOURCE_CD', 'MR_SRC_CD']);
   var iCA=hdrs.indexOf('CA'), iBUnits=hdrs.indexOf('BILLED_UNITS'),
       iBillDate=hdrs.indexOf('BILL_DATE'), iDueDate=hdrs.indexOf('DUE_DATE'),
       iBillBasis=hdrs.indexOf('BILL_BASIS');
@@ -3352,6 +3353,7 @@ function parseFileInto(text, type){
       SUBSTATION:(v[iSub]||''),
       FEEDER:(v[iFeed]||''),
       SERIAL_NBR:iSerl>=0?(v[iSerl]||''):'',
+      MR_SOURCE_CD: iMrSrc>=0?(v[iMrSrc]||''):'',
       SOURCE:type,
       CA:                 iCA>=0       ?(v[iCA]||'')         :'',
       BILLED_UNITS:       iBUnits>=0   ?(v[iBUnits]||'')     :'',
@@ -3469,6 +3471,12 @@ function ia(){
         var t = r.CATEGORY || r.TARIFF_TYPE || '';
         // CATEGORY in D array = TARIFF_TYPE from CSV (LMV1, HV1 etc.) for both billed and unbilled
         if(t && /^(LMV|HV|EHV)/i.test(t)) window._tariffLookup[String(r.ACCT_ID)] = t;
+      });
+
+      // Build SM lookup from D array MR_SOURCE_CD
+      window._smLookup = {};
+      D.forEach(function(r){
+        if(r.MR_SOURCE_CD) window._smLookup[String(r.ACCT_ID)] = String(r.MR_SOURCE_CD).trim().toUpperCase();
       });
 
       setTimeout(autoSyncAtr,1500);
@@ -4550,17 +4558,22 @@ function runDefaulterFilter(){
       });
       if(!matched) return false;
     }
-    // SM filter — multi-select
+    // SM filter — use MR_SOURCE_CD from DEF record or _smLookup from master
     if(selSm.length){
-      var isSm=String(r.METER_NO||'').toUpperCase().startsWith('GE');
+      var mrSrc = String(r.MR_SOURCE_CD||'').trim().toUpperCase();
+      // Fallback to _smLookup built from master file
+      if(!mrSrc && window._smLookup) mrSrc = String(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
+      var isSm = mrSrc === 'SM';
       var wantSm=selSm.indexOf('sm')>=0, wantNon=selSm.indexOf('nonsm')>=0;
       if(wantSm && !wantNon && !isSm) return false;
       if(wantNon && !wantSm && isSm) return false;
     }
-    // Bill Basis filter — multi-select (uses D array fallback if DEF_ALL lacks BILL_BASIS)
+    // Bill Basis filter
     if(selBasis.length){
-      var rb = String(r.BILL_BASIS||'').trim().toUpperCase() || _basisLookup[String(r.ACCT_ID)] || '';
-      if(selBasis.indexOf(rb)<0) return false;
+      var rb = String(r.BILL_BASIS||'').trim().toUpperCase();
+      // Fallback to D array lookup
+      if(!rb && window._basisLookupGlobal) rb = window._basisLookupGlobal[String(r.ACCT_ID)] || '';
+      if(!rb || selBasis.indexOf(rb)<0) return false;
     }
     if(q){
       var meter = METER_DATA[String(r.ACCT_ID)] || r.METER_NO || '';
