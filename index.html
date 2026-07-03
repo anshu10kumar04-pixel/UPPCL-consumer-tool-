@@ -1102,8 +1102,22 @@ function buildProgressReport(){
     return;
   }
 
+  // FTP file date = today, but data inside = previous day
+  // Use billed_date from manifest minus 1 day as "data date"
   var today = new Date();
-  var dateStr = today.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  var dataDate = today;
+  try{
+    var ss = window._manifest_cache && window._manifest_cache.sync_status;
+    var bd = (ss&&(ss['233511']||ss['233512']))?(ss['233511']||ss['233512']).billed_date:'';
+    if(bd && bd.length===8){
+      // DDMMYYYY format
+      var dd=parseInt(bd.slice(0,2)),mm=parseInt(bd.slice(2,4))-1,yy=parseInt(bd.slice(4,8));
+      var fileDate = new Date(yy,mm,dd);
+      // Data inside file = fileDate - 1 day
+      dataDate = new Date(fileDate.getTime() - 86400000);
+    }
+  }catch(e){}
+  var dateStr = dataDate.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 
   // ── Build SS → Feeder aggregation ───────────────────────────────────────
   // ssMap[ss] = { feeders:{fd:{...}}, totals:{...} }
@@ -1130,8 +1144,8 @@ function buildProgressReport(){
 
     // Check if paid in current month
     var pdObj = parseDate(lpDate);
-    var paidCurMonth = pdObj && pdObj.getFullYear()===today.getFullYear() && pdObj.getMonth()===today.getMonth();
-    var isToday = pdObj && pdObj.getDate()===today.getDate() && pdObj.getMonth()===today.getMonth() && pdObj.getFullYear()===today.getFullYear();
+    var paidCurMonth = pdObj && pdObj.getFullYear()===dataDate.getFullYear() && pdObj.getMonth()===dataDate.getMonth();
+    var isToday = pdObj && pdObj.getDate()===dataDate.getDate() && pdObj.getMonth()===dataDate.getMonth() && pdObj.getFullYear()===dataDate.getFullYear();
 
     // BILLABLE = billed + unbilled
     f.billable++; t.billable++;
@@ -1181,7 +1195,7 @@ function buildProgressReport(){
   h += '<div style="font-family:var(--fh);font-weight:700;font-size:13px;">📈 SUB STATION WISE BILLING & COLLECTION SUMMARY <span style="color:#93C5FD;font-size:11px;">(Amt in Lacs)</span></div>';
   h += '<div style="display:flex;gap:8px;align-items:center;">';
   h += '<span style="font-size:11px;opacity:0.8;">upto</span>';
-  h += '<span style="background:#3B82F6;padding:3px 10px;border-radius:5px;font-size:12px;font-weight:700;">'+dateStr+'</span>';
+  h += '<span style="background:#3B82F6;padding:3px 10px;border-radius:5px;font-size:12px;font-weight:700;">'+dateStr+'</span><span style="font-size:10px;opacity:0.7;margin-left:4px;">(prev day data)</span>';
   h += '<button onclick="buildProgressReport()" style="background:#374151;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">🔄</button>';
   h += '<button onclick="progressExportXLSX()" style="background:#059669;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">⬇ XLSX</button>';
   h += '<button onclick="progressExportPDF()" style="background:#DC2626;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">🖨 PDF</button>';
