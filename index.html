@@ -1112,34 +1112,37 @@ function buildProgressReport(){
   D.forEach(function(r){
     var ss = r.SUBSTATION||'Unknown';
     var fd = r.FEEDER||'Unknown';
-    if(!ssMap[ss]) ssMap[ss]={feeders:{}, tots:{billable:0,billed:0,unbilled:0,muCnt:0,gap:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0}};
-    if(!ssMap[ss].feeders[fd]) ssMap[ss].feeders[fd]={billable:0,billed:0,unbilled:0,muCnt:0,gap:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
+    if(!ssMap[ss]) ssMap[ss]={feeders:{}, tots:{billable:0,billed:0,unbilled:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0}};
+    if(!ssMap[ss].feeders[fd]) ssMap[ss].feeders[fd]={billable:0,billed:0,unbilled:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
     var f = ssMap[ss].feeders[fd];
     var t = ssMap[ss].tots;
     var out = Math.max(0, parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
     var ca  = Math.max(0, parseFloat(r.CA||0)||0);
-    var lp  = Math.max(0, parseFloat(r.LAST_PAYMENT_AMOUNT||0)||0);
+    var lp  = Math.max(0, parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);
     var lpDate = r.LAST_PAY_DATE||r.PAY_DATE||'';
     var basis  = String(r.BILL_BASIS||'').trim().toUpperCase();
     var isBilled   = r.SOURCE==='billed';
-    var isUnbilled = r.SOURCE==='unbilled';
-    var isMU       = basis==='MU';
-    var isToday    = (function(){
+    var isUnbilled = r.SOURCE==='unbilled' || r.SOURCE==='master';
+    var isMU   = basis==='MU';
+    var isProv = basis==='PROV';
+    var isToday = (function(){
       var pd = parseDate(lpDate);
       if(!pd) return false;
       return pd.getDate()===today.getDate() && pd.getMonth()===today.getMonth() && pd.getFullYear()===today.getFullYear();
     })();
 
-    // Billable = billed + unbilled
+    // BILLABLE = billed + unbilled (all active consumers)
     f.billable++; t.billable++;
-    if(isBilled){   f.billed++;   t.billed++;   }
+    if(isBilled)  { f.billed++;   t.billed++;   }
     if(isUnbilled){ f.unbilled++; t.unbilled++; }
-    if(isBilled && isMU){ f.muCnt++; t.muCnt++; }
-    // GAP = billable - (billed + unbilled) except prov → in our data = unbilled count
-    f.currAsst += ca; t.currAsst += ca;
-    // Upto Revenue = sum of CA (current arrear = total outstanding)
+    // MU = billed with MU basis; PROV = provisional
+    if(isBilled && isMU)  { f.muCnt++;   t.muCnt++;   }
+    if(isBilled && isProv){ f.provCnt++; t.provCnt++; }
+    // CURR. ASST. = CA of billed consumers
+    if(isBilled){ f.currAsst += ca; t.currAsst += ca; }
+    // Upto REVENUE = total outstanding
     f.uptoRev += out; t.uptoRev += out;
-    // Today Revenue & Paid — based on last payment date = today
+    // TODAY Revenue & Paid
     if(isToday){
       f.todayRev  += lp; t.todayRev  += lp;
       f.todayPaid++;     t.todayPaid++;
@@ -1157,7 +1160,14 @@ function buildProgressReport(){
   // ─── Build HTML ─────────────────────────────────────────────────────────
   // Top 16 SS by billable consumers
   var ssList = Object.keys(ssMap).sort(function(a,b){return ssMap[b].tots.billable-ssMap[a].tots.billable;}).slice(0,16);
-  var grand = {billable:0,billed:0,unbilled:0,muCnt:0,currAsst:0,uptoRev:0,todayRev:0,todayPaid:0,uptoPaid:0};
+  var grand = {billable:0,billed:0,unbilled:0,muCnt:0,provCnt:0,currAsst:0,uptoRev:0,todayRev:0,todayPaid:0,uptoPaid:0};
+  ssList.forEach(function(ss){
+    var t=ssMap[ss].tots;
+    grand.billable+=t.billable; grand.billed+=t.billed; grand.unbilled+=t.unbilled;
+    grand.muCnt+=t.muCnt; grand.provCnt+=t.provCnt;
+    grand.currAsst+=t.currAsst; grand.uptoRev+=t.uptoRev;
+    grand.todayRev+=t.todayRev; grand.todayPaid+=t.todayPaid; grand.uptoPaid+=t.uptoPaid;
+  });
 
   var h = '';
   h += '<div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;">';
@@ -1190,7 +1200,6 @@ function buildProgressReport(){
     var pctMU       = pct(t.muCnt,    t.billed);
     var pctColl     = pct(t.todayRev, t.currAsst);
     var turnUp      = pct(t.todayPaid,t.billable);
-    var gap         = t.billable - t.billed - t.unbilled;
     var rowBg       = si%2===0?'#F9FAFB':'#fff';
 
     // SS row
@@ -1199,17 +1208,19 @@ function buildProgressReport(){
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;font-weight:700;color:#1E3A5F;">';
     h += '<span style="cursor:pointer;color:#1D4ED8;font-weight:700;margin-right:4px;" onclick="toggleFeeder('+si+')" id="ss-btn-'+si+'">➕</span>'+ss;
     h += '</td>';
+    var gap = t.billable - t.billed;  // GAP = billable - billed (unbilled consumers)
+    var pctBilledExProv = pct(t.billed - t.provCnt, t.billable);
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.billable.toLocaleString()+'</td>';
-    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.billed.toLocaleString()+'</td>';
-    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.billed.toLocaleString()+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.billed.toLocaleString()+'</td>';  // METER BILLABLE = billed count
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.billed.toLocaleString()+'</td>';  // BILLED
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+pctBilled+'</td>';
-    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+pct(t.billed-t.unbilled,t.billable)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+pctBilledExProv+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.muCnt.toLocaleString()+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+pctMU+'</td>';
-    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+(gap>0?gap:'0')+'</td>';
-    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+cr2(t.currAsst)+'</td>';
-    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#DC2626;font-weight:700;">'+cr2(t.todayRev)+'</td>';
-    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+cr2(t.uptoRev)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+(gap>0?gap:0)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+cr2(t.currAsst/100000)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#DC2626;font-weight:700;">'+cr2(t.todayRev/100000)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+cr2(t.uptoRev/100000)+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#DC2626;font-weight:700;">'+t.todayPaid+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.uptoPaid.toLocaleString()+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+pctColl+'</td>';
@@ -1220,7 +1231,8 @@ function buildProgressReport(){
     var feeders = Object.keys(ssMap[ss].feeders).sort();
     feeders.forEach(function(fd, fi){
       var f = ssMap[ss].feeders[fd];
-      var fgap = f.billable - f.billed - f.unbilled;
+      var fgap = f.billable - f.billed;
+      var fpctBilledExProv = pct(f.billed-f.provCnt,f.billable);
       h += '<tr style="display:none;background:#EFF6FF;" class="feeder-row-'+si+'">';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:center;font-size:10px;color:#6B7280;"></td>';
       h += '<td style="padding:4px 6px 4px 22px;border:1px solid #BFDBFE;font-size:10px;color:#1D4ED8;">↳ '+fd+'</td>';
@@ -1228,10 +1240,10 @@ function buildProgressReport(){
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.billed+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.billed+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+pct(f.billed,f.billable)+'</td>';
-      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+pct(f.billed-f.unbilled,f.billable)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+fpctBilledExProv+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.muCnt+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+pct(f.muCnt,f.billed)+'</td>';
-      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+(fgap>0?fgap:'0')+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+(fgap>0?fgap:0)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+cr2(f.currAsst)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;color:#DC2626;">'+cr2(f.todayRev)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+cr2(f.uptoRev)+'</td>';
@@ -1241,27 +1253,25 @@ function buildProgressReport(){
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+pct(f.todayPaid,f.billable)+'</td>';
       h += '</tr>';
 
-      // Accumulate grand totals
-      grand.billable+=f.billable; grand.billed+=f.billed; grand.muCnt+=f.muCnt;
-      grand.currAsst+=f.currAsst; grand.uptoRev+=f.uptoRev;
-      grand.todayRev+=f.todayRev; grand.todayPaid+=f.todayPaid; grand.uptoPaid+=f.uptoPaid;
+
     });
   });
 
   // Grand Total row
   h += '<tr style="background:#1E3A5F;color:#fff;font-weight:700;">';
   h += '<td colspan="2" style="padding:6px 10px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL</td>';
+  var ggap = grand.billable - grand.billed;
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.billable.toLocaleString()+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.billed.toLocaleString()+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.billed.toLocaleString()+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+pct(grand.billed,grand.billable)+'</td>';
-  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">—</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+pct(grand.billed-grand.provCnt,grand.billable)+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.muCnt.toLocaleString()+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+pct(grand.muCnt,grand.billed)+'</td>';
-  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">—</td>';
-  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+cr2(grand.currAsst)+'</td>';
-  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+cr2(grand.todayRev)+'</td>';
-  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+cr2(grand.uptoRev)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+(ggap>0?ggap:0)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+cr2(grand.currAsst/100000)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+cr2(grand.todayRev/100000)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+cr2(grand.uptoRev/100000)+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+grand.todayPaid+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.uptoPaid.toLocaleString()+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+pct(grand.todayRev,grand.currAsst)+'</td>';
