@@ -1463,8 +1463,10 @@ function buildYoYReport(){
       py[ss].tariff[tariff].rev+=lpAmt; py[ss].tariff[tariff].cnt++;
     });
 
-    // All SS (union of both years)
-    var allSS = [...new Set([...Object.keys(cy),...Object.keys(py)])].sort();
+    // Top 16 SS by current year revenue (matching progress report)
+    var allSS = [...new Set([...Object.keys(cy),...Object.keys(py)])]
+      .sort(function(a,b){ return (cy[b]?cy[b].total_rev:0)-(cy[a]?cy[a].total_rev:0); })
+      .slice(0,16);
 
     function fL(n){ if(!n) return '0'; n=Math.abs(n); return n>=10000000?(n/10000000).toFixed(2)+' Cr':n>=100000?(n/100000).toFixed(2)+' L':'₹'+Math.round(n).toLocaleString(); }
     function dEl(cy,py){ var d=cy-py; var pct=py>0?((d/py)*100).toFixed(1):'—'; var c=d>=0?'#059669':'#DC2626'; return '<span style="color:'+c+';font-size:10px;font-weight:700;">'+(d>=0?'▲':'▼')+fL(d)+'<br>('+pct+'%)</span>'; }
