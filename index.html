@@ -3448,11 +3448,13 @@ function ia(){
       window._basisLookupGlobal = {};
       D.forEach(function(r){ window._basisLookupGlobal[String(r.ACCT_ID)] = String(r.BILL_BASIS||'').trim().toUpperCase(); });
 
-      // Build global TARIFF lookup {ACCT_ID: 'LMV1'/'HV1'/...} from TARIFF_TYPE in billed
+      // Build global TARIFF lookup {ACCT_ID: 'LMV1'/'HV1'/...}
+      // Billed: CATEGORY = TARIFF_TYPE | Unbilled: CATEGORY = TARIFF_TYPE directly
       window._tariffLookup = {};
       D.forEach(function(r){
         var t = r.CATEGORY || r.TARIFF_TYPE || '';
-        if(t) window._tariffLookup[String(r.ACCT_ID)] = t;
+        // CATEGORY in D array = TARIFF_TYPE from CSV (LMV1, HV1 etc.) for both billed and unbilled
+        if(t && /^(LMV|HV|EHV)/i.test(t)) window._tariffLookup[String(r.ACCT_ID)] = t;
       });
 
       setTimeout(autoSyncAtr,1500);
