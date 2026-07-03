@@ -1426,18 +1426,39 @@ function buildYoYReport(){
     var cy = {}; // current year {ss: {sm_rev,sm_cnt,nsm_rev,nsm_cnt,total_rev,total_cnt, by_tariff:{t:{...}}}}
     var py = {}; // prev year same structure
 
-    // Current year - consumers who paid in current month (July 2026)
+    // Get data date from manifest (FTP file date - 1 day = actual data date)
+    var dataDate = today;
+    try{
+      var mss = window._manifest_cache && window._manifest_cache.sync_status;
+      var bd = (mss&&(mss['233511']||mss['233512']))?(mss['233511']||mss['233512']).billed_date:'';
+      if(bd && bd.length===8){
+        var dd2=parseInt(bd.slice(0,2)),mm2=parseInt(bd.slice(2,4))-1,yy2=parseInt(bd.slice(4,8));
+        dataDate = new Date(new Date(yy2,mm2,dd2).getTime()-86400000);
+      }
+    }catch(e){}
+
+    var dataDateDay = dataDate.getDate();
+    var dataDateMonth = dataDate.getMonth();  // 6 = July
+    var dataDateYear = dataDate.getFullYear();
+
+    // CY (Jul 2026): consumers paid upto dataDate in current month
+    // Use CATEGORY from billed/unbilled (LMV1, LMV2 etc.) - not stToTariff conversion
     D.forEach(function(r){
       var ss = r.SUBSTATION||''; if(!ss) return;
       var lpDate = parseDate(r.LAST_PAY_DATE||r.PAY_DATE||'');
       var lpAmt  = parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0;
-      if(!lpDate || lpDate.getMonth()!==today.getMonth() || lpDate.getFullYear()!==today.getFullYear()) return;
+      if(!lpDate) return;
+      // Only include payments upto dataDate in July 2026
+      if(lpDate.getFullYear()!==dataDateYear || lpDate.getMonth()!==dataDateMonth) return;
+      if(lpDate.getDate() > dataDateDay) return;
       if(lpAmt<=0) return;
 
       var mrSrc = String(r.MR_SOURCE_CD||'').toUpperCase();
-      if(!mrSrc && window._smLookup) mrSrc = window._smLookup[String(r.ACCT_ID)]||'';
+      if(!mrSrc && window._smLookup) mrSrc = (window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
       var isSM = mrSrc==='SM';
-      var tariff = r.CATEGORY||stToTariff(r.SUPPLY_TYPE)||r.SUPPLY_TYPE||'OTHER';
+      // Use CATEGORY directly (LMV1,LMV2 etc from billed/unbilled CSV TARIFF_TYPE column)
+      var tariff = String(r.CATEGORY||r.TARIFF_TYPE||'').trim();
+      if(!tariff || !/^(LMV|HV|EHV)/i.test(tariff)) tariff = stToTariff(r.SUPPLY_TYPE)||'OTHER';
 
       if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
       cy[ss].total_rev+=lpAmt; cy[ss].total_cnt++;
@@ -1447,13 +1468,18 @@ function buildYoYReport(){
       cy[ss].tariff[tariff].rev+=lpAmt; cy[ss].tariff[tariff].cnt++;
     });
 
-    // Previous year - July 2025
-    Object.values(PY_DATA).forEach(function(r){
+    // PY (Jul 2025): FULL MONTH revenue (all July 2025 payments)
+    // SM classification: use current year _smLookup by ACCT_ID where possible
+    Object.entries(PY_DATA).forEach(function(entry){
+      var acct=entry[0], r=entry[1];
       var ss = r.ss||''; if(!ss) return;
       var lpAmt = r.pay||0; if(lpAmt<=0) return;
-      var isSM = String(r.mr||'').toUpperCase()==='SM';
-      // Use current year SM classification if available (use ACCT_ID not available here - use mr field)
+      // SM: prefer current year lookup, fallback to prev year MR_SOURCE_CD
+      var curMR = window._smLookup ? (window._smLookup[acct]||'') : '';
+      var isSM = curMR==='SM' || (!curMR && String(r.mr||'').toUpperCase()==='SM');
+      // Tariff: use stToTariff on SUPPLY_TYPE (numeric) → LMV1, LMV2 etc
       var tariff = stToTariff(r.st)||r.st||'OTHER';
+      if(!/^(LMV|HV|EHV)/i.test(tariff)) tariff = 'OTHER';
 
       if(!py[ss]) py[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
       py[ss].total_rev+=lpAmt; py[ss].total_cnt++;
@@ -1478,8 +1504,9 @@ function buildYoYReport(){
     h += '<tr style="background:#1E3A5F;color:#fff;">';
     h += '<th rowspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;min-width:40px;"></th>';
     h += '<th rowspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:left;min-width:160px;">SUBSTATION</th>';
-    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1D4ED8;">JUL 2025</th>';
-    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#059669;">JUL 2026</th>';
+    var ddStr = dataDate.getDate()+'-'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dataDate.getMonth()]+'-'+dataDate.getFullYear();
+    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1D4ED8;">JUL 2025 (Full Month)</th>';
+    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#059669;">JUL 2026 (Upto '+ddStr+')</th>';
     h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#7C3AED;">GROWTH</th>';
     h += '</tr>';
     // Header row 2
