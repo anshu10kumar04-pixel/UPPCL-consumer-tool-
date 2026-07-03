@@ -1171,9 +1171,12 @@ function buildProgressReport(){
   });
 
   function cr2(n){
-    if(!n || n===0) return '0';
-    if(n>=100000) return (n/100000).toFixed(2)+' L';
-    return Math.round(n).toLocaleString();
+    n = n || 0;
+    if(n===0) return '0';
+    var abs = Math.abs(n);
+    if(abs>=10000000) return (n/10000000).toFixed(2)+' Cr';
+    if(abs>=100000)   return (n/100000).toFixed(2)+' L';
+    return '\u20b9'+Math.round(n).toLocaleString();
   }
   function pct(a,b){ return b>0?(a/b*100).toFixed(1)+'%':'—'; }
 
@@ -1240,9 +1243,9 @@ function buildProgressReport(){
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.muCnt.toLocaleString()+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+pctMU+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+(gap>0?gap:0)+'</td>';
-    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+cr2(t.currAsst/100000)+'</td>';
-    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#DC2626;font-weight:700;">'+cr2(t.todayRev/100000)+'</td>';
-    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+cr2(t.uptoRev/100000)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+cr2(t.currAsst)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#DC2626;font-weight:700;">'+cr2(t.todayRev)+'</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+cr2(t.uptoRev)+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#DC2626;font-weight:700;">'+t.todayPaid+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+t.uptoPaid.toLocaleString()+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+pctCollEff+'</td>';
@@ -1291,9 +1294,9 @@ function buildProgressReport(){
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.muCnt.toLocaleString()+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+pct(grand.muCnt,grand.billed)+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+(ggap>0?ggap:0)+'</td>';
-  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+cr2(grand.currAsst/100000)+'</td>';
-  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+cr2(grand.todayRev/100000)+'</td>';
-  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+cr2(grand.uptoRev/100000)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+cr2(grand.currAsst)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+cr2(grand.todayRev)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+cr2(grand.uptoRev)+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+grand.todayPaid+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.uptoPaid.toLocaleString()+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+pct(grand.uptoRev,grand.currAsst)+'</td>';
@@ -3291,6 +3294,10 @@ function parseFileInto(text, type){
   var iPayAmt  = findCol(hdrs, ['PAY_AMT', 'LP AMT', 'LAST_PAY_AMT', 'LAST_PAYMENT_AMOUNT']);
   var iPayDate = findCol(hdrs, ['PAY_DATE', 'LP DATE', 'LAST_PAY_DATE']);
   var iTotOut  = findCol(hdrs, ['TOTAL_OUTSTANDING', 'TOTAL OUTSTANDING', 'AMOUNT_PAYABLE', 'OUTSTANDING']);
+  // Master-specific columns (same fields, but named differently)
+  var _iTotOutM = findCol(hdrs, ['TOTAL_OUTSTANDING','TOTAL OUTSTANDING']);
+  var _iPayAmtM = findCol(hdrs, ['PAY_AMT','LP AMT','LAST_PAY_AMT']);
+  var _iPayDateM= findCol(hdrs, ['PAY_DATE','LP DATE','LAST_PAY_DATE']);
 
   var pos=nl+1,len=text.length;
   while(pos<len){
@@ -3318,13 +3325,10 @@ function parseFileInto(text, type){
     var rawAmt = '', rawDate = '', outValue = '';
 
     if(type==='master'){
-      // Use proper column names (was using broken positional trick v[v.length-1])
-      var iTotOutM = findCol(hdrs, ['TOTAL_OUTSTANDING','TOTAL OUTSTANDING']);
-      var iPayAmtM = findCol(hdrs, ['PAY_AMT','LP AMT','LAST_PAY_AMT']);
-      var iPayDateM= findCol(hdrs, ['PAY_DATE','LP DATE','LAST_PAY_DATE']);
-      outValue = iTotOutM>=0 ? (v[iTotOutM]||'0') : '0';
-      rawAmt   = iPayAmtM>=0 ? (v[iPayAmtM]||'0') : '0';
-      rawDate  = iPayDateM>=0? (v[iPayDateM]||'-') : '-';
+      // Column indices computed once outside loop — use pre-calculated values
+      outValue = _iTotOutM>=0 ? (v[_iTotOutM]||'0') : '0';
+      rawAmt   = _iPayAmtM>=0 ? (v[_iPayAmtM]||'0') : '0';
+      rawDate  = _iPayDateM>=0? (v[_iPayDateM]||'-') : '-';
 
       MASTER_MAP[key] = {
         TOTAL_OUTSTANDING: outValue,
@@ -3396,8 +3400,7 @@ function parseFileInto(text, type){
     if(!D_PRI[acct]||dp>D_PRI[acct]){ D_PRI[acct]=dp; D.push(row); }
     // Store billed LAT/LON
     if(type==='billed'){var pLat=parseFloat(lat),pLon=parseFloat(lon);if(pLat>20&&pLat<30&&pLon>70&&!BILLED_LOC[acct])BILLED_LOC[acct]={lat:pLat,lon:pLon};}
-    // Store master outstanding for unbilled recalc
-    if(type==='master') MASTER_MAP[acct]={tot_out:iTotOut>=0?(v[iTotOut]||'0').replace(/"/g,''):'0',pay_amt:rawAmt,pay_date:rawDate};
+    // Master records handled above via continue (MASTER_MAP populated with correct TOTAL_OUTSTANDING)
     // PAY_DATA priority
     var priMap={billed:3,unbilled:2,master:1};
     var existPri=PAY_DATA[acct]?(priMap[PAY_DATA[acct].SOURCE]||0):0;
