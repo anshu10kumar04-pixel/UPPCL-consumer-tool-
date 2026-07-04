@@ -1544,7 +1544,7 @@ function buildYoYReport(){
 
       // SM row
       h += '<tr class="yoy-sub-'+si+'" style="display:none;background:#EFF6FF;">';
-      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;"></td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:center;"><span style="cursor:pointer;color:#1D4ED8;font-weight:700;font-size:11px;" onclick="toggleYoYSub(\'sm-'+si+'\')" id="yoy-sm-btn-'+si+'">➕</span></td>';
       h += '<td style="padding:4px 6px 4px 20px;border:1px solid #BFDBFE;font-size:10px;font-weight:700;color:#1D4ED8;">📶 SM (Smart Meter)</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;color:#1E40AF;">'+fL(p.sm_rev)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;color:#1E40AF;">'+p.sm_cnt+'</td>';
@@ -1558,7 +1558,7 @@ function buildYoYReport(){
 
       // Non-SM row
       h += '<tr class="yoy-sub-'+si+'" style="display:none;background:#FFF7ED;">';
-      h += '<td style="padding:4px 6px;border:1px solid #FED7AA;"></td>';
+      h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:center;"><span style="cursor:pointer;color:#EA580C;font-weight:700;font-size:11px;" onclick="toggleYoYSub(\'nsm-'+si+'\')" id="yoy-nsm-btn-'+si+'">➕</span></td>';
       h += '<td style="padding:4px 6px 4px 20px;border:1px solid #FED7AA;font-size:10px;font-weight:700;color:#EA580C;">📊 Non-SM</td>';
       h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;color:#1E40AF;">'+fL(p.nsm_rev)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;color:#1E40AF;">'+p.nsm_cnt+'</td>';
@@ -1570,23 +1570,23 @@ function buildYoYReport(){
       h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;">'+dEl(c.nsm_cnt,pd.nsm_cnt)+'</td>';
       h += '</tr>';
 
-      // Tariff breakdown rows
+      // Tariff breakdown rows - hidden under SM expand
       allTariffs.forEach(function(t){
         var ct=c.tariff[t]||{rev:0,cnt:0};
         var pt=p.tariff[t]||{rev:0,cnt:0};
-        h += '<tr class="yoy-sub-'+si+'" style="display:none;background:#F0FDF4;">';
-        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;"></td>';
-        h += '<td style="padding:3px 6px 3px 28px;border:1px solid #BBF7D0;font-size:10px;color:#374151;">↳ '+t+'</td>';
+        h += '<tr class="yoy-sub-'+si+' yoy-cat-sm-'+si+'" style="display:none;background:#E0F2FE;">';
+        h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;"></td>';
+        h += '<td style="padding:3px 6px 3px 36px;border:1px solid #BAE6FD;font-size:10px;color:#0369A1;">↳ '+t+'</td>';
         var pd2=pyD[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
-        var pdt=(pd2.tariff&&pd2.tariff[t])||{rev:0,cnt:0};
-        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;color:#1E40AF;">'+fL(pt.rev)+'</td>';
-        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;color:#1E40AF;">'+pt.cnt+'</td>';
-        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;color:#1D4ED8;">'+fL(pdt.rev)+'</td>';
-        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;color:#1D4ED8;">'+pdt.cnt+'</td>';
-        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;color:#059669;">'+fL(ct.rev)+'</td>';
-        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;color:#059669;">'+ct.cnt+'</td>';
-        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;">'+dEl(ct.rev,pdt.rev)+'</td>';
-        h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;">'+dEl(ct.cnt,pdt.cnt)+'</td>';
+        var pd2b=pyD[ss]||{tariff:{}}; var pdt=(pd2b.tariff&&pd2b.tariff[t])||{rev:0,cnt:0};
+        h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;color:#1E40AF;">'+fL(pt.rev)+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;color:#1E40AF;">'+pt.cnt+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;color:#1D4ED8;">'+fL(pdt.rev)+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;color:#1D4ED8;">'+pdt.cnt+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;color:#059669;">'+fL(ct.rev)+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;color:#059669;">'+ct.cnt+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;">'+dEl(ct.rev,pdt.rev)+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;">'+dEl(ct.cnt,pdt.cnt)+'</td>';
         h += '</tr>';
       });
     });
@@ -1612,6 +1612,23 @@ function buildYoYReport(){
 function toggleYoY(si){
   var rows = document.querySelectorAll('.yoy-sub-'+si);
   var btn  = gel('yoy-btn-'+si);
+  var open = rows.length && rows[0].style.display !== 'none';
+  rows.forEach(function(r){ r.style.display = open ? 'none' : ''; });
+  if(btn) btn.textContent = open ? '➕' : '➖';
+  // Reset sub-buttons when closing
+  if(open){
+    var smBtn=gel('yoy-sm-btn-'+si); if(smBtn) smBtn.textContent='➕';
+    var nsmBtn=gel('yoy-nsm-btn-'+si); if(nsmBtn) nsmBtn.textContent='➕';
+    document.querySelectorAll('.yoy-cat-sm-'+si+', .yoy-cat-nsm-'+si).forEach(function(r){r.style.display='none';});
+  }
+}
+
+function toggleYoYSub(id){
+  var parts = id.split('-');
+  var type = parts[0]; // 'sm' or 'nsm'
+  var si = parts[1];
+  var rows = document.querySelectorAll('.yoy-cat-'+type+'-'+si);
+  var btn = gel('yoy-'+type+'-btn-'+si);
   var open = rows.length && rows[0].style.display !== 'none';
   rows.forEach(function(r){ r.style.display = open ? 'none' : ''; });
   if(btn) btn.textContent = open ? '➕' : '➖';
