@@ -2442,6 +2442,7 @@ function dashRenderFiltered(){
   }
 
   // Build single-value shortcuts for backward compat with scopeLabel etc.
+  console.log('[DASH] selSS:', selSS, 'selFeed:', selFeed, 'selBasis:', selBasis);
   var ss    = selSS.length===1    ? selSS[0]    : '';
   var fd    = selFeed.length===1  ? selFeed[0]  : '';
   var basis = selBasis.length===1 ? selBasis[0] : '';
