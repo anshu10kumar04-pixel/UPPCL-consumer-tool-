@@ -1396,7 +1396,7 @@ function loadPrevYearData(callback){
     .catch(function(){ PY_LOADED=true; if(callback) callback(); });
 }
 
-function buildCYAgg(dataDate){
+function buildCYAgg(dataDate){ /* v2 */
   if(window._cyAgg && window._cyAggDate===dataDate.getDate()) return window._cyAgg;
   var cy={};
   var ddDay=dataDate.getDate(), ddMon=dataDate.getMonth(), ddYear=dataDate.getFullYear();
