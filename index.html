@@ -1311,7 +1311,7 @@ function buildProgressReport(){
   h += '<div style="font-family:var(--fh);font-weight:700;font-size:13px;">📊 SS-WISE REVENUE COMPARISON — JUL 2025 vs JUL 2026</div>';
   h += '<span style="font-size:10px;opacity:0.7;">SM/Non-SM + Tariff-wise. Click ➕ to expand.</span>';
   h += '</div>';
-  h += '<div id="yoy-section"><div style="padding:20px;text-align:center;color:#6B7280;font-family:var(--fh);">Click to load Jul 2025 data → <button onclick="buildYoYReport()" style="background:#1D4ED8;color:#fff;border:none;padding:6px 16px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:12px;cursor:pointer;">📊 LOAD COMPARISON</button></div></div>';
+  h += '<div id="yoy-section"><div style="padding:20px;text-align:center;color:#6B7280;font-family:var(--fh);">⏳ Loading comparison data...</div></div>';
   h += '</div>';
 
   el.innerHTML = h;
@@ -3288,7 +3288,11 @@ function st(name){
     if(name==='dfp'&&!_dfpLoaded) loadDfp();
     if(name==='defaulter') loadDefaulters();
     if(name==='dashboard') buildDashboard();
-    if(name==='progress')  buildProgressReport();
+    if(name==='progress'){
+      buildProgressReport();
+      // If PY already loaded, build YoY immediately; else it will auto-build when ready
+      if(PY_LOADED) setTimeout(buildYoYReport, 200);
+    }
     if(name==='settings'){
       if(!_settingsBuilt) buildSettingsPanel();
       setTimeout(function(){
@@ -3411,6 +3415,10 @@ function startDownloads(){
         sl('BUILDING INDEX…',93);
         sl('BUILDING INDEX…',93);
         setTimeout(function(){ ia(); hl2(); },20);
+        // Preload Jul 2025 comparison data in background
+        if(!PY_LOADED) loadPrevYearData(function(){
+          if(window._lastTab==='progress') buildYoYReport();
+        });
         return;
       }
       sl('PARSING '+(idx+1)+'/'+FILES.length+'…',68+Math.round(idx/FILES.length*24));
