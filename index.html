@@ -1382,35 +1382,18 @@ var PY_LOADED = false;
 function loadPrevYearData(callback){
   if(PY_LOADED){ if(callback) callback(); return; }
   var RAW = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/UPPCL-consumer-tool-/main/';
-  var files = ['prev_year/jul2025_eudd1.csv','prev_year/jul2025_eudd2.csv'];
-  var done = 0;
-  files.forEach(function(f){
-    fetch(RAW+f)
-      .then(function(r){ return r.ok?r.text():''; })
-      .then(function(text){
-        if(text){
-          var lines = text.split(String.fromCharCode(10)).filter(Boolean);
-          var hdrs = lines[0].split(',').map(function(h){return h.trim().replace(/"/g,'');});
-          var iAcct=hdrs.indexOf('ACCT_ID'), iSS=hdrs.indexOf('SUBSTATION'),
-              iST=hdrs.indexOf('SUPPLY_TYPE'), iMR=hdrs.indexOf('MR_SOURCE_CD'),
-              iPay=hdrs.indexOf('PAY_AMT'), iDay=hdrs.indexOf('PAY_DAY');
-          for(var i=1;i<lines.length;i++){
-            var v=lines[i].split(',');
-            var acct=v[iAcct]||''; if(!acct) continue;
-            PY_DATA[acct]={
-              ss:  v[iSS]||'',
-              st:  v[iST]||'',
-              mr:  v[iMR]||'',
-              pay: parseFloat(v[iPay]||0)||0,
-              day: parseInt(v[iDay]||0)||0
-            };
-          }
-        }
-        done++;
-        if(done===files.length){ PY_LOADED=true; if(callback) callback(); }
-      })
-      .catch(function(){ done++; if(done===files.length){ PY_LOADED=true; if(callback) callback(); } });
-  });
+  // Use pre-aggregated SS-wise JSON (213KB) instead of row-level CSVs (5MB)
+  fetch(RAW+'prev_year/jul2025_agg.json')
+    .then(function(r){ return r.ok?r.json():null; })
+    .then(function(agg){
+      if(agg){
+        // Store as PY_AGG — SS-wise pre-aggregated data
+        window.PY_AGG = agg;  // {eudd1:{SS:{full:{...},upto:{day:{...}}}}, eudd2:{...}}
+      }
+      PY_LOADED=true;
+      if(callback) callback();
+    })
+    .catch(function(){ PY_LOADED=true; if(callback) callback(); });
 }
 
 function buildYoYReport(){
@@ -1467,36 +1450,41 @@ function buildYoYReport(){
       cy[ss].tariff[tariff].rev+=lpAmt; cy[ss].tariff[tariff].cnt++;
     });
 
-    // PY (Jul 2025): TWO buckets — full month + upto same day-of-month as dataDate
-    var pyD = {}; // upto same date (e.g., upto 2-Jul-2025)
-    Object.entries(PY_DATA).forEach(function(entry){
-      var acct=entry[0], r=entry[1];
-      var ss = r.ss||''; if(!ss) return;
-      var lpAmt = r.pay||0; if(lpAmt<=0) return;
-      // SM: ONLY current year _smLookup — no fallback to prev year
-      var curMR = window._smLookup ? (window._smLookup[acct]||'').toUpperCase() : '';
-      var isSM = curMR==='SM';
-      var tariff = stToTariff(r.st)||r.st||'OTHER';
-      if(!/^(LMV|HV|EHV)/i.test(tariff)) tariff = 'OTHER';
+    // PY from pre-aggregated JSON — instant, no row iteration needed
+    var pyD = {}; // upto same day
+    var agg = window.PY_AGG || {};
+    // Merge eudd1 + eudd2
+    ['eudd1','eudd2'].forEach(function(div){
+      var divAgg = agg[div]||{};
+      Object.keys(divAgg).forEach(function(ss){
+        var ssAgg = divAgg[ss];
+        var full = ssAgg.full||{};
+        var upto = (ssAgg.upto||{})[dataDateDay] || {sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
 
-      // Full month bucket
-      if(!py[ss]) py[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
-      py[ss].total_rev+=lpAmt; py[ss].total_cnt++;
-      if(isSM){py[ss].sm_rev+=lpAmt; py[ss].sm_cnt++;}
-      else    {py[ss].nsm_rev+=lpAmt; py[ss].nsm_cnt++;}
-      if(!py[ss].tariff[tariff]) py[ss].tariff[tariff]={rev:0,cnt:0};
-      py[ss].tariff[tariff].rev+=lpAmt; py[ss].tariff[tariff].cnt++;
+        // Full month
+        if(!py[ss]) py[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
+        py[ss].sm_rev  += full.sm_rev||0;   py[ss].sm_cnt  += full.sm_cnt||0;
+        py[ss].nsm_rev += full.nsm_rev||0;  py[ss].nsm_cnt += full.nsm_cnt||0;
+        py[ss].total_rev += (full.sm_rev||0)+(full.nsm_rev||0);
+        py[ss].total_cnt += (full.sm_cnt||0)+(full.nsm_cnt||0);
+        Object.keys(full.tariff||{}).forEach(function(t){
+          if(!py[ss].tariff[t]) py[ss].tariff[t]={rev:0,cnt:0};
+          py[ss].tariff[t].rev += full.tariff[t].rev||0;
+          py[ss].tariff[t].cnt += full.tariff[t].cnt||0;
+        });
 
-      // Upto same day-of-month bucket
-      var payDay = r.day||0;  // pre-extracted day number
-      if(payDay > 0 && payDay <= dataDateDay){
+        // Upto same day
         if(!pyD[ss]) pyD[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
-        pyD[ss].total_rev+=lpAmt; pyD[ss].total_cnt++;
-        if(isSM){pyD[ss].sm_rev+=lpAmt; pyD[ss].sm_cnt++;}
-        else    {pyD[ss].nsm_rev+=lpAmt; pyD[ss].nsm_cnt++;}
-        if(!pyD[ss].tariff[tariff]) pyD[ss].tariff[tariff]={rev:0,cnt:0};
-        pyD[ss].tariff[tariff].rev+=lpAmt; pyD[ss].tariff[tariff].cnt++;
-      }
+        pyD[ss].sm_rev  += upto.sm_rev||0;   pyD[ss].sm_cnt  += upto.sm_cnt||0;
+        pyD[ss].nsm_rev += upto.nsm_rev||0;  pyD[ss].nsm_cnt += upto.nsm_cnt||0;
+        pyD[ss].total_rev += (upto.sm_rev||0)+(upto.nsm_rev||0);
+        pyD[ss].total_cnt += (upto.sm_cnt||0)+(upto.nsm_cnt||0);
+        Object.keys(upto.tariff||{}).forEach(function(t){
+          if(!pyD[ss].tariff[t]) pyD[ss].tariff[t]={rev:0,cnt:0};
+          pyD[ss].tariff[t].rev += upto.tariff[t].rev||0;
+          pyD[ss].tariff[t].cnt += upto.tariff[t].cnt||0;
+        });
+      });
     });
 
     // Top 16 SS by current year revenue (matching progress report)
