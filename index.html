@@ -2163,19 +2163,19 @@ function buildDashboard(){
     var cats=[...allCats].sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
     var h2='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px;">';
     // Header row 1 - tariff groups (CNT+AMT per tariff)
-    h2 += '<thead><tr style="background:#065F46;color:#fff;">';
-    h2 += '<th rowspan="2" style="padding:6px 10px;text-align:left;font-family:var(--fh);font-size:10px;border:1px solid #047857;min-width:150px;">SUBSTATION</th>';
+    h2 += '<thead><tr style="background:#1E3A5F;color:#fff;">';
+    h2 += '<th rowspan="2" style="padding:6px 10px;text-align:left;font-family:var(--fh);font-size:10px;border:1px solid #374151;min-width:150px;color:#fff;">SUBSTATION</th>';
     cats.forEach(function(cat){
-      h2 += '<th colspan="2" style="padding:5px 6px;text-align:center;font-family:var(--fh);font-size:10px;border:1px solid #047857;">'+cat+'</th>';
+      h2 += '<th colspan="2" style="padding:5px 6px;text-align:center;font-family:var(--fh);font-size:10px;border:1px solid #374151;color:#fff;background:#1D4ED8;">'+cat+'</th>';
     });
-    h2 += '<th colspan="2" style="padding:5px 6px;text-align:center;font-family:var(--fh);font-size:10px;border:1px solid #047857;background:#047857;">TOTAL</th>';
-    h2 += '</tr><tr style="background:#047857;color:#fff;">';
+    h2 += '<th colspan="2" style="padding:5px 6px;text-align:center;font-family:var(--fh);font-size:10px;border:1px solid #374151;background:#059669;color:#fff;">TOTAL</th>';
+    h2 += '</tr><tr style="background:#1E40AF;color:#fff;">';
     cats.forEach(function(){
-      h2 += '<th style="padding:4px 6px;text-align:right;font-size:9px;border:1px solid #065F46;">CNT</th>';
-      h2 += '<th style="padding:4px 6px;text-align:right;font-size:9px;border:1px solid #065F46;">AMT</th>';
+      h2 += '<th style="padding:4px 6px;text-align:right;font-size:9px;border:1px solid #374151;color:#fff;">CNT</th>';
+      h2 += '<th style="padding:4px 6px;text-align:right;font-size:9px;border:1px solid #374151;color:#fff;">AMT</th>';
     });
-    h2 += '<th style="padding:4px 6px;text-align:right;font-size:9px;border:1px solid #065F46;">CNT</th>';
-    h2 += '<th style="padding:4px 6px;text-align:right;font-size:9px;border:1px solid #065F46;">AMT</th>';
+    h2 += '<th style="padding:4px 6px;text-align:right;font-size:9px;border:1px solid #374151;background:#047857;color:#fff;">CNT</th>';
+    h2 += '<th style="padding:4px 6px;text-align:right;font-size:9px;border:1px solid #374151;background:#047857;color:#fff;">AMT</th>';
     h2 += '</tr></thead><tbody>';
     // Grand totals accumulator
     var grandCats={}, grandTotal={count:0,amt:0};
