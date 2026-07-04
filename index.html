@@ -1423,32 +1423,8 @@ function buildYoYReport(){
     var dataDateMonth = dataDate.getMonth();  // 6 = July
     var dataDateYear = dataDate.getFullYear();
 
-    // CY (Jul 2026): consumers paid upto dataDate in current month
-    // Use CATEGORY from billed/unbilled (LMV1, LMV2 etc.) - not stToTariff conversion
-    D.forEach(function(r){
-      var ss = r.SUBSTATION||''; if(!ss) return;
-      var lpDate = parseDate(r.LAST_PAY_DATE||r.PAY_DATE||'');
-      var lpAmt  = parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0;
-      if(!lpDate) return;
-      // Only include payments upto dataDate in July 2026
-      if(lpDate.getFullYear()!==dataDateYear || lpDate.getMonth()!==dataDateMonth) return;
-      if(lpDate.getDate() > dataDateDay) return;
-      if(lpAmt<=0) return;
-
-      var mrSrc = String(r.MR_SOURCE_CD||'').toUpperCase();
-      if(!mrSrc && window._smLookup) mrSrc = (window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
-      var isSM = mrSrc==='SM';
-      // Use CATEGORY directly (LMV1,LMV2 etc from billed/unbilled CSV TARIFF_TYPE column)
-      var tariff = String(r.CATEGORY||r.TARIFF_TYPE||'').trim();
-      if(!tariff || !/^(LMV|HV|EHV)/i.test(tariff)) tariff = stToTariff(r.SUPPLY_TYPE)||'OTHER';
-
-      if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
-      cy[ss].total_rev+=lpAmt; cy[ss].total_cnt++;
-      if(isSM){cy[ss].sm_rev+=lpAmt; cy[ss].sm_cnt++;}
-      else    {cy[ss].nsm_rev+=lpAmt; cy[ss].nsm_cnt++;}
-      if(!cy[ss].tariff[tariff]) cy[ss].tariff[tariff]={rev:0,cnt:0};
-      cy[ss].tariff[tariff].rev+=lpAmt; cy[ss].tariff[tariff].cnt++;
-    });
+    // CY: use cached aggregate (computed once after D loads)
+    var cy = buildCYAgg(dataDate);
 
     // PY from pre-aggregated JSON — instant, no row iteration needed
     var pyD = {}; // upto same day
@@ -3419,6 +3395,18 @@ function startDownloads(){
         if(!PY_LOADED) loadPrevYearData(function(){
           if(window._lastTab==='progress') buildYoYReport();
         });
+        // Pre-compute CY aggregate in background (uses dataDate after D loads)
+        setTimeout(function(){
+          try{
+            var mss=window._manifest_cache&&window._manifest_cache.sync_status;
+            var bd=(mss&&(mss['233511']||mss['233512']))?(mss['233511']||mss['233512']).billed_date:'';
+            if(bd&&bd.length===8){
+              var dd2=parseInt(bd.slice(0,2)),mm2=parseInt(bd.slice(2,4))-1,yy2=parseInt(bd.slice(4,8));
+              var preDate=new Date(new Date(yy2,mm2,dd2).getTime()-86400000);
+              buildCYAgg(preDate);
+            }
+          }catch(e){}
+        }, 500);
         return;
       }
       sl('PARSING '+(idx+1)+'/'+FILES.length+'…',68+Math.round(idx/FILES.length*24));
@@ -3614,6 +3602,8 @@ function loadLocationXlsx(){
 
 function ia(){
   window._dOutMap = null;  // Reset live outstanding cache
+  window._cyAgg = null;   // Reset CY aggregate cache
+  window._cyAgg = null;   // Reset CY aggregate cache
   var subSet=new Set(),feedSet=new Set(),catSet=new Set();
   fetch(RAW_BASE+'geo_mapping.json').then(r=>r.ok?r.json():{}).then(function(map){
     GEO_MAP=map;applyGeoAndStats();
