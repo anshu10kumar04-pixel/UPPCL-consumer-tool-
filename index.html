@@ -1426,11 +1426,8 @@ function buildYoYReport(){
   var el = gel('yoy-section');
   if(!el) return;
   loadPrevYearData(function(){
-    // Current year: use _smLookup for SM/NonSM classification
-    // Build SS-wise aggregation for Jul 2026 (current month from D array)
     var today = new Date();
-    var cy = {}; // current year {ss: {sm_rev,sm_cnt,nsm_rev,nsm_cnt,total_rev,total_cnt, by_tariff:{t:{...}}}}
-    var py = {}; // prev year same structure
+    var py = {};
 
     // Get data date from manifest (FTP file date - 1 day = actual data date)
     var dataDate = today;
@@ -4973,14 +4970,9 @@ function openDefaulterModal(acctId){
 
   // Payment section
   gel('modal-pay-section').style.display = 'block';
-  // Live outstanding: D array for billed/unbilled, DEF CSV for master consumers
-  var modalLiveOut;
-  if(window._dOutMap && window._dOutMap[String(acctId)] !== undefined){
-    modalLiveOut = window._dOutMap[String(acctId)];
-  } else {
-    // Master consumer not in D array - use DEF CSV outstanding directly
-    modalLiveOut = parseFloat(defRec.OUTSTANDING)||0;
-  }
+  // Use exact same calculation as renderDefaulters list
+  var dOut2 = window._dOutMap ? window._dOutMap[String(acctId)] : undefined;
+  var modalLiveOut = Math.round(dOut2 !== undefined ? dOut2 : (parseFloat(defRec.OUTSTANDING)||0));
   gel('modal-pay-grid').innerHTML =
     '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">LAST PAID AMT</div>'+
     '<div style="font-size:14px;font-weight:700;color:#059669;">₹'+Math.round(defRec.PAY_AMT||0).toLocaleString()+'</div></div>'+
