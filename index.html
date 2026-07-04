@@ -1478,7 +1478,7 @@ function buildYoYReport(){
         var upto = (ssAgg.upto||{})[String(dataDateDay)] || {sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
 
         // Full month
-        if(!py[ss]) py[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
+        if(!py[ss]) py[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{},sm_tariff:{},nsm_tariff:{}};
         py[ss].sm_rev  += full.sm_rev||0;   py[ss].sm_cnt  += full.sm_cnt||0;
         py[ss].nsm_rev += full.nsm_rev||0;  py[ss].nsm_cnt += full.nsm_cnt||0;
         py[ss].total_rev += (full.sm_rev||0)+(full.nsm_rev||0);
@@ -1488,9 +1488,16 @@ function buildYoYReport(){
           py[ss].tariff[t].rev += full.tariff[t].rev||0;
           py[ss].tariff[t].cnt += full.tariff[t].cnt||0;
         });
+        ['sm_tariff','nsm_tariff'].forEach(function(key){
+          Object.keys(full[key]||{}).forEach(function(t){
+            if(!py[ss][key][t]) py[ss][key][t]={rev:0,cnt:0};
+            py[ss][key][t].rev += (full[key][t]||{rev:0}).rev;
+            py[ss][key][t].cnt += (full[key][t]||{cnt:0}).cnt;
+          });
+        });
 
         // Upto same day
-        if(!pyD[ss]) pyD[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
+        if(!pyD[ss]) pyD[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{},sm_tariff:{},nsm_tariff:{}};
         pyD[ss].sm_rev  += upto.sm_rev||0;   pyD[ss].sm_cnt  += upto.sm_cnt||0;
         pyD[ss].nsm_rev += upto.nsm_rev||0;  pyD[ss].nsm_cnt += upto.nsm_cnt||0;
         pyD[ss].total_rev += (upto.sm_rev||0)+(upto.nsm_rev||0);
@@ -1499,6 +1506,13 @@ function buildYoYReport(){
           if(!pyD[ss].tariff[t]) pyD[ss].tariff[t]={rev:0,cnt:0};
           pyD[ss].tariff[t].rev += upto.tariff[t].rev||0;
           pyD[ss].tariff[t].cnt += upto.tariff[t].cnt||0;
+        });
+        ['sm_tariff','nsm_tariff'].forEach(function(key){
+          Object.keys(upto[key]||{}).forEach(function(t){
+            if(!pyD[ss][key][t]) pyD[ss][key][t]={rev:0,cnt:0};
+            pyD[ss][key][t].rev += (upto[key][t]||{rev:0}).rev;
+            pyD[ss][key][t].cnt += (upto[key][t]||{cnt:0}).cnt;
+          });
         });
       });
     });
@@ -1593,8 +1607,8 @@ function buildYoYReport(){
       var smTariffs=[...new Set([...Object.keys(c.sm_tariff||{}),...Object.keys(p.tariff||{})])].sort();
       smTariffs.forEach(function(t){
         var ct=(c.sm_tariff||{})[t]||{rev:0,cnt:0};
-        var pt=p.tariff[t]||{rev:0,cnt:0};
-        var pdt=((pyD[ss]||{}).tariff||{})[t]||{rev:0,cnt:0};
+        var pt=(p.sm_tariff||{})[t]||{rev:0,cnt:0};
+        var pdt=((pyD[ss]||{}).sm_tariff||{})[t]||{rev:0,cnt:0};
         h += '<tr class="yoy-cat-sm-'+si+'" style="display:none;background:#E0F2FE;">';
         h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;"></td>';
         h += '<td style="padding:3px 6px 3px 36px;border:1px solid #BAE6FD;font-size:10px;color:#0369A1;">\u21b3 '+t+'</td>';
@@ -1612,8 +1626,8 @@ function buildYoYReport(){
       var nsmTariffs=[...new Set([...Object.keys(c.nsm_tariff||{}),...Object.keys(p.tariff||{})])].sort();
       nsmTariffs.forEach(function(t){
         var ct=(c.nsm_tariff||{})[t]||{rev:0,cnt:0};
-        var pt=p.tariff[t]||{rev:0,cnt:0};
-        var pdt=((pyD[ss]||{}).tariff||{})[t]||{rev:0,cnt:0};
+        var pt=(p.nsm_tariff||{})[t]||{rev:0,cnt:0};
+        var pdt=((pyD[ss]||{}).nsm_tariff||{})[t]||{rev:0,cnt:0};
         h += '<tr class="yoy-cat-nsm-'+si+'" style="display:none;background:#FEF9C3;">';
         h += '<td style="padding:3px 6px;border:1px solid #FDE68A;"></td>';
         h += '<td style="padding:3px 6px 3px 36px;border:1px solid #FDE68A;font-size:10px;color:#92400E;">\u21b3 '+t+'</td>';
