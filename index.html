@@ -1401,7 +1401,13 @@ function loadPrevYearData(callback){
 }
 
 function buildCYAgg(dataDate){
-  if(window._cyAgg && window._cyAggDate===dataDate.getDate()) return window._cyAgg;
+  // Always rebuild - don't cache, SM lookup may not be ready when first called
+  // Only cache if we have SM data
+  if(window._cyAgg && window._cyAggDate===dataDate.getDate()){
+    // Check if SM data present - if not, rebuild
+    var hasSM = Object.keys(window._cyAgg).some(function(ss){ return (window._cyAgg[ss].sm_cnt||0)>0; });
+    if(hasSM) return window._cyAgg;
+  }
   var cy={};
   var ddDay=dataDate.getDate(), ddMon=dataDate.getMonth(), ddYear=dataDate.getFullYear();
   D.forEach(function(r){
@@ -1415,10 +1421,17 @@ function buildCYAgg(dataDate){
     var isSM=mrSrc==='SM';
     var tariff=String(r.CATEGORY||r.TARIFF_TYPE||'').trim();
     if(!tariff||!/^(LMV|HV|EHV)/i.test(tariff)) tariff=stToTariff(r.SUPPLY_TYPE)||'OTHER';
-    if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
+    if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{},sm_tariff:{},nsm_tariff:{}};
     cy[ss].total_rev+=lpAmt; cy[ss].total_cnt++;
-    if(isSM){cy[ss].sm_rev+=lpAmt;cy[ss].sm_cnt++;}
-    else    {cy[ss].nsm_rev+=lpAmt;cy[ss].nsm_cnt++;}
+    if(isSM){
+      cy[ss].sm_rev+=lpAmt; cy[ss].sm_cnt++;
+      if(!cy[ss].sm_tariff[tariff]) cy[ss].sm_tariff[tariff]={rev:0,cnt:0};
+      cy[ss].sm_tariff[tariff].rev+=lpAmt; cy[ss].sm_tariff[tariff].cnt++;
+    } else {
+      cy[ss].nsm_rev+=lpAmt; cy[ss].nsm_cnt++;
+      if(!cy[ss].nsm_tariff[tariff]) cy[ss].nsm_tariff[tariff]={rev:0,cnt:0};
+      cy[ss].nsm_tariff[tariff].rev+=lpAmt; cy[ss].nsm_tariff[tariff].cnt++;
+    }
     if(!cy[ss].tariff[tariff]) cy[ss].tariff[tariff]={rev:0,cnt:0};
     cy[ss].tariff[tariff].rev+=lpAmt; cy[ss].tariff[tariff].cnt++;
   });
@@ -1574,15 +1587,15 @@ function buildYoYReport(){
       h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;">'+dEl(c.nsm_cnt,pd.nsm_cnt)+'</td>';
       h += '</tr>';
 
-      // Tariff breakdown rows - hidden under SM expand
-      allTariffs.forEach(function(t){
-        var ct=c.tariff[t]||{rev:0,cnt:0};
+      // SM tariff rows - expand under SM
+      var smTariffs=[...new Set([...Object.keys(c.sm_tariff||{}),...Object.keys(p.tariff||{})])].sort();
+      smTariffs.forEach(function(t){
+        var ct=(c.sm_tariff||{})[t]||{rev:0,cnt:0};
         var pt=p.tariff[t]||{rev:0,cnt:0};
+        var pdt=((pyD[ss]||{}).tariff||{})[t]||{rev:0,cnt:0};
         h += '<tr class="yoy-cat-sm-'+si+'" style="display:none;background:#E0F2FE;">';
         h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;"></td>';
-        h += '<td style="padding:3px 6px 3px 36px;border:1px solid #BAE6FD;font-size:10px;color:#0369A1;">↳ '+t+'</td>';
-        var pd2=pyD[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
-        var pd2b=pyD[ss]||{tariff:{}}; var pdt=(pd2b.tariff&&pd2b.tariff[t])||{rev:0,cnt:0};
+        h += '<td style="padding:3px 6px 3px 36px;border:1px solid #BAE6FD;font-size:10px;color:#0369A1;">\u21b3 '+t+'</td>';
         h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;color:#1E40AF;">'+fL(pt.rev)+'</td>';
         h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;color:#1E40AF;">'+pt.cnt+'</td>';
         h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;color:#1D4ED8;">'+fL(pdt.rev)+'</td>';
@@ -1593,8 +1606,25 @@ function buildYoYReport(){
         h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;">'+dEl(ct.cnt,pdt.cnt)+'</td>';
         h += '</tr>';
       });
-    });
-
+      // NSM tariff rows - expand under NonSM
+      var nsmTariffs=[...new Set([...Object.keys(c.nsm_tariff||{}),...Object.keys(p.tariff||{})])].sort();
+      nsmTariffs.forEach(function(t){
+        var ct=(c.nsm_tariff||{})[t]||{rev:0,cnt:0};
+        var pt=p.tariff[t]||{rev:0,cnt:0};
+        var pdt=((pyD[ss]||{}).tariff||{})[t]||{rev:0,cnt:0};
+        h += '<tr class="yoy-cat-nsm-'+si+'" style="display:none;background:#FEF9C3;">';
+        h += '<td style="padding:3px 6px;border:1px solid #FDE68A;"></td>';
+        h += '<td style="padding:3px 6px 3px 36px;border:1px solid #FDE68A;font-size:10px;color:#92400E;">\u21b3 '+t+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;color:#1E40AF;">'+fL(pt.rev)+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;color:#1E40AF;">'+pt.cnt+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;color:#1D4ED8;">'+fL(pdt.rev)+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;color:#1D4ED8;">'+pdt.cnt+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;color:#059669;">'+fL(ct.rev)+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;color:#059669;">'+ct.cnt+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;">'+dEl(ct.rev,pdt.rev)+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;">'+dEl(ct.cnt,pdt.cnt)+'</td>';
+        h += '</tr>';
+      });
     // Grand total
     h += '<tr style="background:#1E3A5F;color:#fff;font-weight:700;">';
     h += '<td colspan="2" style="padding:6px 10px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL</td>';
@@ -3648,7 +3678,8 @@ function parseFileInto(text, type){
         MR_SOURCE_CD: mrSrcM
       };
       // Build SM lookup from master (most complete MR_SOURCE_CD source)
-      if(mrSrcM) { if(!window._smLookup) window._smLookup={}; window._smLookup[key]=mrSrcM.trim().toUpperCase(); }
+      if(!window._smLookup) window._smLookup={};
+      if(mrSrcM) window._smLookup[key]=mrSrcM.trim().toUpperCase();
       continue;
     }
 
