@@ -2440,5 +2440,3193 @@ function dashRenderFiltered(){
     resultEl.innerHTML = '<div style="padding:14px 16px;font-size:12px;color:#9CA3AF;font-family:var(--fh);border-top:1px solid #E5E7EB;">Select Substation, Feeder, and/or Bill Basis above, then click APPLY.</div>';
     return;
   }
+  var scopeD = D.filter(function(r){
+    if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
+    if(fd && dashNorm(r.FEEDER)!==fdN) return false;
+    if(basis && dashNorm(r.BILL_BASIS)!==basisN) return false;
+    return true;
+  });
+  var scopeDef = DEF_ALL.filter(function(r){
+    if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
+    if(fd && dashNorm(r.FEEDER)!==fdN) return false;
+    if(basis){ var rb=dashNorm(r.BILL_BASIS)||(window._basisLookupGlobal&&window._basisLookupGlobal[String(r.ACCT_ID)])||''; if(rb!==basisN) return false; }
+    return true;
+  });
+
+  function cr2(n){ return n>=10000000?'\u20b9'+(n/10000000).toFixed(2)+' Cr':n>=100000?'\u20b9'+(n/100000).toFixed(2)+' L':'\u20b9'+Math.round(n).toLocaleString(); }
+
+  var billedC=0, unbilledC=0, totOut=0, totCA=0;
+  scopeD.forEach(function(r){
+    if(r.SOURCE==='billed') billedC++; else unbilledC++;
+    totOut += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
+    totCA  += parseFloat(r.CA||0)||0;
+  });
+  var defOutS = scopeDef.reduce(function(s,r){return s+(r.OUTSTANDING||0);},0);
+
+  // Category (tariff) wise count + amount
+  var catMap = {};
+  scopeD.forEach(function(r){
+    var t = r.CATEGORY || 'Unknown';
+    if(!catMap[t]) catMap[t] = {count:0, out:0, defCount:0, defOut:0, r2:0,r2o:0,r5:0,r5o:0,r10:0,r10o:0,r50:0,r50o:0,r1l:0,r1lo:0};
+    catMap[t].count++;
+    catMap[t].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
+  });
+  scopeDef.forEach(function(r){
+    var t = r.SUPPLY_TYPE || 'Unknown';
+    if(!catMap[t]) catMap[t] = {count:0, out:0, defCount:0, defOut:0, r2:0,r2o:0,r5:0,r5o:0,r10:0,r10o:0,r50:0,r50o:0,r1l:0,r1lo:0};
+    var o = r.OUTSTANDING||0;
+    catMap[t].defCount++;
+    catMap[t].defOut += o;
+    if(o>=2000  && o<5000)  { catMap[t].r2++;  catMap[t].r2o+=o;  }
+    if(o>=5000  && o<10000) { catMap[t].r5++;  catMap[t].r5o+=o;  }
+    if(o>=10000 && o<50000) { catMap[t].r10++; catMap[t].r10o+=o; }
+    if(o>=50000 && o<100000){ catMap[t].r50++; catMap[t].r50o+=o; }
+    if(o>=100000)           { catMap[t].r1l++; catMap[t].r1lo+=o; }
+  });
+  var catList = Object.keys(catMap).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+
+  // Bill Basis-wise (billed consumers only)
+  var fBasisMap = {};
+  scopeD.filter(function(r){return r.SOURCE==='billed';}).forEach(function(r){
+    var b = String(r.BILL_BASIS||'').trim().toUpperCase()||'UNKNOWN';
+    if(!fBasisMap[b]) fBasisMap[b]={count:0,out:0,defCount:0,defOut:0};
+    fBasisMap[b].count++;
+    fBasisMap[b].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
+  });
+  scopeDef.forEach(function(r){
+    var rb = String(r.BILL_BASIS||'').trim().toUpperCase();
+    if(!rb && window._basisLookupGlobal) rb = window._basisLookupGlobal[String(r.ACCT_ID)]||'';
+    var b = rb || 'UNKNOWN';
+    if(!fBasisMap[b]) fBasisMap[b]={count:0,out:0,defCount:0,defOut:0};
+    fBasisMap[b].defCount++;
+    fBasisMap[b].defOut += r.OUTSTANDING||0;
+  });
+  var fBasisOrder=['MU','ASS','PROV','CEIL','UNKNOWN'];
+  var fBasisList = Object.keys(fBasisMap).sort(function(a,b){
+    var ia=fBasisOrder.indexOf(a), ib=fBasisOrder.indexOf(b);
+    if(ia<0) ia=99; if(ib<0) ib=99;
+    return ia-ib;
+  });
+
+  var scopeLabel = (div?div+' → ':'') + (ss?ss:'All Substations') + (fd?' → '+fd:'');
+
+  var h = '<div style="padding:14px 16px;border-top:1px solid #E5E7EB;">';
+  h += '<div style="font-family:var(--fh);font-weight:700;font-size:13px;color:#4338CA;margin-bottom:12px;">📍 '+scopeLabel+'</div>';
+
+  // mini KPI row
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">';
+  function mk(label,val,bg,tc){
+    return '<div style="background:'+bg+';border-radius:10px;padding:10px 14px;flex:1;min-width:120px;">'+
+      '<div style="font-size:16px;font-weight:800;color:'+tc+';font-family:var(--fh);">'+val+'</div>'+
+      '<div style="font-size:10px;font-weight:700;color:#6B7280;font-family:var(--fh);">'+label+'</div></div>';
+  }
+  h += mk('TOTAL CONSUMERS', scopeD.length.toLocaleString(), '#EFF6FF', '#1D4ED8');
+  h += mk('BILLED / UNBILLED', billedC+' / '+unbilledC, '#F0FDF4', '#059669');
+  h += mk('OUTSTANDING', cr2(totOut), '#FFF7ED', '#EA580C');
+  h += mk('TOTAL CA', cr2(totCA), '#FEF2F2', '#DC2626');
+  h += mk('DEFAULTERS', scopeDef.length.toLocaleString(), '#FEF3C7', '#D97706');
+  h += mk('DEF OUTSTANDING', cr2(defOutS), '#FFF1F2', '#F43F5E');
+  h += '</div>';
+
+  // Category-wise table with defaulter range breakdown
+  h += '<div id="filt-cat-tbl" style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  h += '<thead>';
+  h += '<tr style="background:#F8FAFC;">';
+  h += '<th rowspan="2" style="padding:7px 9px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">TARIFF</th>';
+  h += '<th rowspan="2" style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">CONSUMERS</th>';
+  h += '<th rowspan="2" style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">OUTSTANDING</th>';
+  h += '<th rowspan="2" style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">DEFAULTERS</th>';
+  h += '<th rowspan="2" style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #E5E7EB;">DEF OUTSTANDING</th>';
+  h += '<th colspan="10" style="padding:5px 9px;text-align:center;font-family:var(--fh);font-size:10px;color:#B91C1C;border-bottom:1px solid #FECACA;border-left:1px solid #FECACA;background:#FFF1F2;">⚠ DEFAULTER COUNT &amp; AMOUNT BY RANGE</th>';
+  h += '</tr>';
+  h += '<tr style="background:#FFF1F2;">';
+  ['₹2K–5K','Amt','₹5K–10K','Amt','₹10K–50K','Amt','₹50K–1L','Amt','Above ₹1L','Amt'].forEach(function(rh,ri){
+    h += '<th style="padding:4px 5px;text-align:right;font-family:var(--fh);font-size:9px;color:'+(ri%2?'#9CA3AF':'#B91C1C')+';border-bottom:1px solid #FECACA;border-left:'+(ri===0?'1px solid #FECACA':'none')+';white-space:nowrap;">'+rh+'</th>';
+  });
+  h += '</tr></thead><tbody>';
+  catList.forEach(function(t,i){
+    var c = catMap[t];
+    h += '<tr style="background:'+(i%2?'#F9FAFB':'#fff')+'">';
+    h += '<td style="padding:7px 9px;font-weight:700;color:#1E3A5F;font-family:var(--fh);">'+t+'</td>';
+    h += '<td style="padding:7px 9px;text-align:right;font-weight:600;">'+c.count.toLocaleString()+'</td>';
+    h += '<td style="padding:7px 9px;text-align:right;color:#EA580C;font-weight:700;">'+cr2(c.out)+'</td>';
+    h += '<td style="padding:7px 9px;text-align:right;color:#D97706;font-weight:700;">'+(c.defCount||0).toLocaleString()+'</td>';
+    h += '<td style="padding:7px 9px;text-align:right;color:#F43F5E;font-weight:700;">'+cr2(c.defOut||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#BE123C;font-weight:700;border-left:1px solid #FEE2E2;">'+(c.r2||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(c.r2o||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#DC2626;font-weight:700;">'+(c.r5||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(c.r5o||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#E11D48;font-weight:700;">'+(c.r10||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(c.r10o||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#9A3412;font-weight:700;">'+(c.r50||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(c.r50o||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#C2410C;font-weight:800;">'+(c.r1l||0)+'</td>';
+    h += '<td style="padding:5px 6px;text-align:right;color:#9CA3AF;font-size:10px;">'+(function(v){return v>=10000000?'₹'+(v/10000000).toFixed(1)+'Cr':v>=100000?'₹'+(v/100000).toFixed(1)+'L':v>0?'₹'+Math.round(v/1000)+'K':'-';})(c.r1lo||0)+'</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;">';
+  h += '<button onclick="filtSecXLSX(\'filt-cat-tbl\',\'Category_Breakup\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button>';
+  h += '<button onclick="filtSecPDF(\'filt-cat-tbl\',\'Category-wise Breakup\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button>';
+  h += '</div>';
+
+  // Bill Basis-wise table for this scope
+  if(fBasisList.length){
+    h += '<div style="margin-top:14px;font-family:var(--fh);font-weight:700;font-size:12px;color:#7C3AED;">📑 BILL BASIS BREAKUP</div>';
+    h += '<div id="filt-basis-tbl" style="overflow-x:auto;margin-top:6px;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+    h += '<thead><tr style="background:#F5F3FF;">';
+    ['BILL BASIS','CONSUMERS','OUTSTANDING','DEFAULTERS','DEF OUTSTANDING'].forEach(function(hd){
+      h += '<th style="padding:7px 9px;text-align:'+(hd==='BILL BASIS'?'left':'right')+';font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #DDD6FE;">'+hd+'</th>';
+    });
+    h += '</tr></thead><tbody>';
+    fBasisList.forEach(function(b,i){
+      var bd=fBasisMap[b], bi=billBasisInfo(b);
+      h += '<tr style="background:'+(i%2?'#FAFAFA':'#fff')+'">';
+      h += '<td style="padding:7px 9px;"><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px;background:'+bi.bg+';color:'+bi.color+';">'+bi.label+'</span></td>';
+      h += '<td style="padding:7px 9px;text-align:right;font-weight:600;">'+bd.count.toLocaleString()+'</td>';
+      h += '<td style="padding:7px 9px;text-align:right;color:#EA580C;font-weight:700;">'+cr2(bd.out)+'</td>';
+      h += '<td style="padding:7px 9px;text-align:right;color:#D97706;font-weight:700;">'+(bd.defCount||0).toLocaleString()+'</td>';
+      h += '<td style="padding:7px 9px;text-align:right;color:#F43F5E;font-weight:700;">'+cr2(bd.defOut||0)+'</td>';
+      h += '</tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;">';
+    h += '<button onclick="filtSecXLSX(\'filt-basis-tbl\',\'Bill_Basis_Breakup\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button>';
+    h += '<button onclick="filtSecPDF(\'filt-basis-tbl\',\'Bill Basis Breakup\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:3px 10px;border-radius:5px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button>';
+    h += '</div>';
+  }
+
+  // ── CROSS ANALYSIS 1: Categories under each Feeder (show when SS selected, no specific feeder) ──
+  if(ss && !fd){
+    var feedCatMap = {};
+    scopeD.forEach(function(r){
+      var f=r.FEEDER||'Unknown', c=r.CATEGORY||'Unknown';
+      if(!feedCatMap[f]) feedCatMap[f]={};
+      if(!feedCatMap[f][c]) feedCatMap[f][c]={count:0,out:0};
+      feedCatMap[f][c].count++;
+      feedCatMap[f][c].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
+    });
+    var fcFeeders = Object.keys(feedCatMap).sort();
+    if(fcFeeders.length){
+      h += '<div style="margin-top:14px;font-family:var(--fh);font-weight:700;font-size:12px;color:#1E3A5F;">📶 CATEGORY-WISE REPORT UNDER EACH FEEDER</div>';
+      h += '<div style="overflow-x:auto;margin-top:6px;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+      h += '<thead><tr style="background:#EFF6FF;"><th style="padding:7px 9px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">FEEDER</th>';
+      h += '<th style="padding:7px 9px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">TARIFF</th>';
+      h += '<th style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">CONSUMERS</th>';
+      h += '<th style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">OUTSTANDING</th></tr></thead><tbody>';
+      var rowI=0;
+      fcFeeders.forEach(function(f){
+        var cats=Object.keys(feedCatMap[f]).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+        var firstCat=true;
+        cats.forEach(function(c){
+          var d=feedCatMap[f][c];
+          h += '<tr style="background:'+(rowI++%2?'#F9FAFB':'#fff')+'">';
+          h += '<td style="padding:7px 9px;font-weight:700;color:#1D4ED8;font-family:var(--fh);">'+(firstCat?f:'')+'</td>';
+          h += '<td style="padding:7px 9px;"><span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;background:#EEF2FF;color:#4338CA;">'+c+'</span></td>';
+          h += '<td style="padding:7px 9px;text-align:right;font-weight:600;">'+d.count.toLocaleString()+'</td>';
+          h += '<td style="padding:7px 9px;text-align:right;color:#EA580C;font-weight:700;">'+cr2(d.out)+'</td>';
+          h += '</tr>';
+          firstCat=false;
+        });
+      });
+      h += '</tbody></table></div>';
+    }
+  }
+
+  // ── CROSS ANALYSIS 2: Feeders under each Category (show when specific feeder NOT selected) ──
+  if(!fd){
+    var catFeedMap = {};
+    scopeD.forEach(function(r){
+      var c=r.CATEGORY||'Unknown', f=r.FEEDER||'Unknown';
+      if(!catFeedMap[c]) catFeedMap[c]={};
+      if(!catFeedMap[c][f]) catFeedMap[c][f]={count:0,out:0};
+      catFeedMap[c][f].count++;
+      catFeedMap[c][f].out += Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
+    });
+    var cfCats = Object.keys(catFeedMap).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+    if(cfCats.length > 1){
+      h += '<div style="margin-top:14px;font-family:var(--fh);font-weight:700;font-size:12px;color:#065F46;">📊 FEEDER-WISE REPORT UNDER EACH CATEGORY</div>';
+      h += '<div style="overflow-x:auto;margin-top:6px;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+      h += '<thead><tr style="background:#F0FDF4;"><th style="padding:7px 9px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">TARIFF</th>';
+      h += '<th style="padding:7px 9px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">FEEDER</th>';
+      h += '<th style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">CONSUMERS</th>';
+      h += '<th style="padding:7px 9px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">OUTSTANDING</th></tr></thead><tbody>';
+      var rowJ=0;
+      cfCats.forEach(function(c){
+        var feeds=Object.keys(catFeedMap[c]).sort();
+        var firstFeed=true;
+        feeds.forEach(function(f){
+          var d=catFeedMap[c][f];
+          h += '<tr style="background:'+(rowJ++%2?'#F9FAFB':'#fff')+'">';
+          h += '<td style="padding:7px 9px;"><span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;background:#D1FAE5;color:#065F46;">'+(firstFeed?c:'')+'</span></td>';
+          h += '<td style="padding:7px 9px;font-weight:600;color:#1D4ED8;">'+f+'</td>';
+          h += '<td style="padding:7px 9px;text-align:right;font-weight:600;">'+d.count.toLocaleString()+'</td>';
+          h += '<td style="padding:7px 9px;text-align:right;color:#EA580C;font-weight:700;">'+cr2(d.out)+'</td>';
+          h += '</tr>';
+          firstFeed=false;
+        });
+      });
+      h += '</tbody></table></div>';
+    }
+  }
+
+  h += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">';
+    h += '<button onclick="dashExportFiltered()" style="background:#059669;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:11px;cursor:pointer;">\u2b07 XLSX</button>';
+  h += '<button onclick="dashPrintFiltered()" style="background:#DC2626;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-family:var(--fh);font-weight:700;font-size:11px;cursor:pointer;">\ud83d\uddb8 PDF</button>';
+  h += '</div>';
+
+  h += '</div>';
+  resultEl.innerHTML = h;
+}
 
 
+function dashExportBilled(){
+  var rows = D.filter(function(r){ return r.SOURCE==='billed'; }).map(function(r){
+    return {ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE_NO||r.MOBILE,ADDRESS:r.ADDRESS,
+      SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,TARIFF:r.CATEGORY,
+      OUTSTANDING:Math.max(0,parseFloat(r.AMOUNT_PAYABLE||0)||0),
+      CA:r.CA||'',BILLED_UNITS:r.BILLED_UNITS||'',BILL_DATE:r.BILL_DATE||'',
+      DUE_DATE:r.DUE_DATE||'',BILL_BASIS:r.BILL_BASIS||'',
+      LP_DATE:r.LAST_PAY_DATE||'',LP_AMT:Math.round(r.LAST_PAYMENT_AMOUNT||0)};
+  });
+  if(!rows.length){alert('No billed data.'); return;}
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Billed');
+  XLSX.writeFile(wb,'Billed_'+new Date().toLocaleDateString('en-IN').replace(/\//g,'-')+'.xlsx');
+}
+function dashExportUnbilled(){
+  var rows = D.filter(function(r){ return r.SOURCE==='unbilled'; }).map(function(r){
+    return {ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE_NO||r.MOBILE,ADDRESS:r.ADDRESS,
+      SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,TARIFF:r.CATEGORY,
+      OUTSTANDING:Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0),
+      LP_DATE:r.LAST_PAY_DATE||'',LP_AMT:Math.round(r.LAST_PAYMENT_AMOUNT||0)};
+  });
+  if(!rows.length){alert('No unbilled data.'); return;}
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Unbilled');
+  XLSX.writeFile(wb,'Unbilled_'+new Date().toLocaleDateString('en-IN').replace(/\//g,'-')+'.xlsx');
+}
+function dashExportAll(){
+  function toRow(r){
+    return {ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE_NO||r.MOBILE,ADDRESS:r.ADDRESS,
+      SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,TARIFF:r.CATEGORY,SOURCE:r.SOURCE,
+      OUTSTANDING:Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0),
+      CA:r.CA||'',BILL_BASIS:r.BILL_BASIS||'',
+      LP_DATE:r.LAST_PAY_DATE||'',LP_AMT:Math.round(r.LAST_PAYMENT_AMOUNT||0)};
+  }
+  if(!D.length){alert('No data.'); return;}
+  var wb=XLSX.utils.book_new();
+  var billed=D.filter(function(r){return r.SOURCE==='billed';});
+  var unbilled=D.filter(function(r){return r.SOURCE==='unbilled';});
+  if(billed.length)   XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(billed.map(toRow)),'Billed');
+  if(unbilled.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(unbilled.map(toRow)),'Unbilled');
+  XLSX.writeFile(wb,'All_Consumers_'+new Date().toLocaleDateString('en-IN').replace(/\//g,'-')+'.xlsx');
+}
+
+function dashSecXLSX(bodyId, filename){
+  var el = document.getElementById(bodyId);
+  if(!el){ alert('Section not found.'); return; }
+  if(el.style.display==='none') el.style.display='block';
+  var tables = el.querySelectorAll('table');
+  if(!tables.length){ alert('No table data to export.'); return; }
+  var wb = XLSX.utils.book_new();
+  tables.forEach(function(tbl, i){
+    var ws = XLSX.utils.table_to_sheet(tbl);
+    var name = (filename+(tables.length>1?'_'+(i+1):'')).substring(0,31);
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  });
+  XLSX.writeFile(wb, filename+'_'+new Date().toLocaleDateString('en-IN').replace(/\//g,'-')+'.xlsx');
+}
+
+function filtSecXLSX(tblId, filename){
+  var el = document.getElementById(tblId);
+  if(!el){ alert('Table not found.'); return; }
+  var tbl = el.querySelector('table');
+  if(!tbl){ alert('No table data.'); return; }
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet(tbl), filename.substring(0,31));
+  XLSX.writeFile(wb, filename+'_'+new Date().toLocaleDateString('en-IN').replace(/\//g,'-')+'.xlsx');
+}
+
+function filtSecPDF(tblId, title){
+  var el = document.getElementById(tblId);
+  if(!el){ alert('Table not found.'); return; }
+  var tbl = el.querySelector('table');
+  if(!tbl){ alert('No table data.'); return; }
+  // Build clean table html
+  var cleanHtml = '<table>';
+  tbl.querySelectorAll('tr').forEach(function(row){
+    cleanHtml += '<tr>';
+    row.querySelectorAll('th,td').forEach(function(cell){
+      var tag = cell.tagName.toLowerCase();
+      var cs = cell.getAttribute('colspan') ? ' colspan="'+cell.getAttribute('colspan')+'"' : '';
+      var rs = cell.getAttribute('rowspan') ? ' rowspan="'+cell.getAttribute('rowspan')+'"' : '';
+      cleanHtml += '<'+tag+cs+rs+'>'+cell.textContent.trim().replace(/\s+/g,' ')+'</'+tag+'>';
+    });
+    cleanHtml += '</tr>';
+  });
+  cleanHtml += '</table>';
+  var w = window.open('','_blank','width=900,height=650');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+title+'</title>');
+  w.document.write('<style>*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:10px;margin:0;color:#000;}');
+  w.document.write('h2{color:#1E3A5F;font-size:13px;margin:0 0 2px;}.sub{font-size:9px;color:#555;margin-bottom:8px;border-bottom:1px solid #ccc;padding-bottom:3px;}');
+  w.document.write('table{border-collapse:collapse;width:100%;font-size:9px;}thead{display:table-header-group;}');
+  w.document.write('th{background:#1E3A5F;color:#fff;padding:4px 6px;text-align:left;border:1px solid #1E3A5F;font-size:8px;}');
+  w.document.write('td{border:1px solid #ccc;padding:3px 6px;}tr:nth-child(even) td{background:#f5f5f5;}tr{page-break-inside:avoid;}');
+  w.document.write('@page{size:A4 landscape;margin:10mm;}@media print{body{margin:0;}}');
+  w.document.write('</style></head><body>');
+  w.document.write('<h2>'+title+'</h2>');
+  w.document.write('<div class="sub">DVVNL JHANSI | Generated: '+new Date().toLocaleString('en-IN')+'</div>');
+  w.document.write(cleanHtml);
+  w.document.write('<scr'+'ipt>window.onload=function(){window.print();};<'+'/scr'+'ipt>');
+  w.document.write('</body></html>');
+  w.document.close();
+}
+
+function dashSecPDF(bodyId, title){
+  var el = document.getElementById(bodyId);
+  if(!el){ alert('Section not found.'); return; }
+  if(el.style.display==='none') el.style.display='block';
+
+  // Extract all tables as clean HTML (text only, no color spans)
+  var tables = el.querySelectorAll('table');
+  if(!tables.length){ alert('No table data to export.'); return; }
+
+  var cleanTablesHtml = '';
+  tables.forEach(function(tbl){
+    cleanTablesHtml += '<table>';
+    var rows = tbl.querySelectorAll('tr');
+    rows.forEach(function(row, ri){
+      cleanTablesHtml += '<tr>';
+      row.querySelectorAll('th,td').forEach(function(cell){
+        var tag = cell.tagName.toLowerCase();
+        var colspan = cell.getAttribute('colspan') ? ' colspan="'+cell.getAttribute('colspan')+'"' : '';
+        var rowspan = cell.getAttribute('rowspan') ? ' rowspan="'+cell.getAttribute('rowspan')+'"' : '';
+        // Get text content (strips all spans/colors)
+        var txt = cell.textContent.trim().replace(/\s+/g,' ');
+        cleanTablesHtml += '<'+tag+colspan+rowspan+'>'+txt+'</'+tag+'>';
+      });
+      cleanTablesHtml += '</tr>';
+    });
+    cleanTablesHtml += '</table>';
+  });
+
+  var w = window.open('','_blank','width=1100,height=750');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+title+'</title>');
+  w.document.write('<style>');
+  w.document.write('*{box-sizing:border-box;}');
+  w.document.write('body{font-family:Arial,sans-serif;font-size:10px;margin:12mm;color:#000;}');
+  w.document.write('h2{color:#1E3A5F;font-size:13px;margin:0 0 2px;font-weight:bold;}');
+  w.document.write('.sub{font-size:9px;color:#555;margin-bottom:10px;border-bottom:1px solid #ccc;padding-bottom:4px;}');
+  w.document.write('table{border-collapse:collapse;width:100%;font-size:9px;margin-bottom:12px;page-break-inside:auto;}');
+  w.document.write('thead{display:table-header-group;}');
+  w.document.write('th{background:#1E3A5F;color:#fff;padding:4px 6px;text-align:left;font-size:8px;border:1px solid #1E3A5F;}');
+  w.document.write('td{border:1px solid #ccc;padding:3px 6px;}');
+  w.document.write('tr:nth-child(even) td{background:#f5f5f5;}');
+  w.document.write('tr{page-break-inside:avoid;}');
+  w.document.write('@page{size:A4 landscape;margin:12mm;}');
+  w.document.write('@media print{body{margin:0;}thead{display:table-header-group;}}');
+  w.document.write('</style></head><body>');
+  w.document.write('<h2>'+title+'</h2>');
+  w.document.write('<div class="sub">DVVNL JHANSI &nbsp;&nbsp;|&nbsp;&nbsp; Generated: '+new Date().toLocaleString('en-IN')+'</div>');
+  w.document.write(cleanTablesHtml);
+  w.document.write('<script>window.onload=function(){window.print();};<\/script>');
+  w.document.write('</body></html>');
+  w.document.close();
+}
+
+function dashPrintFiltered(){
+  var resultEl = gel('dash-filtered-result');
+  if(!resultEl || !resultEl.innerHTML.trim()){ alert('Pehle filters apply karo.'); return; }
+  var div = gel('dash-div-sel') ? gel('dash-div-sel').value : '';
+  var ss  = gel('dash-ss-sel')  ? gel('dash-ss-sel').value  : '';
+  var fd  = gel('dash-feed-sel')? gel('dash-feed-sel').value: '';
+  var basis = gel('dash-basis-sel') ? gel('dash-basis-sel').value : '';
+  var title = (div?div+' -> ':'')+(ss||'All SS')+(fd?' -> '+fd:'')+(basis?' | Basis: '+basis:'');
+
+  // Extract KPI cards
+  var kpiHtml = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">';
+  resultEl.querySelectorAll('div[style*="border-radius:10px"],div[style*="min-width:120px"]').forEach(function(card){
+    var vals = card.querySelectorAll('[style*="font-weight:8"],[style*="font-size:2"]');
+    var lbl  = card.querySelector('[style*="font-size:10px"]');
+    if(vals.length && lbl){
+      kpiHtml += '<div style="border:1px solid #ccc;padding:5px 8px;min-width:90px;">';
+      kpiHtml += '<div style="font-size:13px;font-weight:bold;">'+vals[0].textContent.trim()+'</div>';
+      kpiHtml += '<div style="font-size:8px;color:#555;">'+lbl.textContent.trim()+'</div></div>';
+    }
+  });
+  kpiHtml += '</div>';
+
+  // Extract all tables as clean text
+  var cleanHtml = '';
+  resultEl.querySelectorAll('table').forEach(function(tbl){
+    cleanHtml += '<table>';
+    tbl.querySelectorAll('tr').forEach(function(row){
+      cleanHtml += '<tr>';
+      row.querySelectorAll('th,td').forEach(function(cell){
+        var tag = cell.tagName.toLowerCase();
+        var cs  = cell.getAttribute('colspan') ? ' colspan="'+cell.getAttribute('colspan')+'"' : '';
+        var rs  = cell.getAttribute('rowspan') ? ' rowspan="'+cell.getAttribute('rowspan')+'"' : '';
+        var txt = cell.textContent.trim().replace(/\s+/g,' ');
+        cleanHtml += '<'+tag+cs+rs+'>'+txt+'</'+tag+'>';
+      });
+      cleanHtml += '</tr>';
+    });
+    cleanHtml += '</table><br>';
+  });
+
+  var w = window.open('','_blank','width=1200,height=800');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+title+'</title>');
+  w.document.write('<style>*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:10px;margin:0;color:#000;}');
+  w.document.write('h2{color:#1E3A5F;font-size:13px;margin:0 0 2px;}');
+  w.document.write('.sub{font-size:9px;color:#555;margin-bottom:8px;border-bottom:1px solid #ccc;padding-bottom:3px;}');
+  w.document.write('table{border-collapse:collapse;width:100%;font-size:9px;margin-bottom:10px;page-break-inside:auto;}');
+  w.document.write('thead{display:table-header-group;}th{background:#1E3A5F;color:#fff;padding:4px 6px;text-align:left;border:1px solid #1E3A5F;font-size:8px;}');
+  w.document.write('td{border:1px solid #ccc;padding:3px 6px;}tr:nth-child(even) td{background:#f5f5f5;}tr{page-break-inside:avoid;}');
+  w.document.write('@page{size:A4 landscape;margin:10mm;}@media print{body{margin:0;}thead{display:table-header-group;}}');
+  w.document.write('</style></head><body>');
+  w.document.write('<h2>FILTERED REPORT - '+title+'</h2>');
+  w.document.write('<div class="sub">DVVNL JHANSI | Generated: '+new Date().toLocaleString('en-IN')+'</div>');
+  w.document.write(kpiHtml);
+  w.document.write(cleanHtml);
+  w.document.write('<scr'+'ipt>window.onload=function(){window.print();};<'+'/scr'+'ipt>');
+  w.document.write('</body></html>');
+  w.document.close();
+}
+
+function dashExportFiltered(){
+  var ss = gel('dash-ss-sel') ? gel('dash-ss-sel').value : '';
+  var fd = gel('dash-feed-sel') ? gel('dash-feed-sel').value : '';
+  var basis = gel('dash-basis-sel') ? gel('dash-basis-sel').value : '';
+  var ssN = dashNorm(ss), fdN = dashNorm(fd), basisN = dashNorm(basis);
+  var scopeD = D.filter(function(r){
+    if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
+    if(fd && dashNorm(r.FEEDER)!==fdN) return false;
+    if(basis && dashNorm(r.BILL_BASIS)!==basisN) return false;
+    return true;
+  }).map(function(r){
+    return {
+      ACCT_ID:r.ACCT_ID, NAME:r.NAME, MOBILE:r.MOBILE_NO||r.MOBILE,
+      SUBSTATION:r.SUBSTATION, FEEDER:r.FEEDER, TARIFF:r.CATEGORY,
+      SOURCE:r.SOURCE, OUTSTANDING:Math.round(Math.max(0,parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0)),
+      CA:r.CA||'', BILLED_UNITS:r.BILLED_UNITS||'', BILL_DATE:r.BILL_DATE||'', DUE_DATE:r.DUE_DATE||'', BILL_BASIS:r.BILL_BASIS||''
+    };
+  });
+  var scopeDef = DEF_ALL.filter(function(r){
+    if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
+    if(fd && dashNorm(r.FEEDER)!==fdN) return false;
+    return true;
+  }).map(function(r){
+    var sc = collectionProbability(r), lb = collectionLabel(sc);
+    return {
+      ACCT_ID:r.ACCT_ID, NAME:r.NAME, MOBILE:r.MOBILE, SUBSTATION:r.SUBSTATION, FEEDER:r.FEEDER,
+      TARIFF:r.SUPPLY_TYPE, OUTSTANDING:Math.round(r.OUTSTANDING||0),
+      BILL_BASIS:billBasisInfo(r.BILL_BASIS).label,
+      AI_COLLECTION_PROB:sc, AI_LABEL:lb.label, ATR_STATUS:r.ATR_STATUS||'PENDING'
+    };
+  });
+  if(!scopeD.length && !scopeDef.length){ alert('No data for this selection.'); return; }
+  var wb = XLSX.utils.book_new();
+  if(scopeD.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(scopeD), 'Consumers');
+  if(scopeDef.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(scopeDef), 'Defaulters');
+  var label = (ss||'All')+(fd?'_'+fd:'');
+  label = label.replace(/[^a-zA-Z0-9_]/g,'_');
+  XLSX.writeFile(wb, 'Dashboard_Report_'+label+'_'+Date.now()+'.xlsx');
+}
+
+function buildSettingsPanel(){
+  _settingsBuilt=true;
+  var subs=[...new Set((D.length?D:[]).map(function(r){return r.SUBSTATION;}).filter(Boolean))].sort();
+  if(!subs.length) subs=Object.keys(SUB_DIVISION_MAP);
+
+  var localMap={}; try{localMap=JSON.parse(localStorage.getItem('sub_division_map')||'{}');}catch(e){}
+  var rowsHtml=subs.map(function(s){
+    var div=localMap[s]||SUB_DIVISION_MAP[s]||'eudd1';
+    return '<tr><td style="padding:6px 10px;font-size:12px;font-weight:600;">'+s+'</td>'+
+      '<td style="text-align:center"><input type="radio" name="div_'+s.replace(/[^a-zA-Z0-9]/g,'_')+'" value="eudd1" '+(div==='eudd1'?'checked':'')+' data-sub="'+s+'" class="sub-div-radio" onchange="saveSubDivMap()"></td>'+
+      '<td style="text-align:center"><input type="radio" name="div_'+s.replace(/[^a-zA-Z0-9]/g,'_')+'" value="eudd2" '+(div==='eudd2'?'checked':'')+' data-sub="'+s+'" class="sub-div-radio" onchange="saveSubDivMap()"></td></tr>';
+  }).join('');
+
+  gel('panel-settings').innerHTML = 
+    '<div style="max-width:800px;margin:0 auto;">'+
+      '<div style="font-family:var(--fh);font-size:24px;font-weight:700;color:#4F46E5;margin-bottom:20px;text-align:center;">⚙️ SYSTEM SETTINGS</div>'+
+
+      /* UPLOAD MASTER CARD */
+      '<div class="settings-card">'+
+        '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:12px;color:#1E1B4B;display:flex;align-items:center;gap:8px;">📤 UPLOAD MASTER DATA</div>'+
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:15px;line-height:1.5;">Select an Excel/CSV to split by division and push to GitHub. Columns: ACCT_ID, NAME, PAY_AMT, PAY_DATE, etc.</div>'+
+        '<input type="file" id="settings-file" accept=".xlsx,.xls,.csv" style="width:100%;margin-bottom:15px;padding:8px;border:1px solid #E5E7EB;border-radius:8px;font-size:12px;"/>'+
+        '<div style="font-family:var(--fh);font-size:12px;font-weight:700;color:#4F46E5;margin-bottom:8px;">DIVISION ASSIGNMENT</div>'+
+        '<div style="max-height:180px;overflow-y:auto;border:1px solid #EEF2FF;border-radius:10px;margin-bottom:15px;">'+
+          '<table style="width:100%;border-collapse:collapse;font-size:11px;">'+
+          '<thead style="background:#F8FAFF;position:sticky;top:0;"><tr><th style="text-align:left;padding:8px;">SUBSTATION</th><th>EUDD1</th><th>EUDD2</th></tr></thead>'+
+          '<tbody id="sub-div-rows">'+rowsHtml+'</tbody></table>'+
+        '</div>'+
+        '<div class="settings-grid-row">'+
+          '<input type="password" id="gh-pat" placeholder="GitHub Personal Access Token" value="'+getGhPat()+'" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 14px;font-size:13px;" oninput="localStorage.setItem(&#39;gh_pat&#39;,this.value)"/>'+
+          '<button class="btn btn-acc" onclick="processAndUpload()">🚀 PROCESS &amp; UPLOAD</button>'+
+        '</div>'+
+        '<div id="settings-log" style="margin-top:15px;max-height:150px;overflow-y:auto;background:#0F172A;color:#A7F3D0;font-family:monospace;font-size:11px;padding:12px;border-radius:10px;display:none;"></div>'+
+      '</div>'+
+
+      /* NEW: LAT LONG UPLOAD CARD */
+      '<div class="settings-card" style="background:#F0F9FF;border-color:#BAE6FD;">'+
+        '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:12px;color:#0369A1;display:flex;align-items:center;gap:8px;">📍 UPLOAD LAT/LONG MAPPING</div>'+
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:15px;line-height:1.5;">Bulk update consumer locations. Provide a file with columns: <b>ACCT_ID, LAT, LON</b>. These will override existing coordinates during search.</div>'+
+        '<input type="file" id="latlong-file" accept=".xlsx,.xls,.csv" style="width:100%;margin-bottom:15px;padding:8px;border:1px solid #BAE6FD;border-radius:8px;font-size:12px;background:#fff;"/>'+
+        '<button class="btn" style="background:#0EA5E9;color:#fff;width:100%;" onclick="processLatLongUpload()">🛰️ UPDATE COORDINATES</button>'+
+        '<div id="latlong-log" style="margin-top:12px;font-size:11px;font-family:monospace;display:none;"></div>'+
+      '</div>'+
+
+      /* FTP SYNC CARD - COMPACT */
+      '<div class="settings-card" style="background:#FFF7ED;border-color:#FED7AA;">'+
+        '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:12px;color:#9A3412;display:flex;align-items:center;gap:8px;">📡 FTP DATA SYNC</div>'+
+        '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:#fff;border:1px solid #FED7AA;margin-bottom:15px;">'+
+          '<span id="ftp-dot" style="width:10px;height:10px;border-radius:50%;background:#9CA3AF;flex-shrink:0;"></span>'+
+          '<span id="ftp-status-text" style="font-family:var(--fh);font-size:13px;font-weight:600;flex:1;color:#4B5563;">Checking server…</span>'+
+          '<button onclick="checkSyncServer()" style="background:transparent;border:1px solid #FED7AA;border-radius:6px;padding:4px 10px;font-family:var(--fh);font-size:11px;font-weight:700;color:#EA580C;cursor:pointer;">REFRESH</button>'+
+        '</div>'+
+        '<div id="ftp-synced-info" style="display:none;background:#fff;border:1px solid #FED7AA;border-radius:10px;padding:12px;margin-bottom:15px;font-size:11px;line-height:1.6;"></div>'+
+        '<div style="font-family:var(--fh);font-size:11px;font-weight:700;color:#9A3412;letter-spacing:1px;margin-bottom:10px;">SELECT DATA:</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:15px;">'+
+          '<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;"><input type="checkbox" id="sync-master" checked style="accent-color:#EA580C;width:16px;height:16px;"> MASTER</label>'+
+          '<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;"><input type="checkbox" id="sync-billed" checked style="accent-color:#EA580C;width:16px;height:16px;"> BILLED</label>'+
+          '<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;"><input type="checkbox" id="sync-unbilled" checked style="accent-color:#EA580C;width:16px;height:16px;"> UNBILLED</label>'+
+          '<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#F43F5E;cursor:pointer;"><input type="checkbox" id="sync-force" style="accent-color:#F43F5E;width:16px;height:16px;"> FORCE ⚠</label>'+
+        '</div>'+
+        '<button class="btn" style="background:#EA580C;color:#fff;width:100%;padding:14px;" id="ftp-sync-btn" onclick="triggerFtpSync()">🔄 START SYNC PROCESS</button>'+
+        '<pre id="ftp-sync-log" style="display:none;background:#0F172A;color:#A7F3D0;font-size:10px;font-family:monospace;padding:12px;border-radius:10px;max-height:180px;overflow-y:auto;margin-top:12px;"></pre>'+
+      '</div>'+
+
+      /* ATR GOOGLE SHEET CARD */
+      '<div class="settings-card" style="background:#F0FDF4;border-color:#BBF7D0;">'+
+        '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:8px;color:#065F46;display:flex;align-items:center;gap:8px;">📋 ATR GOOGLE SHEET SYNC</div>'+
+        '<div style="font-size:12px;color:#374151;margin-bottom:14px;line-height:1.6;">'+
+          'Field staff ATR entries (PAID / LOCK / THEFT) save locally <b>and</b> sync to a Google Apps Script.<br>'+
+          'Paste your deployed Web App URL below. Without this, ATR stays on this device only.'+
+        '</div>'+
+        '<div style="margin-bottom:12px;">'+
+          '<div class="lbl" style="margin-bottom:6px;">APPS SCRIPT WEB APP URL</div>'+
+          '<input type="text" id="settings-atr-url" placeholder="https://script.google.com/macros/s/…/exec"'+
+            ' style="width:100%;border:1.5px solid #6EE7B7;border-radius:10px;padding:10px 14px;font-size:12px;font-family:var(--fb);outline:none;box-sizing:border-box;"'+
+            ' value=""/>'+
+        '</div>'+
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
+          '<button class="btn" style="background:#059669;color:#fff;flex:1;min-width:120px;" onclick="saveAtrUrl()">💾 SAVE URL</button>'+
+          '<button class="btn" style="background:#0EA5E9;color:#fff;flex:1;min-width:120px;" onclick="syncAtrFromSheet()">🔄 PULL FROM SHEET</button>'+
+          '<button class="btn" style="background:#7C3AED;color:#fff;flex:1;min-width:140px;" onclick="downloadAtrFromSheet()">⬇ DOWNLOAD ATR XLSX</button>'+
+          '<button class="btn" style="background:#F59E0B;color:#000;flex:1;min-width:120px;" onclick="manualPushAtr()">⬆ PUSH TO SHEET NOW</button>'+
+        '</div>'+
+        '<div id="atr-url-status" style="margin-top:10px;font-size:12px;font-family:var(--fh);font-weight:600;color:#059669;"></div>'+
+        '<div style="margin-top:10px;padding:10px 14px;background:#fff;border-radius:8px;border:1px solid #BBF7D0;font-size:12px;color:#374151;line-height:2;">'+
+          '<b>SM ATR (localStorage):</b> <span id="atr-local-count" style="color:#4F46E5;font-weight:700;">–</span>&emsp;'+
+          '<b>Defaulter ATR (localStorage):</b> <span id="atr-def-local-count" style="color:#F43F5E;font-weight:700;">–</span><br>'+
+          '<b>Last pushed to sheet:</b> <span id="atr-last-push" style="color:#6B7280;font-weight:600;">–</span>&emsp;'+
+          '<button onclick="clearPendingAtr()" style="background:#FEE2E2;border:1px solid #FECACA;border-radius:6px;padding:3px 10px;font-size:11px;font-family:var(--fh);font-weight:700;color:#DC2626;cursor:pointer;">🗑 CLEAR PENDING-ONLY RECORDS</button>'+
+          '&nbsp;<button onclick="unlockAllAtr()" style="background:#EDE9FE;border:1px solid #C4B5FD;border-radius:6px;padding:3px 10px;font-size:11px;font-family:var(--fh);font-weight:700;color:#6D28D9;cursor:pointer;">🔓 UNLOCK ALL ATR</button>'+
+        '</div>'+
+      '</div>'+
+
+    '</div>';
+  checkSyncServer();
+}
+
+function processLatLongUpload(){
+  var fEl = gel('latlong-file');
+  if(!fEl || !fEl.files[0]) return alert('Please choose a file first.');
+  if(!getGhPat()) return alert('Enter GitHub PAT in the card above.');
+  
+  var logEl = gel('latlong-log'); logEl.style.display='block'; logEl.innerHTML='⏳ Reading…';
+  
+  var reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      var wb = XLSX.read(e.target.result, {type:'array'});
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      if(!rows.length) throw new Error('File is empty.');
+      
+      var keys = Object.keys(rows[0]), hdrs = keys.map(k => String(k).trim().toUpperCase());
+      var iAcct = findCol(hdrs, ['ACCT_ID', 'ACCOUNT_ID']);
+      var iLat = findCol(hdrs, ['LAT', 'LATITUDE']);
+      var iLon = findCol(hdrs, ['LON', 'LONGITUDE', 'LONG']);
+      
+      if(iAcct < 0 || iLat < 0 || iLon < 0) throw new Error('Missing columns (Need: ACCT_ID, LAT, LON)');
+      
+      var mapping = {};
+      rows.forEach(r => {
+        var v = keys.map(k => r[k]);
+        var acct = ac(v[iAcct]);
+        if(acct) mapping[acct] = [v[iLat], v[iLon]];
+      });
+      
+      logEl.innerHTML = '✅ Parsed ' + rows.length + ' points. Uploading to GitHub…';
+      var content = JSON.stringify(mapping);
+      ghPutFile('geo_mapping.json', content, 'Update coordinates mapping')
+        .then(() => { logEl.innerHTML = '🎉 DONE! Coordinates updated. Reload to apply.'; })
+        .catch(err => { logEl.innerHTML = '❌ Error: ' + err.message; });
+        
+    } catch(err){ logEl.innerHTML = '❌ Error: ' + err.message; }
+  };
+  reader.readAsArrayBuffer(fEl.files[0]);
+}
+
+
+function saveSubDivMap(){
+  var m={}; document.querySelectorAll('.sub-div-radio:checked').forEach(function(r){ m[r.dataset.sub]=r.value; });
+  localStorage.setItem('sub_division_map',JSON.stringify(m));
+}
+
+function processAndUpload(){
+  var fEl=gel('settings-file');
+  if(!fEl||!fEl.files[0]) return alert('Choose a file first.');
+  if(!getGhPat()) return alert('Enter GitHub Personal Access Token first.');
+
+  var subDivMap={};
+  document.querySelectorAll('.sub-div-radio:checked').forEach(function(r){ subDivMap[r.dataset.sub]=r.value; });
+  localStorage.setItem('sub_division_map',JSON.stringify(subDivMap));
+
+  var logEl=gel('settings-log'); logEl.style.display='block'; logEl.innerHTML='';
+  settingsLog('⏳ Reading file…');
+
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var wb=XLSX.read(e.target.result,{type:'array'});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var rawRows=XLSX.utils.sheet_to_json(ws,{defval:''});
+      if(!rawRows.length) throw new Error('File is empty.');
+      
+      // Smart header detection
+      var firstRow = rawRows[0];
+      var keys = Object.keys(firstRow);
+      var hdrs = keys.map(k => String(k).trim().toUpperCase());
+      
+      var iAcct = findCol(hdrs, ['ACCT_ID', 'ACCOUNT_ID']);
+      var iMob  = findCol(hdrs, ['MOBILE_NO', 'MOBILE']);
+      var iName = findCol(hdrs, ['NAME', 'CONSUMER_NAME']);
+      var iAddr = findCol(hdrs, ['ADDRESS', 'ADDRES']);
+      var iCat  = findCol(hdrs, ['TARIFF_TYPE', 'CATEGORY', 'SUPPLY_TYPE', 'TARIFF']);
+      var iLoad = findCol(hdrs, ['LOAD', 'SANCTION_LOAD', 'SANCT_LOAD']);
+      var iLat  = findCol(hdrs, ['LAT', 'LATITUDE']);
+      var iLon  = findCol(hdrs, ['LON', 'LONGITUDE', 'LONG']);
+      var iSub  = findCol(hdrs, ['SUBSTATION', 'SUB_STATION']);
+      var iFeed = findCol(hdrs, ['FEEDER']);
+      var iDate = findCol(hdrs, ['PAY_DATE', 'LP DATE', 'LAST_PAY_DATE']);
+      var iAmt  = findCol(hdrs, ['PAY_AMT', 'LP AMT', 'LAST_PAY_AMT', 'LAST_PAYMENT_AMOUNT']);
+      var iOut  = findCol(hdrs, ['TOTAL_OUTSTANDING', 'TOTAL OUTSTANDING', 'AMOUNT_PAYABLE', 'OUTSTANDING']);
+
+      settingsLog('✅ Parsed '+rawRows.length+' rows. Mapping columns…');
+
+      var groups={eudd1:[],eudd2:[]};
+      rawRows.forEach(function(r){
+        var vals = keys.map(k => r[k]);
+        var sub = iSub>=0 ? String(vals[iSub]||'').trim() : '';
+        var div = subDivMap[sub]||'eudd1';
+        var lat = iLat>=0 ? vals[iLat] : '';
+        var lon = iLon>=0 ? vals[iLon] : '';
+        if(parseFloat(lat)>50){var t=lat;lat=lon;lon=t;}
+        
+        groups[div].push({
+          ACCT_ID: iAcct>=0 ? vals[iAcct] : '',
+          MOBILE_NO: iMob>=0 ? vals[iMob] : '',
+          NAME: iName>=0 ? vals[iName] : '',
+          ADDRESS: iAddr>=0 ? vals[iAddr] : '',
+          CATEGORY: iCat>=0 ? vals[iCat] : '',
+          LOAD: iLoad>=0 ? vals[iLoad] : '',
+          LAT: lat, LON: lon,
+          SUBSTATION: sub,
+          FEEDER: iFeed>=0 ? vals[iFeed] : '',
+          'LP DATE': iDate>=0 ? vals[iDate] : '',
+          'LP AMT': iAmt>=0 ? vals[iAmt] : '',
+          'TOTAL OUTSTANDING': iOut>=0 ? vals[iOut] : ''
+        });
+      });
+
+      var manifest={eudd1:[],eudd2:[],substation_division:subDivMap,updated:new Date().toISOString()};
+      var MAX_BYTES=5*1024*1024;
+      var uploads=[];
+
+      ['eudd1','eudd2'].forEach(function(div){
+        var rs=groups[div], header=CSV_COLS.join(',')+'\n', chunkRows=[], chunkSize=header.length, letter=0;
+        function flush(){
+          if(!chunkRows.length) return;
+          var fname=div+String.fromCharCode(97+letter)+'.csv';
+          uploads.push({path:fname, content:rowsToCsv(chunkRows)});
+          manifest[div].push(fname);
+          letter++; chunkRows=[]; chunkSize=header.length;
+        }
+        rs.forEach(function(r){
+          var line=CSV_COLS.map(function(c){return csvEscape(r[c]);}).join(',')+'\n';
+          if(chunkSize+line.length>MAX_BYTES) flush();
+          chunkRows.push(r); chunkSize+=line.length;
+        });
+        flush();
+      });
+      uploads.push({path:'manifest.json', content:JSON.stringify(manifest,null,2)});
+
+      settingsLog('📦 Built '+uploads.length+' files: '+uploads.map(function(u){return u.path;}).join(', '));
+      settingsLog('☁️ Uploading to GitHub…');
+
+      var i=0;
+      function next(){
+        if(i>=uploads.length){ settingsLog('🎉 DONE! manifest.json updated. Reload to use new data.'); return; }
+        var u=uploads[i];
+        settingsLog('  → '+u.path+' ('+(u.content.length/1024).toFixed(0)+' KB)');
+        ghPutFile(u.path,u.content,'Update '+u.path+' via Settings tab')
+          .then(function(){ settingsLog('  ✅ '+u.path); i++; next(); })
+          .catch(function(err){ settingsLog('  ❌ '+u.path+': '+err.message); });
+      }
+      next();
+    }catch(err){ settingsLog('❌ Error: '+err.message); }
+  };
+  reader.readAsArrayBuffer(fEl.files[0]);
+}
+
+
+function downloadAtrFromSheet(){
+  // Ensure DEF_ALL is populated before building the report
+  if(!DEF_ALL.length){
+    buildDefAll();
+    setTimeout(downloadAtrFromSheet, 1200); // retry once data loads
+    return;
+  }
+
+  // Always merge localStorage (latest) + sheet — local wins on conflict
+  var localSm  = {}; try{ localSm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
+  var localDef = {}; try{ localDef = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+
+  var url = getScriptUrl();
+  var btn = event ? event.target : null;
+
+  function buildAndDownload(sheetSm, sheetDef){
+    // Local overrides sheet (local is always newest)
+    var mergedSm  = Object.assign({}, sheetSm,  localSm);
+    var mergedDef = Object.assign({}, sheetDef, localDef);
+
+    var smRows = [], defRows = [];
+
+    Object.keys(mergedSm).forEach(function(acct){
+      var e = mergedSm[acct];
+      var dc = DC.find(function(r){ return String(r.ACCT_ID)===String(acct); });
+      smRows.push({
+        ACCT_ID:    acct,
+        NAME:       dc?dc.NAME:'',
+        MOBILE:     dc?dc.MOBILE_NO:'',
+        METER_NO:   dc?(dc.METER_NO||METER_DATA[acct]||''):'',
+        SUBSTATION: dc?dc.SUBSTATION:'',
+        FEEDER:     dc?dc.FEEDER:'',
+        OUTSTANDING:dc?Math.round(dc.OUTSTANDING||0):0,
+        ATR_STATUS: typeof e==='object'?e.atr:e,
+        COMMENT:    typeof e==='object'?(e.comment||''):'',
+        TIMESTAMP:  typeof e==='object'?(e.ts||''):''
+      });
+    });
+
+    Object.keys(mergedDef).forEach(function(acct){
+      var e = mergedDef[acct];
+      var dr = DEF_ALL.find(function(r){ return String(r.ACCT_ID)===String(acct); });
+      var sc = dr ? collectionProbability(dr) : '', lb = dr ? collectionLabel(sc) : {label:''};
+      defRows.push({
+        ACCT_ID:    acct,
+        NAME:       dr?dr.NAME:'',
+        MOBILE:     dr?(dr.MOBILE_NO||dr.MOBILE||''):'',
+        ADDRESS:    dr?dr.ADDRESS:'',
+        METER_NO:   dr?(METER_DATA[acct]||dr.METER_NO||''):'',
+        TARIFF:     dr?dr.SUPPLY_TYPE:'',
+        LOAD_KW:    dr?dr.LOAD:0,
+        SUBSTATION: dr?dr.SUBSTATION:'',
+        FEEDER:     dr?dr.FEEDER:'',
+        LP_DATE:    dr?dr.PAY_DATE:'',
+        LP_AMT:     dr?Math.round(dr.PAY_AMT||0):0,
+        OUTSTANDING:dr?Math.round(dr.OUTSTANDING||0):0,
+        AI_COLLECTION_PROB: sc,
+        AI_LABEL:   lb.label,
+        ATR_STATUS: typeof e==='object'?e.atr:e,
+        COMMENT:    typeof e==='object'?(e.comment||''):'',
+        TIMESTAMP:  typeof e==='object'?(e.ts||''):''
+      });
+    });
+
+    if(!smRows.length && !defRows.length){ alert('No ATR data found.'); return; }
+
+    var wb = XLSX.utils.book_new();
+    var summary = [
+      {TYPE:'SM Unrecharge', COUNT:smRows.length},
+      {TYPE:'Defaulters',    COUNT:defRows.length},
+      {TYPE:'TOTAL',         COUNT:smRows.length+defRows.length}
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
+    if(smRows.length)  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(smRows),  'SM_ATR');
+    if(defRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(defRows), 'Defaulter_ATR');
+
+    var date = new Date().toLocaleDateString('en-IN').replace(/\//g,'-');
+    XLSX.writeFile(wb, 'ATR_Full_Report_'+date+'.xlsx');
+    if(btn){ btn.textContent='✅ DOWNLOADED'; btn.disabled=false; setTimeout(function(){ btn.textContent='⬇ DOWNLOAD ATR XLSX'; },2000); }
+  }
+
+  if(!url){
+    buildAndDownload({}, {});
+    return;
+  }
+
+  if(btn){ btn.textContent='⏳ FETCHING…'; btn.disabled=true; }
+  fetch(url + '?action=get', {mode:'cors'})
+    .then(function(r){ return r.json(); })
+    .then(function(data){ buildAndDownload(data['SM_ATR']||{}, data['Defaulter_ATR']||{}); })
+    .catch(function(){
+      buildAndDownload({}, {});
+      if(btn){ btn.textContent='⬇ DOWNLOAD ATR XLSX'; btn.disabled=false; }
+    });
+}
+
+function getScriptUrl(){
+  return localStorage.getItem('atr_script_url') || ATR_SCRIPT_URL || DEFAULT_SCRIPT_URL || '';
+}
+
+function syncAtrToSheet(payload){
+  var url = getScriptUrl();
+  if(!url){ console.log('No sheet URL configured'); return; }
+  fetch(url, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  }).then(function(){ console.log('ATR synced:', payload.acct); })
+    .catch(function(e){ console.warn('Sync error:', e); });
+}
+
+function syncAtrFromSheet(){
+  var url = getScriptUrl();
+  if(!url){ alert('⚠ Google Sheet URL not configured.\nGo to SM UNRECHARGE tab → SHEET SYNC SETTINGS → paste your script URL.'); return; }
+  
+  var btn = event.target;
+  btn.textContent = '⏳ SYNCING…';
+  btn.disabled = true;
+  
+  fetch(url + '?action=get', {mode:'cors'})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var smAtr   = data['SM_ATR'] || {};
+      var defAtr  = data['Defaulter_ATR'] || {};
+      
+      // Merge SM ATR into localStorage
+      var local_sm = {};
+      try{ local_sm = JSON.parse(localStorage.getItem('atr_data')||'{}'); }catch(e){}
+      Object.keys(smAtr).forEach(function(acct){ local_sm[acct] = smAtr[acct]; });
+      localStorage.setItem('atr_data', JSON.stringify(local_sm));
+      
+      // Merge Defaulter ATR into localStorage
+      var local_def = {};
+      try{ local_def = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+      Object.keys(defAtr).forEach(function(acct){ local_def[acct] = defAtr[acct]; });
+      localStorage.setItem('def_atr_data', JSON.stringify(local_def));
+      
+      // Apply to DC array
+      DC.forEach(function(r){
+        var e = local_sm[String(r.ACCT_ID)];
+        if(e){ r.ATR_STATUS = typeof e==='object'?(e.atr||r.ATR_STATUS):e; r.ATR_COMMENT = typeof e==='object'?(e.comment||''):''; }
+      });
+      
+      // Apply to DEF_ALL
+      DEF_ALL.forEach(function(r){
+        var e = local_def[String(r.ACCT_ID)];
+        if(e){ r.ATR_STATUS = typeof e==='object'?(e.atr||r.ATR_STATUS):e; r.ATR_COMMENT = typeof e==='object'?(e.comment||''):''; }
+      });
+      
+      var total = Object.keys(smAtr).length + Object.keys(defAtr).length;
+      btn.textContent = '✅ SYNCED ('+total+')';
+      btn.disabled = false;
+      setTimeout(function(){ btn.textContent='☁️ SYNC FROM SHEET'; },3000);
+      
+      // Refresh tables
+      if(DC.length) dcFilter();
+      if(DEF_ALL.length) runDefaulterFilter();
+      
+      alert('✅ Synced '+Object.keys(smAtr).length+' SM ATR and '+Object.keys(defAtr).length+' Defaulter ATR records from Google Sheet!');
+    })
+    .catch(function(e){
+      btn.textContent = '☁️ SYNC FROM SHEET';
+      btn.disabled = false;
+      alert('⚠ Sync failed: ' + e.message + '\n\nMake sure script is deployed as Web App with access: Anyone');
+    });
+}
+
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
+const ADMIN_PIN='1995', USER_PIN='1234';
+const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours
+let currentPin='', loginRole='admin', CURRENT_ROLE=null;
+
+function setLoginRole(r){ loginRole=r; gel('tab-admin').classList.toggle('active',r==='admin'); gel('tab-user').classList.toggle('active',r==='user'); pinReset(); }
+function pinPress(d){ if(currentPin.length>=4)return; currentPin+=d; updatePinDots(); if(currentPin.length===4)setTimeout(checkPin,150); }
+function pinBackspace(){ currentPin=currentPin.slice(0,-1); updatePinDots(); setText('login-error',''); }
+function pinClear(){ pinReset(); }
+function pinReset(){ currentPin=''; updatePinDots(false); setText('login-error',''); }
+function updatePinDots(err){ for(var i=0;i<4;i++){var d=gel('pd'+i); if(!d)continue; d.classList.toggle('filled',i<currentPin.length); d.classList.toggle('error',err===true);} }
+function checkPin(){
+  var ok=loginRole==='admin'?ADMIN_PIN:USER_PIN;
+  if(currentPin===ok){ loginSuccess(loginRole); }
+  else{ updatePinDots(true); setText('login-error','✗ INCORRECT PIN'); setTimeout(pinReset,800); }
+}
+function loginSuccess(role){
+  CURRENT_ROLE=role;
+  localStorage.setItem('uppcl_session', JSON.stringify({role:role, ts:Date.now()}));
+  var ls=gel('login-screen'); ls.style.display='none'; ls.style.pointerEvents='none';
+  gel('app').style.display='block';
+  gel('sbar').style.display='flex';
+  var b=gel('role-indicator'); if(b){b.textContent=role==='admin'?'👑 ADMIN':'👤 USER'; b.className='role-badge '+(role==='admin'?'badge-admin':'badge-user');}
+  applyRoleRestrictions(role);
+  if(D.length===0) autoFetch();
+}
+function applyRoleRestrictions(role){
+  if(role==='admin'){ var st=gel('tab-settings'); if(st) st.style.display=''; }
+  // ATR Report available to all roles
+  if(role==='user'){
+    document.querySelectorAll('button').forEach(function(btn){
+      if(btn.textContent.includes('SHEET SYNC')||btn.textContent.includes('EXPORT KML')) btn.style.display='none';
+    });
+  }
+}
+function logout(){
+  CURRENT_ROLE=null; currentPin=''; loginRole='admin';
+  localStorage.removeItem('uppcl_session');
+  gel('tab-admin').classList.add('active'); gel('tab-user').classList.remove('active');
+  pinReset();
+  var ls=gel('login-screen'); ls.style.display='flex'; ls.style.pointerEvents='all';
+  gel('app').style.display='none';
+}
+window.addEventListener('DOMContentLoaded',function(){
+  // Init pushed accts once
+  initPushedAccts();
+
+  // Monthly ATR reset check (non-blocking, wrapped in try-catch)
+  try{
+    var now = new Date();
+    var curMonth = now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
+    var lastMonth = localStorage.getItem('atr_last_reset_month');
+    if(lastMonth && lastMonth !== curMonth){
+      var smData  = {}; try{smData  = JSON.parse(localStorage.getItem('atr_data')||'{}');    }catch(ex){}
+      var defData = {}; try{defData = JSON.parse(localStorage.getItem('def_atr_data')||'{}');}catch(ex){}
+      if(Object.keys(defData).length) localStorage.setItem('def_atr_archive_'+lastMonth, JSON.stringify(defData));
+      if(Object.keys(smData).length)  localStorage.setItem('sm_atr_archive_'+lastMonth,  JSON.stringify(smData));
+      var archUrl = localStorage.getItem('atr_script_url');
+      if(archUrl && (Object.keys(smData).length || Object.keys(defData).length)){
+        fetch(archUrl, {method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({type:'archive_month',month:lastMonth,sm:smData,defaulter:defData})
+        }).catch(function(){}); 
+      }
+      localStorage.removeItem('atr_data');
+      localStorage.removeItem('def_atr_data');
+      localStorage.removeItem('atr_last_push');
+      localStorage.removeItem('atr_pushed_accts');
+      localStorage.setItem('atr_last_reset_month', curMonth);
+      window._showMonthResetAlert = lastMonth;
+    } else if(!lastMonth){
+      localStorage.setItem('atr_last_reset_month', curMonth);
+    }
+  }catch(e){ console.warn('Monthly ATR reset error:',e); }
+
+  // Session restore
+  var session = null;
+  try { session = JSON.parse(localStorage.getItem('uppcl_session')); } catch(e){}
+  if(session && session.role && session.ts && (Date.now() - session.ts < SESSION_TIMEOUT)){
+    loginSuccess(session.role);
+    if(window._showMonthResetAlert){
+      setTimeout(function(){
+        alert('\ud83d\uddd3 \u0928\u090f \u092e\u0939\u0940\u0928\u0947 \u0915\u0940 \u0936\u0941\u0930\u0941\u0906\u0924! \u092a\u093f\u091b\u0932\u0947 \u092e\u0939\u0940\u0928\u0947 ('+window._showMonthResetAlert+') \u0915\u0940 ATR archive \u0939\u094b \u0917\u0908\u0964 \u0938\u092d\u0940 ATR entries reset \u0939\u094b \u0917\u0908 \u0939\u0948\u0902\u0964');
+        window._showMonthResetAlert = null;
+      }, 2000);
+    }
+  } else {
+    gel('login-screen').style.display='flex';
+  }
+});
+function showHelp(){var m=gel('help-modal');if(!m)return;var info=gel('help-login-info');if(info)info.innerHTML=CURRENT_ROLE==='admin'?'👑 <b>Admin PIN: 1995</b> — Full access<br/>👤 <b>User PIN: 1234</b> — View only':'👤 <b>User PIN: 1234</b> — View only';m.classList.add('open');document.body.style.overflow='hidden';}
+function closeHelp(){ var m=gel('help-modal'); if(m){m.classList.remove('open');document.body.style.overflow='';} }
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function st(name){
+  if(name==='dashboard' && window.innerWidth<=768){ name='lookup'; }
+  if(name===_lastTab)return; _lastTab=name;
+  document.querySelectorAll('.tab').forEach(function(tab){
+    tab.classList.toggle('active', tab.getAttribute('onclick')&&tab.getAttribute('onclick').indexOf("'"+name+"'")>-1);
+  });
+  ['lookup','dc','dfp','defaulter','dashboard','settings','progress'].forEach(function(n){
+    var p=gel('panel-'+n); if(p)p.classList.toggle('active',n===name);
+  });
+  requestAnimationFrame(function(){
+    if(name==='dc'&&!_dcLoaded) loadDC();
+    if(name==='dfp'&&!_dfpLoaded) loadDfp();
+    if(name==='defaulter') loadDefaulters();
+    if(name==='dashboard') buildDashboard();
+    if(name==='progress'){
+      buildProgressReport();
+      // Always trigger YoY - loadPrevYearData returns immediately if already loaded
+      setTimeout(function(){
+        loadPrevYearData(function(){ buildYoYReport(); });
+      }, 300);
+    }
+    if(name==='settings'){
+      if(!_settingsBuilt) buildSettingsPanel();
+      setTimeout(function(){
+        var inp = gel('settings-atr-url');
+        if(inp) inp.value = getScriptUrl() || '';
+        updateAtrLocalCounts();
+      }, 100);
+    }
+  });
+}
+
+// ─── FETCH & PARSE ────────────────────────────────────────────────────────────
+function resolveFiles(){
+  return fetch(MANIFEST_URL).then(function(r){return r.ok?r.json():null;})
+    .then(function(m){
+      if(m){ window._manifest_cache=m; console.log('Manifest loaded:',Object.keys(m));
+        if(m.substation_division) SUB_DIVISION_MAP=m.substation_division;
+        
+        // Parse Master Cutoff Date
+        if(m.sync_status){
+          for(var k in m.sync_status){
+            var mp = m.sync_status[k].master_period;
+            if(mp){
+              var p = mp.split('_');
+              var months = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+              var lastDay = new Date(parseInt(p[1]), months[p[0].toUpperCase()] + 1, 0);
+              MASTER_CUTOFF = lastDay;
+              break;
+            }
+          }
+        }
+
+        var div = DIVISION.toLowerCase();
+        var m_files = [], b_files = [], u_files = [];
+        
+        if(div==='all'){
+          m_files = (m.eudd1||[]).concat(m.eudd2||[]);
+          b_files = (m.billed_eudd1||[]).concat(m.billed_eudd2||[]);
+          u_files = (m.unbilled_eudd1||[]).concat(m.unbilled_eudd2||[]);
+        } else {
+          m_files = m[div]||[];
+          b_files = m['billed_'+div]||[];
+          u_files = m['unbilled_'+div]||[];
+        }
+
+        FILES = [];
+        m_files.forEach(function(f){ 
+          var path = f.startsWith('master/') ? f : 'master/' + f;
+          FILES.push({url:RAW_BASE+path, type:'master'}); 
+        });
+        b_files.forEach(function(f){ FILES.push({url:RAW_BASE+f, type:'billed'}); });
+        u_files.forEach(function(f){ FILES.push({url:RAW_BASE+f, type:'unbilled'}); });
+      }
+    }).catch(function(){})
+    .then(function(){
+      // Load order: billed > unbilled > master
+      // Use manifest cache directly - FILES_EUDD1/EUDD2 may be empty
+      var mc=window._manifest_cache;
+      FILES=[];
+      if(mc){
+        // Master FIRST — needed for unbilled outstanding lookup (MASTER_MAP)
+        var mf=(mc.eudd1||[]).concat(mc.eudd2||[]);
+        mf.forEach(function(f){FILES.push({url:RAW_BASE+f,type:'master'});});
+        // Billed second (priority 3)
+        (mc.billed_eudd1||[]).concat(mc.billed_eudd2||[])
+          .forEach(function(f){FILES.push({url:RAW_BASE+f,type:'billed'});});
+        // Unbilled LAST (priority 2) — uses MASTER_MAP built from master files above
+        (mc.unbilled_eudd1||[]).concat(mc.unbilled_eudd2||[])
+          .forEach(function(f){FILES.push({url:RAW_BASE+f,type:'unbilled'});});
+      }
+    });
+}
+
+function autoFetch(){
+  gel('loading').style.display='flex';
+  resolveFiles().then(startDownloads);
+}
+function startDownloads(){
+  var allTexts=new Array(FILES.length), fetched=0, total=FILES.length;
+
+  // Fetch defaulter.csv in parallel
+  fetch(DEFAULTER_FILE)
+    .then(function(r){ return r.ok?r.text():''; })
+    .then(function(t){ if(t) parseDefaulterText(t); })
+    .catch(function(){});
+
+  // Fetch METERNO.csv in parallel
+  fetch(METERNO_FILE)
+    .then(function(r){ return r.ok?r.text():''; })
+    .then(function(t){ if(t) parseMeterData(t); })
+    .catch(function(){});
+
+  function fetchOne(url, attempt){
+    var ctrl = typeof AbortController!=='undefined' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function(){ctrl.abort();}, 120000) : null;
+    return fetch(url, ctrl ? {signal:ctrl.signal} : {})
+      .then(function(r){ if(timer)clearTimeout(timer); return r.ok?r.text():''; })
+      .catch(function(e){
+        if(timer)clearTimeout(timer);
+        if(attempt < 2){ console.warn('Retry '+(attempt+1)+':', url.split('/').pop()); return fetchOne(url, attempt+1); }
+        console.warn('Failed after retries:', url.split('/').pop());
+        return '';
+      });
+  }
+  FILES.forEach(function(item,idx){
+    var url = typeof item === 'string' ? item : item.url;
+    fetchOne(url, 0).then(function(t){
+      allTexts[idx]=t||''; fetched++;
+      sl('DOWNLOADING '+fetched+'/'+total+'…', Math.round(fetched/total*60)+5);
+      if(fetched===total) setTimeout(parseAll,20);
+    });
+  });
+
+  function parseAll(){
+    sl('PARSING DATA…',68);
+    var idx=0;
+    function next(){
+      if(idx>=FILES.length){
+        allTexts=null;
+        sl('BUILDING INDEX…',93);
+        sl('BUILDING INDEX…',93);
+        setTimeout(function(){
+          window._cyAgg = null; // Reset CY cache so SM classification rebuilds with master data
+          ia(); hl2();
+        },20);
+        // Preload Jul 2025 comparison data in background
+        if(!PY_LOADED) loadPrevYearData(function(){
+          if(window._lastTab==='progress') buildYoYReport();
+        });
+        // Pre-compute CY aggregate in background (uses dataDate after D loads)
+        setTimeout(function(){
+          try{
+            var mss=window._manifest_cache&&window._manifest_cache.sync_status;
+            var bd=(mss&&(mss['233511']||mss['233512']))?(mss['233511']||mss['233512']).billed_date:'';
+            if(bd&&bd.length===8){
+              var dd2=parseInt(bd.slice(0,2)),mm2=parseInt(bd.slice(2,4))-1,yy2=parseInt(bd.slice(4,8));
+              var preDate=new Date(new Date(yy2,mm2,dd2).getTime()-86400000);
+              buildCYAgg(preDate);
+            }
+          }catch(e){}
+        }, 500);
+        return;
+      }
+      sl('PARSING '+(idx+1)+'/'+FILES.length+'…',68+Math.round(idx/FILES.length*24));
+      var text=allTexts[idx]; allTexts[idx]=null;
+      var item=FILES[idx];
+      var type = typeof item === 'string' ? 'master' : item.type;
+      setTimeout(function(){
+        if(text) parseFileInto(text, type);
+        idx++; next();
+      },15);
+    }
+    next();
+  }
+}
+
+function findCol(hdrs, options){
+  for(var i=0; i<options.length; i++){
+    var idx = hdrs.indexOf(options[i]);
+    if(idx>=0) return idx;
+  }
+  return -1;
+}
+
+function parseFileInto(text, type){
+  // Skip leading empty lines (common in unbilled exports)
+  var start = 0;
+  while(start < text.length && (text[start]==='\n' || text[start]==='\r' || text[start]===' ')) start++;
+  if(start >= text.length) return;
+
+  var nl=text.indexOf('\n', start); if(nl<0)return;
+  var hdrs=text.substring(start,nl).replace(/\r/,'').split(',').map(function(h){return h.replace(/"/g,'').trim().toUpperCase();});
+  
+  var iAcct = findCol(hdrs, ['ACCT_ID', 'ACCOUNT_ID']);
+  var iMob  = findCol(hdrs, ['MOBILE_NO', 'MOBILE']);
+  var iName = findCol(hdrs, ['NAME', 'CONSUMER_NAME']);
+  var iFath = findCol(hdrs, ['FATHER_NAME']);
+  var iAddr = findCol(hdrs, ['ADDRESS', 'ADDRES']);
+  var iCat  = findCol(hdrs, ['TARIFF_TYPE', 'CATEGORY', 'SUPPLY_TYPE', 'TARIFF']);
+  var iLoad = findCol(hdrs, ['LOAD', 'SANCTION_LOAD', 'SANCT_LOAD']);
+  var iLat  = findCol(hdrs, ['LAT', 'LATITUDE']);
+  var iLon  = findCol(hdrs, ['LON', 'LONGITUDE', 'LONG']);
+  var iSub  = findCol(hdrs, ['SUBSTATION', 'SUB_STATION']);
+  var iFeed = findCol(hdrs, ['FEEDER']);
+  var iSerl = findCol(hdrs, ['SERIAL_NBR', 'METER_SERIAL_NBR', 'MTR_SRL_NO', 'METER_NO']);
+  var iMrSrc = findCol(hdrs, ['MR_SOURCE_CD', 'MR_SRC_CD']);
+  var iCA=hdrs.indexOf('CA'), iBUnits=hdrs.indexOf('BILLED_UNITS'),
+      iBillDate=hdrs.indexOf('BILL_DATE'), iDueDate=hdrs.indexOf('DUE_DATE'),
+      iBillBasis=hdrs.indexOf('BILL_BASIS');
+  var iPayAmt  = findCol(hdrs, ['PAY_AMT', 'LP AMT', 'LAST_PAY_AMT', 'LAST_PAYMENT_AMOUNT']);
+  var iPayDate = findCol(hdrs, ['PAY_DATE', 'LP DATE', 'LAST_PAY_DATE']);
+  var iTotOut  = findCol(hdrs, ['TOTAL_OUTSTANDING', 'TOTAL OUTSTANDING', 'AMOUNT_PAYABLE', 'OUTSTANDING']);
+  // Master-specific columns (same fields, but named differently)
+  var _iTotOutM = findCol(hdrs, ['TOTAL_OUTSTANDING','TOTAL OUTSTANDING']);
+  var _iPayAmtM = findCol(hdrs, ['PAY_AMT','LP AMT','LAST_PAY_AMT']);
+  var _iPayDateM= findCol(hdrs, ['PAY_DATE','LP DATE','LAST_PAY_DATE']);
+  var _iMrSrcM  = findCol(hdrs, ['MR_SOURCE_CD','MR SOURCE CD']);
+  var _iSerialM = findCol(hdrs, ['SERIAL_NBR','SERIAL_NUMBER','MTR_SRL_NO']);
+
+  var pos=nl+1,len=text.length;
+  while(pos<len){
+    var end=text.indexOf('\n',pos); if(end<0)end=len;
+    var line=text.substring(pos,end).trim(); pos=end+1;
+    if(!line)continue;
+    
+    // Better CSV split handling for quoted commas
+    var v = [];
+    var inQuotes = false;
+    var current = '';
+    for(var i=0; i<line.length; i++){
+      var c = line[i];
+      if(c==='"' && (i===0 || line[i-1]!== '\\\\')){ inQuotes = !inQuotes; }
+      else if(c===',' && !inQuotes){ v.push(current.trim()); current = ''; }
+      else { current += c; }
+    }
+    v.push(current.trim());
+    // Strip surrounding quotes from values
+    v = v.map(function(val){ return val.replace(/^"|"$/g, '').trim(); });
+
+    var acct = v[iAcct] || ''; if(!acct)continue;
+    var key = ac(acct);
+    
+    var rawAmt = '', rawDate = '', outValue = '';
+
+    if(type==='master'){
+      // Column indices computed once outside loop — use pre-calculated values
+      outValue = _iTotOutM>=0 ? (v[_iTotOutM]||'0') : '0';
+      rawAmt   = _iPayAmtM>=0 ? (v[_iPayAmtM]||'0') : '0';
+      rawDate  = _iPayDateM>=0? (v[_iPayDateM]||'-') : '-';
+
+      var mrSrcM = _iMrSrcM>=0 ? (v[_iMrSrcM]||'') : '';
+      MASTER_MAP[key] = {
+        TOTAL_OUTSTANDING: outValue,
+        LP_DATE: rawDate,
+        LP_AMT: rawAmt,
+        MR_SOURCE_CD: mrSrcM
+      };
+      // Build SM lookup from master (most complete MR_SOURCE_CD source)
+      if(!window._smLookup) window._smLookup={};
+      // SM = GE meter serial OR MR_SOURCE_CD=SM
+      var serialM = _iSerialM>=0 ? String(v[_iSerialM]||'').replace(/^'/,'').toUpperCase() : '';
+      var isSMM = serialM.startsWith('GE') || String(mrSrcM).trim().toUpperCase()==='SM';
+      window._smLookup[key] = isSMM ? 'SM' : (mrSrcM||'');
+      continue;
+    }
+
+    rawAmt   = iPayAmt>=0  ? (v[iPayAmt]  || '0') : '0';
+    rawDate  = iPayDate>=0 ? (v[iPayDate] || '-') : '-';
+    outValue = iTotOut>=0  ? (v[iTotOut]  || '0') : '0';
+    
+    // Auto-swap amount/date if swapped in CSV
+    if(rawAmt && rawDate && /\d{2}-\d{2}-\d{4}/.test(rawAmt)){var tmp=rawAmt;rawAmt=rawDate;rawDate=tmp;}
+
+    var lat=(v[iLat]||''), lon=(v[iLon]||'');
+    var fLat=parseFloat(lat); if(fLat>50){var t=lat;lat=lon;lon=t;}
+    
+    var row={
+      ACCT_ID:acct,
+      MOBILE_NO:(v[iMob]||''),
+      NAME:(v[iName]||''),
+      FATHER_NAME:iFath>=0?(v[iFath]||''):'',
+      ADDRESS:(v[iAddr]||''),
+      CATEGORY:stToTariff(v[iCat]||''),
+      LOAD:(v[iLoad]||''),
+      LAT:lat, LON:lon,
+      SUBSTATION:(v[iSub]||''),
+      FEEDER:(v[iFeed]||''),
+      SERIAL_NBR:iSerl>=0?(v[iSerl]||''):'',
+      MR_SOURCE_CD: iMrSrc>=0?(v[iMrSrc]||''):'',
+      SOURCE:type,
+      CA:                 iCA>=0       ?(v[iCA]||'')         :'',
+      BILLED_UNITS:       iBUnits>=0   ?(v[iBUnits]||'')     :'',
+      BILL_DATE:          iBillDate>=0 ?(v[iBillDate]||'')   :'',
+      DUE_DATE:           iDueDate>=0  ?(v[iDueDate]||'')    :'',
+      BILL_BASIS:         iBillBasis>=0?(v[iBillBasis]||''):'',
+      AMOUNT_PAYABLE:     iTotOut>=0   ?(v[iTotOut]||'')     :'',
+      LAST_PAYMENT_AMOUNT:iPayAmt>=0   ?(v[iPayAmt]||'')     :'',
+      LAST_PAY_DATE:      iPayDate>=0  ?(v[iPayDate]||'')    :'',
+      Google_Map_Link:(lat&&lon)?'https://www.google.com/maps?q='+lat+','+lon:''
+    };
+    
+    if(type==='unbilled'){
+      var master = MASTER_MAP[key];
+      if(master){
+        var mOut = pf(master.TOTAL_OUTSTANDING);
+        // If consumer paid AFTER master snapshot date, subtract that payment from outstanding
+        var curLpDate = parseDate(rawDate);
+        var masterLpDate = parseDate(master.LP_DATE);
+        // Use unbilled LP if it's more recent than master LP
+        if(curLpDate && masterLpDate && curLpDate > masterLpDate && pf(rawAmt) > 0){
+          mOut = Math.max(0, mOut - pf(rawAmt));
+        } else if(curLpDate && MASTER_CUTOFF && curLpDate > MASTER_CUTOFF && pf(rawAmt) > 0){
+          mOut = Math.max(0, mOut - pf(rawAmt));
+        }
+        outValue = mOut.toString();
+      } else {
+        // No master record - use 0 (cannot determine outstanding without master data)
+        outValue = '0';
+      }
+      // CRITICAL: update row.AMOUNT_PAYABLE with calculated outstanding
+      row.AMOUNT_PAYABLE = outValue;
+      row.OUTSTANDING    = outValue;
+    }
+
+    PAY_DATA[key]={
+      PAY_AMT:rawAmt,
+      PAY_DATE:rawDate,
+      TOTAL_OUTSTANDING:outValue,
+      STATUS:'INSERVICE',
+      NAME:row.NAME,
+      SUPPLY_TYPE:row.CATEGORY||'-'
+    };
+    var dp=({billed:3,unbilled:2,master:1})[type]||0;
+    if(!D_PRI[acct]||dp>D_PRI[acct]){ D_PRI[acct]=dp; D.push(row); }
+    if(type==='billed'){var pLat=parseFloat(lat),pLon=parseFloat(lon);if(pLat>20&&pLat<30&&pLon>70&&!BILLED_LOC[acct])BILLED_LOC[acct]={lat:pLat,lon:pLon};}
+    // PAY_DATA already has correct outValue from above - no duplicate write
+  }
+}
+
+// ─── INIT APP ─────────────────────────────────────────────────────────────────
+function loadLocationXlsx(){
+  fetch(RAW_BASE+'location.xlsx')
+    .then(function(r){return r.ok?r.arrayBuffer():null;})
+    .then(function(buf){
+      if(!buf) return;
+      var wb=XLSX.read(buf,{type:'array'});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      var hi=rows[0]||[];
+      var iA=hi.indexOf('ACCT_ID'),iLa=hi.indexOf('LAT'),iLo=hi.indexOf('LON');
+      if(iA<0||iLa<0||iLo<0){
+        // Try first 3 cols
+        iA=0;iLa=1;iLo=2;
+      }
+      for(var i=1;i<rows.length;i++){
+        var r=rows[i];
+        var acct=String(r[iA]||'').trim();
+        var lat=parseFloat(r[iLa]), lon=parseFloat(r[iLo]);
+        if(acct&&lat>20&&lat<30&&lon>70) LOCATION_MAP[acct]={lat:lat,lon:lon};
+      }
+      console.log('location.xlsx loaded:',Object.keys(LOCATION_MAP).length,'entries');
+    }).catch(function(){});
+}
+
+function ia(){
+  window._dOutMap = null;  // Reset live outstanding cache
+  window._cyAgg = null;   // Reset CY aggregate cache
+  window._cyAgg = null;   // Reset CY aggregate cache
+  var subSet=new Set(),feedSet=new Set(),catSet=new Set();
+  fetch(RAW_BASE+'geo_mapping.json').then(r=>r.ok?r.json():{}).then(function(map){
+    GEO_MAP=map;applyGeoAndStats();
+  }).catch(function(){applyGeoAndStats();});
+
+  function applyGeoAndStats(){
+    var i=0;
+    function chunk(){
+      var end=Math.min(i+3000,D.length);
+      for(;i<end;i++){
+        var r=D[i],key=ac(r.ACCT_ID);
+        if(GEO_MAP[key]&&GEO_MAP[key][0]&&(!r.LAT||r.LAT==='-'||r.LAT==='0')){r.LAT=GEO_MAP[key][0];r.LON=GEO_MAP[key][1];}
+        if(r.SUBSTATION)subSet.add(r.SUBSTATION);
+        if(r.FEEDER)feedSet.add(r.FEEDER);
+        if(r.CATEGORY||r.SUPPLY_TYPE)catSet.add(r.CATEGORY||r.SUPPLY_TYPE);
+      }
+      if(i<D.length){setTimeout(chunk,0);return;}
+      setText('s-tot',D.length.toLocaleString());
+      setText('s-sub',subSet.size.toString());
+      setText('s-feed',feedSet.size.toString());
+      gel('upload-screen').style.display='none';
+      FD=D.slice();
+
+      // Post-process D: rename 132 KV HASARI substations → GROWTH CENTER
+      var _ssRename = {'132 KV HASARI_26295':'GROWTH CENTER_20058','132 KV HASARI_26400':'GROWTH CENTER_20058'};
+      D.forEach(function(r){
+        if(_ssRename[r.SUBSTATION]) r.SUBSTATION = _ssRename[r.SUBSTATION];
+      });
+
+      // Build global BILL_BASIS lookup {ACCT_ID: 'MU'/'ASS'/...} for filter use
+      window._basisLookupGlobal = {};
+      D.forEach(function(r){ window._basisLookupGlobal[String(r.ACCT_ID)] = String(r.BILL_BASIS||'').trim().toUpperCase(); });
+
+      // Build global TARIFF lookup {ACCT_ID: 'LMV1'/'HV1'/...}
+      // Billed: CATEGORY = TARIFF_TYPE | Unbilled: CATEGORY = TARIFF_TYPE directly
+      window._tariffLookup = {};
+      D.forEach(function(r){
+        var t = r.CATEGORY || r.TARIFF_TYPE || '';
+        // CATEGORY in D array = TARIFF_TYPE from CSV (LMV1, HV1 etc.) for both billed and unbilled
+        if(t && /^(LMV|HV|EHV)/i.test(t)) window._tariffLookup[String(r.ACCT_ID)] = t;
+      });
+
+      // Build SM lookup from master data MR_SOURCE_CD
+      window._smLookup = {};
+      D.forEach(function(r){
+        if(r.MR_SOURCE_CD) window._smLookup[String(r.ACCT_ID)] = String(r.MR_SOURCE_CD).trim().toUpperCase();
+      });
+
+      setTimeout(autoSyncAtr,1500);
+    // Load location.xlsx for GPS fallback
+    if(!Object.keys(LOCATION_MAP).length) loadLocationXlsx();
+    }
+    chunk();
+  }
+}
+
+// ─── SEARCH ───────────────────────────────────────────────────────────────────
+function debounceSearch(){ clearTimeout(_searchTimer); _searchTimer=setTimeout(dl,300); }
+function dl(){
+  var inp=gel('li'); if(!inp)return;
+  var q=(inp.value||'').trim();
+  var lr=gel('lr'); if(!lr)return;
+  if(!q){lr.innerHTML='';return;}
+  if(!D.length){lr.innerHTML='<p style="color:var(--muted);padding:20px">Data still loading…</p>';return;}
+  var q2=q.toLowerCase();
+  var pri={billed:3,unbilled:2,master:1}; var bestMap={};
+  D.forEach(function(r){
+    var meterNo=METER_DATA[String(r.ACCT_ID)]||r.SERIAL_NBR||'';
+    var match=String(r.ACCT_ID).includes(q)||(r.MOBILE_NO&&r.MOBILE_NO.includes(q))||(meterNo&&meterNo.toLowerCase().includes(q2))||(r.NAME&&r.NAME.toLowerCase().includes(q2));
+    if(!match) return;
+    var a=String(r.ACCT_ID),rp=pri[r.SOURCE]||0;
+    if(!bestMap[a]||(pri[bestMap[a].SOURCE]||0)<rp) bestMap[a]=r;
+  });
+  var res=Object.values(bestMap).slice(0,5);
+  if(!res.length){lr.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-family:var(--fh)">🔎 No record found for "'+q+'"</div>';return;}
+  lr.innerHTML=res.map(function(r){return buildConsumerCard(r,q);}).join('');
+}
+
+function buildConsumerCard(r, q){
+  var pay = PAY_DATA[ac(r.ACCT_ID)] || null;
+  var payHtml = '';
+  
+  var out = 0;
+  var lpAmt = 0;
+  var lpDateStr = '-';
+  var sourceLabel = r.SOURCE ? r.SOURCE.toUpperCase() : 'MASTER';
+  var sourceColor = r.SOURCE==='billed' ? '#10B981' : (r.SOURCE==='unbilled' ? '#F59E0B' : '#64748B');
+
+  if(pay){
+    lpAmt = pf(pay.PAY_AMT);
+    lpDateStr = pay.PAY_DATE || '-';
+    // Use r.AMOUNT_PAYABLE from D array (already correctly calculated for unbilled via MASTER_MAP)
+    // PAY_DATA.TOTAL_OUTSTANDING may be stale — D array is authoritative
+    out = pf(r.AMOUNT_PAYABLE) || pf(r.OUTSTANDING) || pf(pay.TOTAL_OUTSTANDING);
+    
+    payHtml = '<div style="margin-top:12px;padding:12px;background:linear-gradient(135deg,#EFF6FF,#F0FDF4);border-radius:10px;border:1px solid #BFDBFE;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'+
+        '<div style="font-family:var(--fh);font-size:10px;font-weight:700;color:#1D4ED8;letter-spacing:1px;">💳 PAYMENT DETAILS</div>'+
+        '<div style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:'+sourceColor+';color:#fff;">'+sourceLabel+'</div>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'+
+        '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">LAST PAID AMT</div><div style="font-size:14px;font-weight:700;color:#059669;">₹'+Math.round(lpAmt).toLocaleString()+'</div></div>'+
+        '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">PAID DATE</div><div style="font-size:12px;font-weight:700;color:#1D4ED8;">'+lpDateStr+'</div></div>'+
+        '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">OUTSTANDING</div><div style="font-size:14px;font-weight:700;color:'+(out>0?'#F43F5E':'#059669')+';">₹'+Math.round(out).toLocaleString()+'</div></div>'+
+      '</div>'+
+      (r.SOURCE==="billed"&&(r.CA||r.BILLED_UNITS)?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #BFDBFE;display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;">'+
+        '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">CURRENT ASSESSMENT</div><div style="font-size:12px;font-weight:700;color:#7C3AED;">'+(r.CA||'-')+'</div></div>'+
+        '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">BILLED UNITS</div><div style="font-size:12px;font-weight:700;color:#0369A1;">'+(r.BILLED_UNITS||'-')+'</div></div>'+
+        '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">BILL DATE</div><div style="font-size:11px;font-weight:700;">'+(r.BILL_DATE||'-')+'</div></div>'+
+        '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">DUE DATE</div><div style="font-size:11px;font-weight:700;color:#F43F5E;">'+(r.DUE_DATE||'-')+'</div></div>'+
+        '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">BILL BASIS</div><div style="font-size:11px;">'+(function(){var bi=billBasisInfo(r.BILL_BASIS);return '<span style="font-weight:700;padding:1px 6px;border-radius:4px;background:'+bi.bg+';color:'+bi.color+';">'+bi.label+'</span>';})()+'</div></div>'+
+        '</div>':'')+
+      '</div></div>';
+  }
+
+  var lat = parseFloat(r.LAT), lon = parseFloat(r.LON);
+  if(lat > 50){ var t = lat; lat = lon; lon = t; }
+  // Fallback to LOCATION_MAP if no lat/lon in row
+  if((!lat||!lon||lat<20)&&LOCATION_MAP){
+    var lx=LOCATION_MAP[String(r.ACCT_ID)];
+    if(lx){lat=lx.lat;lon=lx.lon;}
+  }
+  var mapBtn = (lat>20&&lat<30&&lon>70) ? '<a class="mb" href="https://www.google.com/maps?q='+lat+','+lon+'&z=17" target="_blank">📍 OPEN IN GOOGLE MAPS</a>' : '';
+  
+  function hl(t){ if(!q || !t) return t; var i = String(t).toLowerCase().indexOf(q.toLowerCase()); if(i < 0) return t; return t.slice(0,i)+'<mark>'+t.slice(i,i+q.length)+'</mark>'+t.slice(i+q.length); }
+  
+  return '<div class="dc"><div class="dh"><div>'+
+    '<div class="dn">'+hl(r.NAME || 'Unknown')+'</div>'+
+    '<div style="margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'+
+    '<span class="da">ACCT: '+hl(String(r.ACCT_ID))+'</span>'+
+    catBadge(r.CATEGORY)+'</div></div>'+
+    '<div style="text-align:right"><div style="color:rgba(255,255,255,0.7);font-size:10px;font-family:var(--fh);">LOAD</div>'+
+    '<div style="font-family:var(--fh);font-size:26px;font-weight:700;color:#FCD34D;">'+(r.LOAD || '-')+' <span style="font-size:13px;color:rgba(255,255,255,0.7);">kW</span></div></div></div>'+
+    '<div class="db"><div class="dgrid">'+
+      '<div class="df"><div class="lbl">MOBILE</div><div class="val">'+(r.MOBILE_NO || '-')+'</div></div>'+
+      '<div class="df"><div class="lbl">METER NO</div><div class="val" style="font-family:var(--fh);color:#1D4ED8;font-weight:700;">'+(METER_DATA[String(r.ACCT_ID)] || r.SERIAL_NBR || '-')+'</div></div>'+
+      '<div class="df"><div class="lbl">SUBSTATION</div><div class="val">'+(r.SUBSTATION || '-')+'</div></div>'+
+      '<div class="df"><div class="lbl">FEEDER</div><div class="val">'+(r.FEEDER || '-')+'</div></div>'+
+
+      '<div class="df" style="grid-column:span 2"><div class="lbl">ADDRESS</div><div class="val">'+(r.ADDRESS || '-')+'</div></div>'+
+      '<div class="df"><div class="lbl">LATITUDE</div><div class="val">'+(lat || r.LAT || '-')+'</div></div>'+
+      '<div class="df"><div class="lbl">LONGITUDE</div><div class="val">'+(lon || r.LON || '-')+'</div></div>'+
+    '</div>'+payHtml+
+    '<div style="margin-top:12px;">'+mapBtn+'</div>'+
+    '</div></div>';
+}
+
+// ─── SM UNRECHARGE (DC) ───────────────────────────────────────────────────────
+function loadDC(){
+  if(_dcLoaded)return;
+  _dcLoaded=true;
+  var panel=gel('panel-dc');
+  panel.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-family:var(--fh);">Loading SM Unrecharge data…</div>';
+  // Load DISCONNECTED.xlsx
+  fetch(DC_FILE)
+    .then(function(r){return r.ok?r.arrayBuffer():Promise.reject('DC file not found');})
+    .then(function(buf){
+      var wb=XLSX.read(buf,{type:'array'});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+      // Load saved ATR from localStorage
+      var _savedAtr = {};
+      try{ _savedAtr = JSON.parse(localStorage.getItem('atr_data')||'{}'); }catch(e){}
+
+      DC=rows.map(function(r){
+        var acct = String(r['account_id']||r['ACCT_ID']||'');
+        var savedEntry = _savedAtr[acct];
+        var atrStatus = 'DISCONNECTED';
+        if(savedEntry){
+          atrStatus = typeof savedEntry==='object' ? (savedEntry.atr||'DISCONNECTED') : savedEntry;
+        } else if(ATR_DATA[acct]){
+          atrStatus = typeof ATR_DATA[acct]==='object' ? ATR_DATA[acct].atr : ATR_DATA[acct];
+        }
+        return {
+          DATE_DC:r['Date of DC']||'',ACCT_ID:acct,
+          NAME:r['NAME']||'',ADDRESS:r['ADDRES']||r['ADDRESS']||'',MOBILE_NO:String(r['MOBILE NO']||r['MOBILE_NO']||''),
+          METER_NO:r['meterno']||r['METER_NO']||'',LOAD:r['load']||r['LOAD']||'',LMV:r['LMV']||'',
+          OUTSTANDING:parseFloat(r['TOTAL OUTSTANDING']||r['OUTSTANDING'])||0,
+          LP_DATE:(r['lp date']!==undefined?r['lp date']:(r['LP DATE']!==undefined?r['LP DATE']:r['LP_DATE']))||0,
+          LP_AMT:parseFloat(r['lp amt']!==undefined?r['lp amt']:(r['LP AMT']!==undefined?r['LP AMT']:r['LP_AMT']))||0,
+          SUBSTATION:r['SUBSTATION']||'',FEEDER:r['FEEDER']||'',
+          LAT:String(r['LAT']||''),LON:String(r['LONG']||r['LON']||''),
+          ATR_STATUS:atrStatus,
+          ATR_COMMENT: typeof savedEntry==='object' ? (savedEntry.comment||'') : ''
+        };
+      }).filter(function(r){return r.ACCT_ID;});
+      // Fix LAT/LON swap
+      DC=DC.map(function(r){
+        var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
+        if(lat>50){return Object.assign({},r,{LAT:String(lon),LON:String(lat)});}
+        return r;
+      });
+      DC_FD=DC.slice();
+      buildDCPanel();
+    })
+    .catch(function(e){
+      panel.innerHTML='<div style="padding:20px;text-align:center;color:#F43F5E;font-family:var(--fh);">⚠ Failed to load SM Unrecharge data: '+e+'</div>';
+    });
+}
+
+function buildDCPanel(){
+  var subs=[...new Set(DC.map(function(r){return r.SUBSTATION;}).filter(Boolean))].sort();
+  var panel=gel('panel-dc');
+  panel.innerHTML=
+    '<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">'+
+      '<div style="background:#FFF1F2;border:1px solid #FECACA;border-left:4px solid #F43F5E;border-radius:10px;padding:12px 18px;">'+
+        '<div style="font-family:var(--fh);font-size:24px;font-weight:700;color:#F43F5E;" id="dc-total">'+DC.length.toLocaleString()+'</div>'+
+        '<div style="font-size:10px;color:#991B1B;font-weight:600;">TOTAL SM UNRECHARGE</div></div>'+
+    '</div>'+
+    // Filters
+    '<div class="fg" style="margin-bottom:14px;">'+
+      '<div><div class="lbl">SEARCH</div><div class="sw"><input type="text" placeholder="Name, Acct, Mobile…" oninput="dcFilter()" id="dc-search" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>'+
+      '<div><div class="lbl">SUBSTATION</div><div class="sw"><select id="dc-sub" onchange="onDcSubChange()"><option value="">ALL SUBSTATIONS</option>'+
+        subs.map(function(s){return '<option>'+s+'</option>';}).join('')+
+      '</select></div></div>'+
+      '<div><div class="lbl">FEEDER</div><div class="sw"><select id="dc-feed" onchange="dcFilter()"><option value="">ALL FEEDERS</option></select></div></div>'+
+      '<div><div class="lbl">ATR STATUS</div><div class="sw"><select id="dc-atr-filter" onchange="dcFilter()">'+
+        '<option value="">ALL STATUS</option><option>DISCONNECTED</option><option>PAID</option><option>LOCK</option><option>THEFT</option><option>TD</option><option>OTHER</option>'+
+      '</select></div></div>'+
+    '</div>'+
+    '<div class="btn-group" style="margin-bottom:14px;">'+
+      '<div id="dc-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>'+
+      '<button class="btn btn-acc" onclick="expDcX()">⬇ EXPORT XLSX</button>'+
+      '<button class="btn" style="background:#059669;color:#fff;border:none;" onclick="downloadAtrFromSheet()">⬇ DOWNLOAD ATR XLSX</button>'+
+      '<button class="btn" style="background:#fff;border:1.5px solid #C7D2FE;color:var(--muted);" onclick="resetDc()">↺ RESET</button>'+
+    '</div>'+
+    // Sheet Sync Settings (admin only)
+    '<div id="dc-sync-bar" style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:10px;padding:12px 14px;margin-bottom:14px;display:none;">'+
+      '<div style="font-family:var(--fh);font-size:12px;font-weight:700;color:#4F46E5;margin-bottom:8px;">☁️ GOOGLE SHEET SYNC</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<input id="atr-url-input" placeholder="Paste Google Apps Script URL…" style="flex:1;min-width:200px;border:1.5px solid #C7D2FE;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;"/>'+
+        '<button class="btn btn-acc" style="padding:8px 14px;" onclick="saveAtrUrl()">CONNECT</button>'+
+      '</div>'+
+    '</div>'+
+    '<div class="tw"><table>'+
+      '<thead><tr>'+
+        '<th style="width:55px">S.NO</th>'+
+        '<th style="width:95px;cursor:pointer" onclick="sortDcCol(&quot;DATE_DC&quot;)">DATE ⇅</th>'+
+        '<th style="width:110px;cursor:pointer" onclick="sortDcCol(&quot;ACCT_ID&quot;)">ACCT ID ⇅</th>'+
+        '<th style="min-width:130px;cursor:pointer" onclick="sortDcCol(&quot;NAME&quot;)">NAME ⇅</th>'+
+        '<th style="width:105px">MOBILE</th>'+
+        '<th style="width:80px">METER NO</th>'+
+        '<th style="width:60px">LMV</th>'+
+        '<th style="width:110px;cursor:pointer" onclick="sortDcCol(&quot;OUTSTANDING&quot;)">OUTSTANDING ⇅</th>'+
+        '<th style="width:95px;cursor:pointer" onclick="sortDcCol(&quot;SUBSTATION&quot;)">SUBSTATION ⇅</th>'+
+        '<th style="width:110px;cursor:pointer" onclick="sortDcCol(&quot;FEEDER&quot;)">FEEDER ⇅</th>'+
+        '<th style="width:60px">MAP</th>'+
+      '</tr></thead>'+
+      '<tbody id="dc-tbody"></tbody>'+
+    '</table></div>'+
+    '<div class="pg" id="dc-pg"></div>';
+
+  // Apply admin restrictions
+  if(CURRENT_ROLE==='admin') gel('dc-sync-bar').style.display='block';
+  var storedUrl=localStorage.getItem('atr_script_url')||DEFAULT_SCRIPT_URL;
+  if(storedUrl&&gel('atr-url-input')) gel('atr-url-input').value=storedUrl;
+  ATR_SCRIPT_URL=storedUrl||DEFAULT_SCRIPT_URL;
+
+  dcFilter();
+}
+
+function onDcSubChange(){
+  var sub=gel('dc-sub')?gel('dc-sub').value:'';
+  var feedSel=gel('dc-feed'); if(!feedSel)return;
+  var cur=feedSel.value;
+  while(feedSel.options.length>1)feedSel.remove(1);
+  var feeds=[...new Set(DC.filter(function(r){return !sub||r.SUBSTATION===sub;}).map(function(r){return r.FEEDER;}).filter(Boolean))].sort();
+  feeds.forEach(function(f){var o=document.createElement('option');o.value=f;o.textContent=f;feedSel.appendChild(o);});
+  feedSel.value=cur;
+  dcFilter();
+}
+
+var _dcSortCol=null,_dcSortAsc=true;
+function sortDcCol(col){
+  if(_dcSortCol===col)_dcSortAsc=!_dcSortAsc; else{_dcSortCol=col;_dcSortAsc=true;}
+  DC_FD.sort(function(a,b){
+    var av=col==='OUTSTANDING'?(parseFloat(a[col])||0):String(a[col]||'').toLowerCase();
+    var bv=col==='OUTSTANDING'?(parseFloat(b[col])||0):String(b[col]||'').toLowerCase();
+    if(av<bv)return _dcSortAsc?-1:1; if(av>bv)return _dcSortAsc?1:-1; return 0;
+  });
+  renderDcTable(1);
+}
+
+function dcFilter(){
+  var q=(gel('dc-search')?gel('dc-search').value:'').toLowerCase();
+  var sub=gel('dc-sub')?gel('dc-sub').value:'';
+  var feed=gel('dc-feed')?gel('dc-feed').value:'';
+  var atr=gel('dc-atr-filter')?gel('dc-atr-filter').value:'';
+  DC_FD=DC.filter(function(r){
+    if(sub&&r.SUBSTATION!==sub)return false;
+    if(feed&&r.FEEDER!==feed)return false;
+    if(atr&&r.ATR_STATUS!==atr)return false;
+    if(q&&!String(r.ACCT_ID).includes(q)&&!(r.NAME&&r.NAME.toLowerCase().includes(q))&&!(r.MOBILE_NO&&r.MOBILE_NO.includes(q)))return false;
+    return true;
+  });
+  var ci=gel('dc-count-info');
+  if(ci)ci.textContent='Showing '+DC_FD.length.toLocaleString()+' of '+DC.length.toLocaleString()+' records';
+  renderDcTable(1);
+}
+
+function renderDcTable(page){
+  var tbody=gel('dc-tbody'); if(!tbody)return;
+  dcPage=page;
+  var slice=DC_FD.slice((page-1)*PS,page*PS);
+  tbody.innerHTML=slice.map(function(r,i){
+    var rank=(page-1)*PS+i+1;
+    var out=Math.round(r.OUTSTANDING);
+    var outColor=out>100000?'#F43F5E':out>10000?'#F59E0B':'var(--text)';
+    var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
+    var mapUrl=(lat&&lon)?'https://www.google.com/maps?q='+lat+','+lon:'';
+    return '<tr>'+
+      '<td style="font-family:var(--fh);color:var(--muted);font-size:11px;">'+rank+'</td>'+
+      '<td style="font-size:11px;color:var(--muted);">'+excelDateToStr(r.DATE_DC)+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;cursor:pointer;" data-id="'+r.ACCT_ID+'" onclick="openDcDetail(this.dataset.id)">'+r.ACCT_ID+'</td>'+
+      '<td style="font-weight:600;">'+r.NAME+'</td>'+
+      '<td>'+r.MOBILE_NO+'</td>'+
+      '<td style="font-family:var(--fh);color:var(--muted);">'+r.METER_NO+'</td>'+
+      '<td>'+atrBadge(r.LMV||'LMV-1')+'</td>'+
+      '<td class="mob-hide" style="font-size:11px;color:var(--muted);">'+excelDateToStr(r.LP_DATE)+'</td>'+
+      '<td style="font-family:var(--fh);color:#059669;font-weight:700;">'+(r.LP_AMT>0?'₹'+Math.round(r.LP_AMT).toLocaleString():'-')+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';">₹'+out.toLocaleString()+'</td>'+
+      '<td>'+r.SUBSTATION+'</td>'+
+      '<td style="display:none">'+r.FEEDER+'</td>'+
+      '<td>'+(mapUrl?'<a class="ml" href="'+mapUrl+'" target="_blank">📍</a>':'')+'</td>'+
+    '</tr>';
+  }).join('');
+  rp('dc-pg',page,Math.ceil(DC_FD.length/PS),renderDcTable);
+}
+
+function resetDc(){
+  var s=gel('dc-search'),ss=gel('dc-sub'),sf=gel('dc-feed'),sa=gel('dc-atr-filter');
+  if(s)s.value=''; if(ss)ss.value=''; if(sf)sf.value=''; if(sa)sa.value='';
+  DC_FD=DC.slice(); renderDcTable(1);
+}
+
+// ─── DC DETAIL MODAL ──────────────────────────────────────────────────────────
+function openDcDetail(acctId){
+  var r=DC.find(function(row){return String(row.ACCT_ID)===String(acctId);});
+  if(!r)return;
+  modalCurrentAcct=String(acctId); modalIsdc=true;
+  var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
+  var dispLat=lat,dispLon=lon;
+  // LAT/LON already fixed in DC loading
+
+  gel('modal-title').textContent='SM UNRECHARGE — '+r.NAME;
+  gel('modal-grid').innerHTML=
+    '<div class="modal-field"><div class="lbl">DATE OF DC</div><div class="val">'+(r.DATE_DC||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">MOBILE</div><div class="val">'+(r.MOBILE_NO||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">METER NUMBER</div><div class="val">'+(r.METER_NO||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">LMV TYPE</div><div class="val">'+(r.LMV||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">LOAD</div><div class="val">'+(r.LOAD||'-')+' kW</div></div>'+
+    '<div class="modal-field"><div class="lbl">LP DATE</div><div class="val">'+excelDateToStr(r.LP_DATE)+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">LP AMOUNT</div><div class="val" style="color:#059669;font-weight:700;">₹'+Math.round(r.LP_AMT||0).toLocaleString()+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">OUTSTANDING</div><div class="val" style="font-size:16px;font-weight:700;color:'+(r.OUTSTANDING>0?'#F43F5E':'#10B981')+';">₹'+Math.round(r.OUTSTANDING).toLocaleString()+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">SUBSTATION</div><div class="val">'+(r.SUBSTATION||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">FEEDER</div><div class="val">'+(r.FEEDER||'-')+'</div></div>'+
+    '<div class="modal-field" style="grid-column:span 2"><div class="lbl">ADDRESS</div><div class="val">'+(r.ADDRESS||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">LATITUDE</div><div class="val">'+(dispLat||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">LONGITUDE</div><div class="val">'+(dispLon||'-')+'</div></div>';
+
+  // ATR section
+  var atrSec=gel('modal-atr-section'); atrSec.style.display='block';
+  var counts={PAID:0,LOCK:0,THEFT:0,DISCONNECTED:0,OTHER:0};
+  DC.forEach(function(row){counts[row.ATR_STATUS]=(counts[row.ATR_STATUS]||0)+1;});
+  gel('modal-atr-counts').innerHTML=
+    '<div style="text-align:center;padding:8px 12px;background:#E8F5E9;border-radius:8px;cursor:pointer" onclick=\"filterDcByAtr(&#39;PAID&#39;)\"><div style="font-size:18px;font-weight:700;color:#2E7D32;">'+counts.PAID+'</div><div style="font-size:10px;color:#2E7D32;font-weight:700;">PAID</div></div>'+
+    '<div style="text-align:center;padding:8px 12px;background:#F3E5F5;border-radius:8px;cursor:pointer" onclick=\"filterDcByAtr(&#39;LOCK&#39;)\"><div style="font-size:18px;font-weight:700;color:#6A1B9A;">'+counts.LOCK+'</div><div style="font-size:10px;color:#6A1B9A;font-weight:700;">LOCK</div></div>'+
+    '<div style="text-align:center;padding:8px 12px;background:#FFEBEE;border-radius:8px;cursor:pointer" onclick=\"filterDcByAtr(&#39;THEFT&#39;)\"><div style="font-size:18px;font-weight:700;color:#B71C1C;">'+counts.THEFT+'</div><div style="font-size:10px;color:#B71C1C;font-weight:700;">THEFT</div></div>'+
+    '<div style="text-align:center;padding:8px 12px;background:#FFEBEE;border-radius:8px;"><div style="font-size:18px;font-weight:700;color:#C62828;">'+(counts.DISCONNECTED||DC.length-counts.PAID-counts.LOCK-counts.THEFT-(counts.OTHER||0))+'</div><div style="font-size:10px;color:#C62828;font-weight:700;">SM</div></div>'+
+    '<div style="text-align:center;padding:8px 12px;background:#E8EAF6;border-radius:8px;cursor:pointer" onclick=\"filterDcByAtr(&#39;OTHER&#39;)\"><div style="font-size:18px;font-weight:700;color:#283593;">'+(counts.OTHER||0)+'</div><div style="font-size:10px;color:#283593;font-weight:700;">OTHER</div></div>';
+
+  var sel=gel('modal-atr-sel');
+  sel.innerHTML='<option value="DISCONNECTED">🔴 SM UNRECHARGE</option><option value="PAID">✅ PAID</option><option value="LOCK">🔒 LOCK</option><option value="THEFT">⚡ THEFT</option><option value="TD">🔌 TEMP DISCONNECTED</option><option value="OTHER">📝 OTHER</option>';
+  sel.value=r.ATR_STATUS||'DISCONNECTED';
+  updateAtrSelectStyle();
+
+  // ATR submitted state — show with unlock option
+  var currentAtr = r.ATR_STATUS || 'DISCONNECTED';
+  var isSubmitted = currentAtr !== 'DISCONNECTED';
+  var isLocked = isAtrLocked(r.ACCT_ID, 'sm');
+  // Load saved comment
+  var savedAtrData = {};
+  try{savedAtrData=JSON.parse(localStorage.getItem('atr_data')||'{}');}catch(e){}
+  var savedEntry = savedAtrData[String(r.ACCT_ID)]||{};
+  var savedComment = typeof savedEntry==='object' ? (savedEntry.comment||'') : '';
+  var commentBox = gel('modal-atr-comment');
+  if(commentBox){ commentBox.value = savedComment; commentBox.disabled = isSubmitted; }
+  var sel2 = gel('modal-atr-sel');
+  if(sel2){
+    sel2.disabled = isSubmitted;
+    sel2.style.opacity = isSubmitted ? '0.7' : '1';
+    sel2.style.cursor = isSubmitted ? 'not-allowed' : 'pointer';
+  }
+  var saveBtns = gel('modal-atr-section').querySelectorAll('.save-atr-btn');
+  saveBtns.forEach(function(b){
+    if(isLocked){
+      // Submitted but not pushed to sheet — LOCKED
+      b.disabled = true;
+      b.style.opacity = '0.7';
+      b.style.cursor = 'not-allowed';
+      b.textContent = '🔒 PUSH TO SHEET TO UNLOCK';
+      b.style.background = '#9CA3AF';
+      b.style.fontSize = '11px';
+    } else if(isSubmitted){
+      // Submitted AND pushed to sheet — allow re-edit
+      b.disabled = false;
+      b.style.opacity = '1';
+      b.style.cursor = 'pointer';
+      b.textContent = '✏️ EDIT ATR';
+      b.style.background = '#6366F1';
+      b.onclick = function(){
+        var sel3=gel('modal-atr-sel'), cb=gel('modal-atr-comment');
+        if(sel3){ sel3.disabled=false; sel3.style.opacity='1'; sel3.style.cursor='pointer'; }
+        if(cb){ cb.disabled=false; }
+        b.textContent='💾 SAVE ATR STATUS';
+        b.style.background='#F59E0B';
+        b.style.fontSize='';
+        b.onclick=null;
+        b.addEventListener('click', function saveHandler(){ saveModalAtr(); b.removeEventListener('click',saveHandler); });
+      };
+    } else {
+      b.disabled = false;
+      b.style.opacity = '1';
+      b.style.cursor = 'pointer';
+      b.textContent = '💾 SAVE ATR STATUS';
+      b.style.background = '#F59E0B';
+      b.style.fontSize = '';
+    }
+  });
+
+  // Map button
+  var mapBtn=gel('modal-map-btn');
+  if(lat&&lon){
+    mapBtn.href='https://www.google.com/maps?q='+lat+','+lon+'&z=17';
+    mapBtn.style.display='inline-flex';
+  } else mapBtn.style.display='none';
+
+  // Payment section
+  gel('modal-pay-section').style.display='none';
+
+  // Nearby
+  if(lat&&lon){
+    gel('modal-nearby-section').style.display='block';
+    modalNearbyLat=lat; modalNearbyLon=lon;
+    loadModalNearby();
+  } else gel('modal-nearby-section').style.display='none';
+
+  var mo=gel('detail-modal'); mo.classList.add('open'); document.body.style.overflow='hidden';
+}
+
+function filterDcByAtr(atr){
+  closeModal();
+  var sel=gel('dc-atr-filter'); if(sel)sel.value=atr;
+  dcFilter();
+}
+
+function toggleAtrComment(){
+  var sel = gel('modal-atr-sel');
+  var wrap = gel('modal-atr-comment-wrap');
+  if(!sel || !wrap) return;
+  // Show comment box for OTHER, DISPUTE, PROMISE, PARTIAL (any that need explanation)
+  var showFor = ['OTHER','DISPUTE','PROMISE','PARTIAL'];
+  wrap.style.display = showFor.indexOf(sel.value) >= 0 ? 'block' : 'none';
+}
+
+function updateAtrSelectStyle(){
+  var s=gel('modal-atr-sel'); if(!s)return;
+  var classes=['atr-dc','atr-paid','atr-lock','atr-theft','atr-other'];
+  classes.forEach(function(c){s.classList.remove(c);});
+  var v=s.value;
+  if(v==='PAID')s.className='atr-paid';
+  else if(v==='LOCK')s.className='atr-lock';
+  else if(v==='THEFT')s.className='atr-theft';
+  else if(v==='OTHER')s.className='atr-other';
+  else s.className='atr-dc';
+}
+
+function saveModalAtr(){
+  if(!modalCurrentAcct)return;
+  var sel=gel('modal-atr-sel'); if(!sel)return;
+  var newAtr=sel.value;
+  var atrType = gel('modal-atr-section') ? gel('modal-atr-section').dataset.type : '';
+
+  if(atrType === 'defaulter'){
+    // Save defaulter ATR
+    var defComment = gel('modal-atr-comment') ? gel('modal-atr-comment').value.trim() : '';
+    var defRec = DEF_ALL.find(function(x){return String(x.ACCT_ID)===String(modalCurrentAcct);});
+    if(defRec){ defRec.ATR_STATUS=newAtr; defRec.ATR_COMMENT=defComment; }
+    try{var da=JSON.parse(localStorage.getItem('def_atr_data')||'{}');da[String(modalCurrentAcct)]={atr:newAtr,comment:defComment,ts:new Date().toISOString()};localStorage.setItem('def_atr_data',JSON.stringify(da));}catch(e){}
+    // Sync to Google Sheet
+    syncAtrToSheet({
+      type: 'defaulter',
+      acct: modalCurrentAcct,
+      atr: newAtr,
+      comment: defComment,
+      name: defRec ? defRec.NAME : '',
+      mobile: defRec ? (defRec.MOBILE_NO||defRec.MOBILE||'') : '',
+      meter: defRec ? (METER_DATA[String(modalCurrentAcct)]||defRec.METER_NO||'') : '',
+      substation: defRec ? defRec.SUBSTATION : '',
+      feeder: defRec ? defRec.FEEDER : '',
+      outstanding: defRec ? defRec.OUTSTANDING : 0,
+      role: CURRENT_ROLE || 'USER'
+    });
+    // Remove from pushed accts — lock until pushed to sheet again
+    var _pushed = getPushedAccts();
+    _pushed.delete(String(modalCurrentAcct));
+    localStorage.setItem('atr_pushed_accts', JSON.stringify(Array.from(_pushed)));
+    // Lock UI
+    sel.disabled=true; sel.style.opacity='0.7';
+    var sb=gel('modal-atr-section').querySelectorAll('.save-atr-btn');
+    sb.forEach(function(b){b.disabled=true;b.style.opacity='0.7';b.style.cursor='not-allowed';b.style.background='#9CA3AF';b.textContent='🔒 PUSH TO SHEET TO UNLOCK';b.style.fontSize='11px';});
+    renderDefaulters(defPage);
+    setTimeout(autoSyncAtr, 2000);
+    return;
+  }
+
+  // SM Unrecharge ATR
+  if(!modalIsdc)return;
+  var r=DC.find(function(row){return String(row.ACCT_ID)===String(modalCurrentAcct);});
+  var comment = gel('modal-atr-comment') ? gel('modal-atr-comment').value.trim() : '';
+  if(r){r.ATR_STATUS=newAtr; r.ATR_COMMENT=comment; ATR_DATA[String(modalCurrentAcct)]={atr:newAtr,comment:comment};}
+  try{var a=JSON.parse(localStorage.getItem('atr_data')||'{}');a[String(modalCurrentAcct)]={atr:newAtr,comment:comment,ts:new Date().toISOString()};localStorage.setItem('atr_data',JSON.stringify(a));}catch(e){}
+  // Remove from pushed accts — lock until pushed to sheet again
+  var _pushed2 = getPushedAccts();
+  _pushed2.delete(String(modalCurrentAcct));
+  localStorage.setItem('atr_pushed_accts', JSON.stringify(Array.from(_pushed2)));
+  // Freeze ATR select, comment and button after save
+  var sel3 = gel('modal-atr-sel');
+  if(sel3){ sel3.disabled=true; sel3.style.opacity='0.7'; sel3.style.cursor='not-allowed'; }
+  var cbox = gel('modal-atr-comment'); if(cbox){ cbox.disabled=true; cbox.style.opacity='0.7'; }
+  // Auto-sync from sheet after 2s to confirm save
+  setTimeout(autoSyncAtr, 2000);
+  var allBtns = gel('modal-atr-section') ? gel('modal-atr-section').querySelectorAll('.save-atr-btn') : [];
+  allBtns.forEach(function(b){
+    b.disabled=true; b.style.opacity='0.7'; b.style.cursor='not-allowed';
+    b.style.background='#9CA3AF'; b.textContent='🔒 PUSH TO SHEET TO UNLOCK'; b.style.fontSize='11px';
+  });
+
+  // Sync to Google Sheet
+  syncAtrToSheet({
+    type: 'sm',
+    acct: modalCurrentAcct,
+    atr: newAtr,
+    comment: gel('modal-atr-comment') ? gel('modal-atr-comment').value.trim() : '',
+    name: r ? r.NAME : '',
+    mobile: r ? r.MOBILE_NO : '',
+    meter: r ? (r.METER_NO || METER_DATA[String(modalCurrentAcct)] || '') : '',
+    substation: r ? r.SUBSTATION : '',
+    feeder: r ? r.FEEDER : '',
+    outstanding: r ? r.OUTSTANDING : 0,
+    role: CURRENT_ROLE || 'USER'
+  });
+  dcFilter();
+}
+
+function saveAtrUrl(){
+  var inp=gel('settings-atr-url')||gel('atr-url-input'); if(!inp)return;
+  var val=inp.value.trim();
+  ATR_SCRIPT_URL=val;
+  localStorage.setItem('atr_script_url',val);
+  var st=gel('atr-url-status');
+  if(st) st.innerHTML=val?'✅ URL saved! ATR will auto-sync every 5 min.':'⚠ URL cleared — ATR will save locally only.';
+  updateAtrLocalCounts();
+}
+
+function manualPushAtr(){
+  var url = getScriptUrl();
+  if(!url){ alert('No Sheet URL configured. Paste and save URL first.'); return; }
+  var btn = event.target;
+  btn.textContent='⏳ PUSHING…'; btn.disabled=true;
+  pushLocalAtrToSheet();
+  setTimeout(function(){
+    localStorage.setItem('atr_last_push', new Date().toLocaleString('en-IN'));
+    updateAtrLocalCounts();
+    btn.textContent='✅ PUSHED'; btn.disabled=false;
+    setTimeout(function(){ btn.textContent='⬆ PUSH TO SHEET NOW'; },2000);
+  }, 2000);
+}
+
+function clearPendingAtr(){
+  if(!confirm('This will remove all PENDING (unactioned) ATR records from localStorage.\nActioned records (PAID/LOCK/THEFT/etc) will be kept.\n\nProceed?')) return;
+  var sm  = {}; try{ sm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
+  var def = {}; try{ def = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+  var smKept=0, defKept=0, smRemoved=0, defRemoved=0;
+  var newSm={}, newDef={};
+  Object.keys(sm).forEach(function(a){
+    var e=sm[a]; var s=typeof e==='object'?e.atr:e;
+    if(s && s!=='PENDING'){ newSm[a]=e; smKept++; } else smRemoved++;
+  });
+  Object.keys(def).forEach(function(a){
+    var e=def[a]; var s=typeof e==='object'?e.atr:e;
+    if(s && s!=='PENDING'){ newDef[a]=e; defKept++; } else defRemoved++;
+  });
+  localStorage.setItem('atr_data', JSON.stringify(newSm));
+  localStorage.setItem('def_atr_data', JSON.stringify(newDef));
+  updateAtrLocalCounts();
+  alert('✅ Cleared '+smRemoved+' SM + '+defRemoved+' Defaulter PENDING records.\nKept: '+smKept+' SM + '+defKept+' Defaulter actioned records.');
+}
+
+function unlockAllAtr(){
+  var sm  = {}; try{ sm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
+  var def = {}; try{ def = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+  addPushedAccts(Object.keys(sm), Object.keys(def));
+  updateAtrLocalCounts();
+  alert('✅ All submitted ATR entries unlocked for re-editing.');
+}
+
+function updateAtrLocalCounts(){
+  try{
+    var sm  = JSON.parse(localStorage.getItem('atr_data')||'{}');
+    var def = JSON.parse(localStorage.getItem('def_atr_data')||'{}');
+    var smTotal=Object.keys(sm).length, defTotal=Object.keys(def).length;
+    var smActioned=Object.keys(sm).filter(function(a){ var e=sm[a]; return (typeof e==='object'?e.atr:e)!=='PENDING'; }).length;
+    var defActioned=Object.keys(def).filter(function(a){ var e=def[a]; return (typeof e==='object'?e.atr:e)!=='PENDING'; }).length;
+    var el1=gel('atr-local-count'), el2=gel('atr-def-local-count'), el3=gel('atr-last-push');
+    if(el1) el1.textContent = smTotal+' ('+smActioned+' actioned)';
+    if(el2) el2.textContent = defTotal+' ('+defActioned+' actioned)';
+    if(el3) el3.textContent = localStorage.getItem('atr_last_push')||'never';
+  }catch(e){}
+}
+
+function loadModalNearby(lat,lon){
+  if(lat!==undefined){modalNearbyLat=lat;modalNearbyLon=lon;}
+  if(!modalNearbyLat||!modalNearbyLon)return;
+  var radius=parseFloat(gel('modal-nb-radius')?gel('modal-nb-radius').value:0.5);
+  var nearby=DC.filter(function(r){return r.LAT&&r.LON&&String(r.ACCT_ID)!==String(modalCurrentAcct);})
+    .map(function(r){var rLat=parseFloat(r.LAT),rLon=parseFloat(r.LON);return Object.assign({},r,{_dist:haversine(modalNearbyLat,modalNearbyLon,rLat,rLon),_lat:rLat,_lon:rLon});})
+    .filter(function(r){return r._dist<=radius;})
+    .sort(function(a,b){return a._dist-b._dist;})
+    .slice(0,10);
+  var cnt=gel('modal-nb-count'); if(cnt)cnt.textContent=nearby.length+' FOUND';
+  var lst=gel('modal-nb-list'); if(!lst)return;
+  if(!nearby.length){lst.innerHTML='<div style="padding:12px;text-align:center;color:var(--muted);font-size:12px;">No nearby consumers within '+(radius<1?radius*1000+'m':radius+'km')+'</div>';return;}
+  lst.innerHTML=nearby.map(function(r,i){
+    var dist=r._dist<1?(r._dist*1000).toFixed(0)+'m':r._dist.toFixed(2)+'km';
+    var out=Math.round(r.OUTSTANDING||0);
+    var outColor=out>100000?'#F43F5E':out>10000?'#F59E0B':'var(--text)';
+    return '<div class="nb-card" onclick="closeModal();setTimeout(function(){openDcDetail(&#39;'+r.ACCT_ID+'&#39;);},100);">'+
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">'+
+        '<div><div style="font-size:12px;font-weight:700;">'+r.NAME+'</div><div style="font-size:10px;color:var(--muted);">'+r.ACCT_ID+' | '+r.SUBSTATION+'</div></div>'+
+        '<div style="text-align:right"><div style="font-family:var(--fh);font-size:12px;font-weight:700;color:#4F46E5;">'+dist+'</div>'+
+          '<div style="font-family:var(--fh);font-size:12px;font-weight:700;color:'+outColor+';">₹'+out.toLocaleString()+'</div></div>'+
+      '</div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+        atrBadge(r.ATR_STATUS)+
+        (r._lat&&r._lon?'<a class="ml" href="https://www.google.com/maps?q='+r._lat+','+r._lon+'" target="_blank" onclick="event.stopPropagation()">📍 MAP</a>':'')+
+      '</div></div>';
+  }).join('');
+}
+
+function closeModal(){
+  var mo=gel('detail-modal'); mo.classList.remove('open'); document.body.style.overflow='';
+  modalCurrentAcct=null; modalIsdc=false;
+}
+
+function expDcX(){
+  if(!DC_FD.length)return alert('No data.');
+  var ws=XLSX.utils.json_to_sheet(DC_FD);
+  var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'SM Unrecharge');
+  XLSX.writeFile(wb,'SM_Unrecharge_'+Date.now()+'.xlsx');
+}
+
+// ─── MULTI-SELECT ─────────────────────────────────────────────────────────────
+var _defSelSubs = [], _defSelFeeds = [], _defSelSupplies = [];
+
+function toggleMs(id){
+  var dd = gel(id);
+  if(!dd) return;
+  // Close all others first
+  document.querySelectorAll('.ms-dropdown.open').forEach(function(d){ if(d.id!==id) d.classList.remove('open'); });
+  dd.classList.toggle('open');
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', function(e){
+  if(!e.target.closest('.ms-wrap')) document.querySelectorAll('.ms-dropdown').forEach(function(d){d.classList.remove('open');});
+});
+
+function filterMsOptions(ddId, q){
+  var opts = gel(ddId) ? gel(ddId).querySelectorAll('.ms-option') : [];
+  q = q.toLowerCase();
+  opts.forEach(function(o){ o.style.display = (!q || o.textContent.toLowerCase().includes(q)) ? '' : 'none'; });
+}
+
+function buildMsOptions(type, values){
+  var optsEl = gel('def-'+type+'-opts');
+  if(!optsEl) return;
+  var sel = type==='sub' ? _defSelSubs : type==='feed' ? _defSelFeeds : _defSelSupplies;
+  optsEl.innerHTML = '';
+  var t = type;
+  values.forEach(function(v){
+    var lbl = document.createElement('label');
+    lbl.className = 'ms-option';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.value = v;
+    cb.checked = sel.indexOf(v) >= 0;
+    cb.addEventListener('change', (function(tp){ return function(){ onMsChange(tp, this); }; })(t));
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(' ' + v));
+    optsEl.appendChild(lbl);
+  });
+}
+
+function onMsChange(type, cb){
+  var sel = type==='sub' ? _defSelSubs : type==='feed' ? _defSelFeeds : _defSelSupplies;
+  if(cb.checked){ if(sel.indexOf(cb.value)<0) sel.push(cb.value); }
+  else { var i=sel.indexOf(cb.value); if(i>=0) sel.splice(i,1); }
+  updateMsBtn(type);
+  if(type==='sub') refreshFeedOptions();
+  runDefaulterFilter();
+}
+
+function updateMsBtn(type){
+  var sel = type==='sub' ? _defSelSubs : type==='feed' ? _defSelFeeds : _defSelSupplies;
+  var btn = gel('def-'+type+'-btn');
+  if(!btn) return;
+  var allLabel = type==='sub'?'ALL SUBSTATIONS':type==='feed'?'ALL FEEDERS':'ALL SUPPLY TYPES';
+  btn.textContent = sel.length===0 ? allLabel : sel.length===1 ? sel[0] : sel.length+' selected';
+}
+
+function getSelectedLoadRanges(){
+  var dd=gel('def-load-dd'); if(!dd) return [];
+  return Array.from(dd.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
+}
+function clearLoadFilter(){
+  var dd=gel('def-load-dd'); if(!dd) return;
+  dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){cb.checked=false;});
+  gel('def-load-btn').textContent='ALL LOAD';
+  runDefaulterFilter();
+}
+function getSelectedSmTypes(){
+  var dd=gel('def-sm-dd'); if(!dd) return [];
+  return Array.from(dd.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
+}
+function clearSmFilter(){
+  var dd=gel('def-sm-dd'); if(!dd) return;
+  dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){cb.checked=false;});
+  gel('def-sm-btn').textContent='ALL METERS';
+  runDefaulterFilter();
+}
+function getSelectedBillBasis(){
+  var dd=gel('def-basis-dd'); if(!dd) return [];
+  return Array.from(dd.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
+}
+function clearBasisFilter(){
+  var dd=gel('def-basis-dd'); if(!dd) return;
+  dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){cb.checked=false;});
+  gel('def-basis-btn').textContent='ALL BASIS';
+  runDefaulterFilter();
+}
+function clearMs(type){
+  if(type==='sub'){ _defSelSubs=[]; buildMsOptions('sub', getAllSubValues()); }
+  else if(type==='feed'){ _defSelFeeds=[]; buildMsOptions('feed', getAllFeedValues()); }
+  else { _defSelSupplies=[]; buildMsOptions('supply', getAllSupplyValues()); }
+  updateMsBtn(type);
+  if(type==='sub') refreshFeedOptions();
+  runDefaulterFilter();
+}
+
+function getAllSubValues(){
+  return [...new Set(DEF_ALL.map(function(r){return r.SUBSTATION;}).filter(Boolean))].sort();
+}
+function getAllFeedValues(){
+  var subs = _defSelSubs;
+  return [...new Set(DEF_ALL.filter(function(r){
+    return !subs.length || subs.indexOf(r.SUBSTATION)>=0;
+  }).map(function(r){return r.FEEDER;}).filter(Boolean))].sort();
+}
+var TARIFF_MAP = {
+  '10':'LMV-1 (Dom)','11':'LMV-1B','20':'LMV-2 (Com)','40':'LMV-4',
+  '50':'LMV-5','60':'LMV-6 (Ind)','70':'LMV-7','80':'LMV-8',
+  '90':'LMV-9 (Agri)','92':'LMV-9A','100':'LMV-10','110':'LMV-11 (Muni)',
+  '120':'LMV-12','200':'HV-2','210':'HV-2A','220':'HV-3','400':'EHV-1',
+  '1':'LMV-1','2':'LMV-2','3':'LMV-3','4':'LMV-4','5':'LMV-5',
+  '6':'LMV-6','7':'LMV-7','8':'LMV-8','9':'LMV-9','11':'LMV-11'
+};
+
+// ST → Tariff: remove last digit from ST code → tariff number
+// e.g. ST=10 → tariff=1 (LMV-1), ST=100 → tariff=10 (LMV-10), ST=200 → tariff=20 (HV-2)
+function stToTariff(st){
+  var s = String(st||'').trim().toUpperCase();
+  if(!s || s==='-') return '';
+  // Complete UPPCL SUPPLY_TYPE → TARIFF_TYPE mapping
+  var exact = {
+    '10':'LMV1','11':'LMV1',
+    '20':'LMV2','22':'LMV2',
+    '30':'LMV3',
+    '40':'LMV4','41':'LMV4','41A':'LMV4','42':'LMV4','42A':'LMV4',
+    '50':'LMV5',
+    '60':'LMV6',
+    '70':'LMV7',
+    '80':'LMV8',
+    '90':'LMV9','92':'LMV9','93':'LMV9',
+    '100':'LMV10','101':'LMV10','103':'LMV10','105':'LMV10',
+    '110':'LMV11',
+    '120':'LMV12',
+    'H11':'HV1','H13':'HV1','H14':'HV1','24B':'HV1',
+    'H21A':'HV2','H21':'HV2','H22':'HV2','H23':'HV2',
+    '200':'HV2','210':'HV2A','220':'HV3',
+    '400':'EHV1'
+  };
+  if(exact[s]) return exact[s];
+  // Already a label like LMV1, HV2 etc.
+  if(/^(LMV|HV|EHV)\d/.test(s)) return s;
+  return s;
+}
+function getAllSupplyValues(){
+  var vals = new Set();
+  // From D array — CATEGORY = TARIFF_TYPE directly from billed CSV (LMV1, HV1 etc.)
+  D.forEach(function(r){ if(r.CATEGORY) vals.add(r.CATEGORY); });
+  // From DEF_ALL — use _tariffLookup (built from D) or stToTariff conversion
+  if(window._tariffLookup){
+    DEF_ALL.forEach(function(r){
+      var t = window._tariffLookup[String(r.ACCT_ID)] || stToTariff(r.SUPPLY_TYPE);
+      if(t && t!=='-') vals.add(t);
+    });
+  }
+  // Filter only valid LMV/HV/EHV labels
+  return Array.from(vals).filter(function(v){
+    return v && /^(LMV|HV|EHV)\d/.test(v);
+  }).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+}
+
+function refreshFeedOptions(){
+  _defSelFeeds = [];
+  buildMsOptions('feed', getAllFeedValues());
+  updateMsBtn('feed');
+}
+
+// ─── DEFAULTERS ───────────────────────────────────────────────────────────────
+function loadDefaulters(){
+  if(DEF_ALL.length > 0){
+    buildDefaulterPanel();
+    runDefaulterFilter();
+    return;
+  }
+  // Trigger build
+  buildDefAll();
+  // Show loading
+  var msg = gel('def-loading-msg');
+  if(msg){msg.style.display='block';msg.innerHTML='⏳ Loading defaulters…';}
+  var attempts=0;
+  var poll=setInterval(function(){
+    attempts++;
+    if(DEF_ALL.length>0){
+      clearInterval(poll);
+      if(msg) msg.style.display='none';
+      buildDefaulterPanel();
+    } else if(attempts>20){
+      clearInterval(poll);
+      buildDefAll(); // fallback: fetch now
+    }
+  },500);
+}
+
+function buildDefaulterPanel(){
+  // Populate multi-select substations
+  buildMsOptions('sub', getAllSubValues());
+  buildMsOptions('feed', getAllFeedValues());
+  // Populate supply type single select
+  buildMsOptions('supply', getAllSupplyValues());
+  runDefaulterFilter();
+}
+function clearDefSearch(){ var s=gel("def-search"); if(s){s.value="";} runDefaulterFilter(); }
+
+// Pre-built full defaulter list (loaded from defaulter.csv)
+var DEF_ALL = [];
+var _defFileLoaded = false;
+
+function parseMeterData(text){
+  METER_DATA = {};
+  var nl = text.indexOf('\n'); if(nl<0) return;
+  var hdrs = text.substring(0,nl).replace(/\r/,'').split(',')
+    .map(function(h){return h.replace(/"/g,'').trim().toUpperCase();});
+  var iAcct = hdrs.indexOf('ACCT_ID'); if(iAcct<0) iAcct=0;
+  var iMeter= hdrs.indexOf('METER_NO'); if(iMeter<0) iMeter=hdrs.indexOf('METERNO'); if(iMeter<0) iMeter=1;
+  var pos=nl+1, len=text.length;
+  while(pos<len){
+    var end=text.indexOf('\n',pos); if(end<0)end=len;
+    var v=text.substring(pos,end).split(','); pos=end+1;
+    var acct=(v[iAcct]||'').replace(/"/g,'').trim();
+    var meter=(v[iMeter]||'').replace(/"/g,'').trim();
+    if(acct && meter) METER_DATA[acct]=meter;
+  }
+  console.log('Meter data loaded:', Object.keys(METER_DATA).length);
+}
+
+function parseDefaulterText(text){
+  DEF_ALL = [];
+  var nl = text.indexOf('\n'); if(nl<0) return;
+  var hdrs = text.substring(0,nl).replace(/\r/,'').split(',')
+    .map(function(h){return h.replace(/"/g,'').trim();});
+  var iAcct=hdrs.indexOf('ACCT_ID'), iMob=hdrs.indexOf('MOBILE_NO'),
+      iName=hdrs.indexOf('NAME'), iAddr=hdrs.indexOf('ADDRESS'),
+      iCat=hdrs.indexOf('CATEGORY'), iLat=hdrs.indexOf('LAT'),
+      iLon=hdrs.indexOf('LON'), iSub=hdrs.indexOf('SUBSTATION'),
+      iFeed=hdrs.indexOf('FEEDER'), iDate=hdrs.indexOf('LP DATE'),
+      iAmt=hdrs.indexOf('LP AMT'), iOut=hdrs.indexOf('TOTAL OUTSTANDING');
+  var pos=nl+1, len=text.length;
+  while(pos<len){
+    var end=text.indexOf('\n',pos); if(end<0)end=len;
+    var v=text.substring(pos,end).split(','); pos=end+1;
+    var acct=(v[iAcct]||'').replace(/"/g,'').trim(); if(!acct)continue;
+    var lat=(v[iLat]||'').replace(/"/g,''), lon=(v[iLon]||'').replace(/"/g,'');
+    try{if(parseFloat(lat)>50){var t=lat;lat=lon;lon=t;}}catch(e){}
+    var out=parseFloat((v[iOut]||'').replace(/"/g,''))||0;
+    // Fix LP DATE/LP AMT swap - if LP DATE looks like a number it's actually the amount
+    var rawDate = iDate>=0 ? (v[iDate]||'').replace(/"/g,'').trim() : '';
+    var rawAmt  = iAmt>=0  ? (v[iAmt] ||'').replace(/"/g,'').trim() : '';
+    var lpDate, lpAmt;
+    if(rawDate && !isNaN(parseFloat(rawDate)) && !/\d{2}[-\/]\d{2}[-\/]\d{4}/.test(rawDate)){
+      // LP DATE is actually a number = amount, LP AMT is the date
+      lpAmt  = parseFloat(rawDate)||0;
+      lpDate = rawAmt;
+    } else {
+      lpDate = rawDate;
+      lpAmt  = parseFloat(rawAmt)||0;
+    }
+    DEF_ALL.push({
+      ACCT_ID:acct, NAME:(v[iName]||'').replace(/"/g,''),
+      MOBILE:(v[iMob]||'').replace(/"/g,''), ADDRESS:(v[iAddr]||'').replace(/"/g,''),
+      SUPPLY_TYPE:(v[iCat]||'').replace(/"/g,'').trim(), OUTSTANDING:out,
+      PAY_AMT:lpAmt,
+      PAY_DATE:lpDate, STATUS:'INSERVICE',
+      SUBSTATION:(v[iSub]||'').replace(/"/g,''), FEEDER:(v[iFeed]||'').replace(/"/g,''),
+      LAT:lat, LON:lon
+    });
+  }
+  console.log('Defaulter pre-loaded:', DEF_ALL.length);
+}
+
+function buildDefAll() {
+  if(window._defAllLoading) return;
+  if(!window._manifest_cache){setTimeout(buildDefAll,500);return;}
+  var mc=window._manifest_cache;
+  var defFiles=(mc.defaulters_eudd1||[]).concat(mc.defaulters_eudd2||[]);
+  if(!defFiles.length){
+    // Fallback: build from D array if no defaulter files
+    buildDefAllFromD(); return;
+  }
+
+  window._defAllLoading = true;
+  DEF_ALL=[];
+  var loaded=0, total=defFiles.length;
+  defFiles.forEach(function(f){
+    fetch(RAW_BASE+f)
+      .then(function(r){return r.ok?r.text():'';})
+      .then(function(text){
+        if(text) parseDefFile(text);
+        loaded++;
+        if(loaded===total){
+          window._defAllLoading = false;
+          console.log('DEF_ALL from files:',DEF_ALL.length);
+          // Apply SS rename in DEF_ALL too
+          var _ssRen={'132 KV HASARI_26295':'GROWTH CENTER_20058','132 KV HASARI_26400':'GROWTH CENTER_20058'};
+          DEF_ALL.forEach(function(r){if(_ssRen[r.SUBSTATION])r.SUBSTATION=_ssRen[r.SUBSTATION];});
+          if(gel('def-tbody')) runDefaulterFilter();
+        }
+      }).catch(function(){loaded++;if(loaded===total){window._defAllLoading=false;if(gel('def-tbody'))runDefaulterFilter();}});
+  });
+}
+
+function parseDefFile(text){
+  var nl=text.indexOf('\n'); if(nl<0) return;
+  var hdrs=text.substring(0,nl).replace(/\r/,'').split(',').map(function(h){return h.replace(/"/g,'').trim().toUpperCase();});
+  var iAcct   = hdrs.indexOf('ACCT_ID'),
+      iName   = hdrs.indexOf('NAME'),
+      iMob    = hdrs.indexOf('MOBILE_NO'),
+      iAddr   = hdrs.indexOf('ADDRESS'),
+      iSub    = hdrs.indexOf('SUBSTATION'),
+      iFeed   = hdrs.indexOf('FEEDER'),
+      iCat    = hdrs.indexOf('TARIFF_TYPE')>=0 ? hdrs.indexOf('TARIFF_TYPE') : hdrs.indexOf('SUPPLY_TYPE')>=0 ? hdrs.indexOf('SUPPLY_TYPE') : hdrs.indexOf('ST'),
+      iLoad   = hdrs.indexOf('SANCTION_LOAD'),
+      iOut    = hdrs.indexOf('OUTSTANDING')>=0 ? hdrs.indexOf('OUTSTANDING') : hdrs.indexOf('AMOUNT_PAYABLE'),
+      iPayAmt = hdrs.indexOf('LAST_PAYMENT_AMOUNT'),
+      iPayDate= hdrs.indexOf('LAST_PAY_DATE'),
+      iLat    = hdrs.indexOf('LATITUDE'),
+      iLon    = hdrs.indexOf('LONGITUDE'),
+      iMeter  = hdrs.indexOf('METER_SERIAL_NBR'),
+      iCA     = hdrs.indexOf('CA'),
+      iBUnits = hdrs.indexOf('BILLED_UNITS'),
+      iBDate  = hdrs.indexOf('BILL_DATE'),
+      iDDate  = hdrs.indexOf('DUE_DATE'),
+      iBBasis = hdrs.indexOf('BILL_BASIS'),
+      iMrSrc  = hdrs.indexOf('MR_SOURCE_CD'),
+      iSrc    = hdrs.indexOf('SOURCE');
+  if(iOut<0) iOut=8; // fallback to col index if not found
+  var defSaved={};
+  try{defSaved=JSON.parse(localStorage.getItem('def_atr_data')||'{}');}catch(e){}
+  var lines=text.substring(nl+1).split('\n');
+  lines.forEach(function(line){
+    if(!line.trim()) return;
+    var v=line.split(',');
+    var acct=String(v[iAcct]||'').replace(/"/g,'').trim();
+    if(!acct) return;
+    var out=parseFloat(v[iOut]||0)||0;
+    if(out<2000) return;
+    var lat=parseFloat(v[iLat]||0), lon=parseFloat(v[iLon]||0);
+    if(lat>50){var t=lat;lat=lon;lon=t;}
+    if((!lat||lat<20)&&LOCATION_MAP[acct]){lat=LOCATION_MAP[acct].lat;lon=LOCATION_MAP[acct].lon;}
+    var ae=defSaved[acct]||{};
+    var rawST=(v[iCat]||'').replace(/"/g,'').trim();
+    DEF_ALL.push({
+      ACCT_ID:   acct,
+      NAME:      (v[iName]||'').replace(/"/g,''),
+      MOBILE:    (v[iMob]||'').replace(/"/g,''),
+      ADDRESS:   (v[iAddr]||'').replace(/"/g,''),
+      SUPPLY_TYPE: stToTariff(rawST),
+      LOAD:      parseFloat(v[iLoad]||0)||0,
+      OUTSTANDING:out,
+      PAY_AMT:   parseFloat(v[iPayAmt]||0)||0,
+      PAY_DATE:  (v[iPayDate]||'-').replace(/"/g,''),
+      SUBSTATION:(v[iSub]||'').replace(/"/g,''),
+      FEEDER:    (v[iFeed]||'').replace(/"/g,''),
+      LAT:lat, LON:lon,
+      METER_NO:  (v[iMeter]||'').replace(/"/g,''),
+      CA:        iCA>=0    ? (v[iCA]||'').replace(/"/g,'')          : '',
+      BILLED_UNITS: iBUnits>=0 ? (v[iBUnits]||'').replace(/"/g,'') : '',
+      BILL_DATE: iBDate>=0 ? (v[iBDate]||'').replace(/"/g,'')       : '',
+      DUE_DATE:  iDDate>=0 ? (v[iDDate]||'').replace(/"/g,'')       : '',
+      BILL_BASIS: iBBasis>=0 ? (v[iBBasis]||'').replace(/"/g,'').trim() : '',
+      MR_SOURCE_CD: iMrSrc>=0 ? (v[iMrSrc]||'').replace(/"/g,'').trim() : '',
+      SOURCE:    iSrc>=0   ? (v[iSrc]||'billed').replace(/"/g,'').trim() : 'billed',
+      ATR_STATUS:typeof ae==='object'?(ae.atr||'PENDING'):ae,
+      ATR_COMMENT:typeof ae==='object'?(ae.comment||''):''
+    });
+  });
+}
+
+function buildDefAllFromD() {
+  if(!D.length){setTimeout(buildDefAllFromD,1000);return;}
+  var pri={billed:3,unbilled:2,master:1}, bestRow={}, i=0;
+  function step1(){
+    var end=Math.min(i+5000,D.length);
+    for(;i<end;i++){
+      var row=D[i],a=String(row.ACCT_ID),rp=pri[row.SOURCE]||0;
+      if(!bestRow[a]||(pri[bestRow[a].SOURCE]||0)<rp) bestRow[a]=row;
+    }
+    if(i<D.length){setTimeout(step1,0);return;}
+    step2();
+  }
+  function step2(){
+    var newDef=[],keys=Object.keys(bestRow),j=0;
+    function chunk(){
+      var end=Math.min(j+5000,keys.length);
+      for(;j<end;j++){
+        var acct=keys[j],row=bestRow[acct],pay=PAY_DATA[acct];
+        var out=row.SOURCE==='billed'?parseFloat(row.AMOUNT_PAYABLE)||0:parseFloat((pay||{}).TOTAL_OUTSTANDING)||0;
+        if(out<2000) continue;
+        var lat=parseFloat(row.LAT),lon=parseFloat(row.LON);
+        if(lat>50){var t=lat;lat=lon;lon=t;}
+        if((!lat||lat<20)&&LOCATION_MAP[acct]){lat=LOCATION_MAP[acct].lat;lon=LOCATION_MAP[acct].lon;}
+        var ae=(localStorage.getItem('def_atr_data')?JSON.parse(localStorage.getItem('def_atr_data')):{})[acct]||{};
+        newDef.push({
+          ACCT_ID:acct,NAME:row.NAME||'-',MOBILE:row.MOBILE_NO||'-',
+          ADDRESS:row.ADDRESS||'-',SUPPLY_TYPE:row.CATEGORY||'-',
+          LOAD:parseFloat(row.LOAD||row.SANCTION_LOAD)||0,OUTSTANDING:out,
+          PAY_AMT:row.SOURCE==='billed'?parseFloat(row.LAST_PAYMENT_AMOUNT)||0:parseFloat((pay||{}).PAY_AMT)||0,
+          PAY_DATE:row.SOURCE==='billed'?(row.LAST_PAY_DATE||'-'):((pay||{}).PAY_DATE||'-'),
+          SUBSTATION:row.SUBSTATION||'-',FEEDER:row.FEEDER||'-',
+          LAT:lat,LON:lon,METER_NO:row.SERIAL_NBR||'-',DATA_SOURCE:row.SOURCE||'master',
+          ATR_STATUS:typeof ae==='object'?(ae.atr||'PENDING'):ae,
+          ATR_COMMENT:typeof ae==='object'?(ae.comment||''):''
+        });
+      }
+      if(j<keys.length){setTimeout(chunk,0);return;}
+      DEF_ALL=newDef;
+      console.log('DEF_ALL from D:',DEF_ALL.length);
+      if(gel('def-tbody')) runDefaulterFilter();
+    }
+    chunk();
+  }
+  step1();
+}
+
+
+function runDefaulterFilter(){
+  // Build live outstanding map if not exists
+  if(!window._dOutMap){
+    window._dOutMap={};
+    D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
+  }
+  if(!gel('def-tbody')){buildDefaulterPanel();return;}
+  if(!DEF_ALL.length) buildDefAll();
+
+  // Rebuild dropdowns every time DEF_ALL has data (options may be stale)
+  if(DEF_ALL.length){
+    var supplyOpts = gel('def-supply-opts');
+    if(supplyOpts){
+      // Always rebuild supply options from D array (ensures LMV1/HV1 labels not raw ST codes)
+      var curSupplyVals = getAllSupplyValues();
+      var curBuilt = supplyOpts.querySelectorAll('.ms-option').length;
+      if(!curBuilt || curBuilt !== curSupplyVals.length){
+        buildMsOptions('sub',    getAllSubValues());
+        buildMsOptions('feed',   getAllFeedValues());
+        buildMsOptions('supply', curSupplyVals);
+      }
+    }
+  }
+
+  // Use pre-built global BILL_BASIS lookup (built when D loads)
+  var _basisLookup = window._basisLookupGlobal || {};
+  if(!Object.keys(_basisLookup).length){
+    // Fallback: build now if global not ready yet
+    D.forEach(function(d){ _basisLookup[String(d.ACCT_ID)] = String(d.BILL_BASIS||'').trim().toUpperCase(); });
+  }
+
+  var minOut = parseFloat(gel('def-min') ? gel('def-min').value : 5000) || 5000;
+  var sub    = _defSelSubs;
+  var feed   = _defSelFeeds;
+  var supply = _defSelSupplies;
+  var sortDir= gel('def-sort') ? gel('def-sort').value : 'desc';
+  var q      = gel('def-search') ? gel('def-search').value.trim().toLowerCase() : '';
+
+  var selLoads = getSelectedLoadRanges();
+  var selSm    = getSelectedSmTypes();
+  var selBasis = getSelectedBillBasis();
+
+  // Fast filter on pre-built array
+  var all = DEF_ALL.filter(function(r){
+    // Use live outstanding from D array if available, fallback to DEF_ALL value
+    var dOut = window._dOutMap ? window._dOutMap[String(r.ACCT_ID)] : undefined;
+    var liveOut = (dOut !== undefined) ? dOut : (parseFloat(r.OUTSTANDING)||0);
+    if(liveOut < minOut) return false;
+    if(sub.length    && sub.indexOf(r.SUBSTATION)<0)    return false;
+    if(feed.length   && feed.indexOf(r.FEEDER)<0)        return false;
+    if(supply.length){
+      var rTariff = (window._tariffLookup&&window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
+      if(!rTariff || supply.indexOf(rTariff)<0) return false;
+    }
+    // Load filter — multi-select ranges
+    if(selLoads.length){
+      var matched=selLoads.some(function(range){
+        var parts=range.split('-');
+        var lo=parseFloat(parts[0]),hi=parseFloat(parts[1]);
+        return r.LOAD>=lo && r.LOAD<=hi;
+      });
+      if(!matched) return false;
+    }
+    // SM filter — use MR_SOURCE_CD directly from DEF_ALL record
+    if(selSm.length){
+      var mrSrc = String(r.MR_SOURCE_CD||'').trim().toUpperCase();
+      if(!mrSrc && window._smLookup) mrSrc = String(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
+      var isSm = mrSrc === 'SM';
+      var wantSm  = selSm.indexOf('sm')>=0;
+      var wantNon = selSm.indexOf('nonsm')>=0;
+      if(wantSm  && !wantNon && !isSm) return false;
+      if(wantNon && !wantSm  &&  isSm) return false;
+    }
+    // Bill Basis filter
+    if(selBasis.length){
+      var rb = String(r.BILL_BASIS||'').trim().toUpperCase();
+      // Fallback to D array lookup
+      if(!rb && window._basisLookupGlobal) rb = window._basisLookupGlobal[String(r.ACCT_ID)] || '';
+      if(!rb || selBasis.indexOf(rb)<0) return false;
+    }
+    if(q){
+      var meter = METER_DATA[String(r.ACCT_ID)] || r.METER_NO || '';
+      if(!String(r.ACCT_ID).includes(q) &&
+         !(r.NAME    && r.NAME.toLowerCase().includes(q))    &&
+         !(r.MOBILE  && r.MOBILE.toLowerCase().includes(q))  &&
+         !(meter     && meter.toLowerCase().includes(q))     &&
+         !(r.ADDRESS && r.ADDRESS.toLowerCase().includes(q)))
+        return false;
+    }
+    return true;
+  });
+
+  all.sort(function(a,b){
+    if(sortDir==='asc')       return a.OUTSTANDING-b.OUTSTANDING;
+    if(sortDir==='load_desc') return (b.LOAD||0)-(a.LOAD||0);
+    if(sortDir==='load_asc')  return (a.LOAD||0)-(b.LOAD||0);
+    if(sortDir==='sm_first'){
+      var as=String(a.METER_NO||'').toUpperCase().startsWith('GE')?0:1;
+      var bs=String(b.METER_NO||'').toUpperCase().startsWith('GE')?0:1;
+      return as-bs || b.OUTSTANDING-a.OUTSTANDING;
+    }
+    if(sortDir==='nonsm_first'){
+      var aIsSM = String(a.MR_SOURCE_CD||'').trim().toUpperCase()==='SM';
+      var bIsSM = String(b.MR_SOURCE_CD||'').trim().toUpperCase()==='SM';
+      return (aIsSM?1:0)-(bIsSM?1:0) || b.OUTSTANDING-a.OUTSTANDING;
+    }
+    if(sortDir==='tariff_asc') return String(a.SUPPLY_TYPE||'').localeCompare(String(b.SUPPLY_TYPE||''));
+    if(sortDir==='ai_high') return collectionProbability(b)-collectionProbability(a);
+    if(sortDir==='ai_low')  return collectionProbability(a)-collectionProbability(b);
+    if(sortDir==='bill_basis'){
+      var ba=String(a.BILL_BASIS||''), bb2=String(b.BILL_BASIS||'');
+      return ba.localeCompare(bb2) || b.OUTSTANDING-a.OUTSTANDING;
+    }
+    if(sortDir==='proximity'){
+      var aLat=parseFloat(a.LAT)||0, aLon=parseFloat(a.LON)||0;
+      var bLat=parseFloat(b.LAT)||0, bLon=parseFloat(b.LON)||0;
+      var aHasCoord=(aLat>20&&aLat<30&&aLon>70), bHasCoord=(bLat>20&&bLat<30&&bLon>70);
+      // Consumers with coordinates come first
+      if(aHasCoord && !bHasCoord) return -1;
+      if(!aHasCoord && bHasCoord) return 1;
+      // Both have coords — sort by distance from first consumer with coord
+      if(aHasCoord && bHasCoord && DEF_DATA.length>0){
+        var ref = DEF_DATA.find(function(r){var lt=parseFloat(r.LAT)||0,lo=parseFloat(r.LON)||0;return lt>20&&lt<30&&lo>70;});
+        if(ref){
+          var refLat=parseFloat(ref.LAT),refLon=parseFloat(ref.LON);
+          var da=haversine(refLat,refLon,aLat,aLon);
+          var db=haversine(refLat,refLon,bLat,bLon);
+          return da-db;
+        }
+      }
+      // Both no coords — sort by outstanding
+      return b.OUTSTANDING-a.OUTSTANDING;
+    }
+    return b.OUTSTANDING-a.OUTSTANDING; // default desc
+  });
+  DEF_DATA = all;
+
+  var totalOut = all.reduce(function(s,r){return s+r.OUTSTANDING;},0);
+  setText('def-count',   all.length.toLocaleString());
+  setText('def-total-out','₹'+Math.round(totalOut).toLocaleString());
+  setText('def-avg-out',  all.length?'₹'+Math.round(totalOut/all.length).toLocaleString():'₹0');
+  // Update filter button labels
+  if(gel('def-load-btn')){
+    var lc=selLoads.length;
+    gel('def-load-btn').textContent=lc?lc+' LOAD RANGE'+(lc>1?'S':''):'ALL LOAD';
+  }
+  if(gel('def-sm-btn')){
+    var sc=selSm.length;
+    gel('def-sm-btn').textContent=sc?(selSm.indexOf('sm')>=0&&selSm.indexOf('nonsm')>=0?'SM + NON-SM':selSm.indexOf('sm')>=0?'SMART METER':'NON-SM'):'ALL METERS';
+  }
+  if(gel('def-basis-btn')){
+    var bc=selBasis.length;
+    gel('def-basis-btn').textContent=bc?(bc===1?billBasisInfo(selBasis[0]).label:bc+' selected'):'ALL BASIS';
+  }
+  renderDefaulters(1);
+}
+
+function defSort(col){
+  if(_defSortCol===col)_defSortAsc=!_defSortAsc; else{_defSortCol=col;_defSortAsc=col!=='OUTSTANDING';}
+  document.querySelectorAll('[id^="dsrt-"]').forEach(function(el){el.textContent='⇅';});
+  var ic=gel('dsrt-'+col); if(ic)ic.textContent=_defSortAsc?'↑':'↓';
+  var numCols=['OUTSTANDING','PAY_AMT'];
+  DEF_DATA.sort(function(a,b){
+    if(col==='COLL_PROB'){
+      var av=collectionProbability(a), bv=collectionProbability(b);
+      if(av<bv)return _defSortAsc?-1:1; if(av>bv)return _defSortAsc?1:-1; return 0;
+    }
+    var av=numCols.indexOf(col)>=0?(parseFloat(a[col])||0):String(a[col]||'').toLowerCase();
+    var bv=numCols.indexOf(col)>=0?(parseFloat(b[col])||0):String(b[col]||'').toLowerCase();
+    if(av<bv)return _defSortAsc?-1:1; if(av>bv)return _defSortAsc?1:-1; return 0;
+  });
+  renderDefaulters(1);
+}
+
+function renderDefaulters(page){
+  defPage=page;
+  var tbody=gel('def-tbody'); if(!tbody)return;
+  var slice=DEF_DATA.slice((page-1)*PS,page*PS);
+
+  // Build live outstanding lookup from D array
+  if(!window._dOutMap){
+    window._dOutMap={};
+    D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
+  }
+
+  var html='';
+  var globalRank=(page-1)*PS;
+  slice.forEach(function(r){
+    globalRank++;
+    var rIcon=globalRank===1?'🥇':globalRank===2?'🥈':globalRank===3?'🥉':globalRank;
+    var dOut2 = window._dOutMap ? window._dOutMap[String(r.ACCT_ID)] : undefined;
+    var out=Math.round(dOut2 !== undefined ? dOut2 : (parseFloat(r.OUTSTANDING)||0));
+    var outColor=out>100000?'#F43F5E':out>25000?'#EA580C':'#F59E0B';
+    var paid=Math.round(r.PAY_AMT||0);
+    var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
+    if(lat>50){var t=lat;lat=lon;lon=t;}
+    var mapUrl=(lat&&lon&&lat>20&&lat<30)?'https://www.google.com/maps?q='+lat+','+lon:'';
+    var meterNo=METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'-';
+    var atr=r.ATR_STATUS||'PENDING';
+    var atrColors={'PAID':'#059669','LOCK':'#7C3AED','THEFT':'#DC2626','TD':'#0891B2','OTHER':'#374151','PENDING':'#9CA3AF'};
+    var atrBgs={'PAID':'#D1FAE5','LOCK':'#EDE9FE','THEFT':'#FEE2E2','TD':'#CFFAFE','OTHER':'#F3F4F6','PENDING':'#F9FAFB'};
+    var rowJson=encodeURIComponent(JSON.stringify({
+      ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE,ADDRESS:r.ADDRESS,
+      SUPPLY_TYPE:r.SUPPLY_TYPE,OUTSTANDING:r.OUTSTANDING,
+      PAY_AMT:r.PAY_AMT,PAY_DATE:r.PAY_DATE,
+      SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,
+      LAT:r.LAT,LON:r.LON,ATR_STATUS:r.ATR_STATUS||'PENDING',METER_NO:meterNo
+    }));
+    html+='<tr>'+
+      '<td class="mob-hide" style="font-family:var(--fh);font-size:14px;font-weight:700;text-align:center;">'+rIcon+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;cursor:pointer;" data-id="'+r.ACCT_ID+'" data-row="'+rowJson+'" onclick="openFromDefRow(this)">'+r.ACCT_ID+'</td>'+
+      '<td style="font-weight:700;">'+r.NAME+'</td>'+
+      '<td>'+r.MOBILE+'</td>'+
+      '<td style="font-family:var(--fh);font-size:11px;color:#1D4ED8;font-weight:700;">'+meterNo+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD?r.LOAD+' kW':'-')+'</td>'+
+      '<td><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:#EEF2FF;color:#4338CA;">'+r.SUPPLY_TYPE+'</span></td>'+
+      '<td style="text-align:center;">'+(function(){var src=String(r.SOURCE||'billed');if(src==='billed')return '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#D1FAE5;color:#059669;">✔ BILLED</span>';return '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#FEF3C7;color:#D97706;">⚡ UNBILLED</span>';})()+'</td>'+
+      '<td style="font-size:11px;color:#374151;" title="'+r.ADDRESS+'">'+r.ADDRESS+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';font-size:13px;">₹'+out.toLocaleString()+'</td>'+
+      '<td style="font-size:11px;color:var(--muted);">'+r.PAY_DATE+'</td>'+
+      '<td style="font-family:var(--fh);color:#059669;font-weight:700;">'+(paid>0?'₹'+paid.toLocaleString():'-')+'</td>'+
+      '<td>'+(function(){var sc=collectionProbability(r),lb=collectionLabel(sc);return '<span style="font-size:11px;font-weight:800;padding:2px 7px;border-radius:5px;background:'+lb.bg+';color:'+lb.color+';">'+sc+'%</span>';})()+'</td>'+
+      '<td class="mob-hide"><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:'+(atrBgs[atr]||'#F9FAFB')+';color:'+(atrColors[atr]||'#9CA3AF')+';">'+atr+'</span></td>'+
+      '<td>'+r.SUBSTATION+'</td>'+
+      '<td style="display:none">'+r.FEEDER+'</td>'+
+      '<td>'+(mapUrl?'<a class="ml" href="#" data-id="'+r.ACCT_ID+'" onclick="event.preventDefault();openDefaulterMap(this.dataset.id)">📍</a>':'')+'</td>'+
+    '</tr>';
+  });
+  tbody.innerHTML=html;
+  rp('def-pg',page,Math.ceil(DEF_DATA.length/PS),renderDefaulters);
+}
+
+function openDefaulterModal(acctId){
+  var defRec = DEF_ALL.find(function(x){return String(x.ACCT_ID)===String(acctId);});
+  if(!defRec){ alert('Consumer not found in defaulter data.'); return; }
+  console.log('openDefaulterModal:', acctId, 'OUT:', defRec.OUTSTANDING, 'AMT:', defRec.PAY_AMT, 'DATE:', defRec.PAY_DATE);
+
+  var r = D.find(function(row){return String(row.ACCT_ID)===String(acctId);});
+  var lat = parseFloat(defRec.LAT||0), lon = parseFloat(defRec.LON||0);
+  if(lat>50){var t=lat;lat=lon;lon=t;}
+  var meterNo = METER_DATA[String(acctId)] || (r?r.SERIAL_NBR:'') || defRec.METER_NO || '-';
+
+  // Source badge — show which dataset this came from
+  var srcBadge = '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:#FEF3C7;color:#92400E;">DEFAULTER</span>';
+
+  gel('modal-title').innerHTML = (defRec.NAME||'Consumer Details') + '&nbsp;&nbsp;' + srcBadge;
+  gel('modal-grid').innerHTML =
+    '<div class="modal-field"><div class="lbl">ACCT ID</div><div class="val" style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+defRec.ACCT_ID+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">MOBILE</div><div class="val">'+(defRec.MOBILE||defRec.MOBILE_NO||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">METER NO</div><div class="val" style="font-family:var(--fh);color:#1D4ED8;font-weight:700;">'+meterNo+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">TARIFF / CATEGORY</div><div class="val">'+catBadge(defRec.SUPPLY_TYPE)+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">LOAD</div><div class="val" style="font-weight:700;">'+(defRec.LOAD||r&&r.LOAD||'-')+' kW</div></div>'+
+    '<div class="modal-field"><div class="lbl">CONSUMER STATUS</div><div class="val">'+(defRec.SOURCE==='billed'?'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#D1FAE5;color:#065F46;">✅ BILLED</span>':defRec.SOURCE==='unbilled'?'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#FEF3C7;color:#92400E;">⚠ UNBILLED</span>':'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#F3F4F6;color:#374151;">— UNKNOWN</span>')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">CA (CURR ARREAR)</div><div class="val" style="font-weight:700;color:#DC2626;">'+(defRec.CA?'\u20b9'+Math.round(parseFloat(defRec.CA)||0).toLocaleString():'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">BILLED UNITS</div><div class="val" style="font-weight:700;color:#0369A1;">'+(defRec.BILLED_UNITS?defRec.BILLED_UNITS+' U':'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">BILL DATE</div><div class="val">'+(defRec.BILL_DATE||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">DUE DATE</div><div class="val" style="color:#F43F5E;font-weight:600;">'+(defRec.DUE_DATE||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">BILL BASIS</div><div class="val">'+(function(){var bi=billBasisInfo(defRec.BILL_BASIS);return '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px;background:'+bi.bg+';color:'+bi.color+';">'+bi.label+'</span>';})()+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">SUBSTATION</div><div class="val" style="font-weight:600;">'+(defRec.SUBSTATION||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">FEEDER</div><div class="val">'+(defRec.FEEDER||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">LP DATE</div><div class="val">'+(defRec.PAY_DATE||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">🤖 AI COLLECTION PROB.</div><div class="val">'+(function(){var sc=collectionProbability(defRec),lb=collectionLabel(sc);return '<span style="font-size:13px;font-weight:800;padding:3px 10px;border-radius:6px;background:'+lb.bg+';color:'+lb.color+';">'+sc+'% — '+lb.label+'</span>';})()+'</div></div>'+
+    '<div class="modal-field" style="grid-column:span 2"><div class="lbl">ADDRESS</div><div class="val">'+(defRec.ADDRESS||'-')+'</div></div>'+
+    (lat&&lon?'<div class="modal-field"><div class="lbl">LATITUDE</div><div class="val">'+lat+'</div></div><div class="modal-field"><div class="lbl">LONGITUDE</div><div class="val">'+lon+'</div></div>':'');
+
+  // Payment section
+  gel('modal-pay-section').style.display = 'block';
+  // Always rebuild _dOutMap fresh to ensure accuracy
+  window._dOutMap={};
+  D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
+  var dOut2 = window._dOutMap[String(acctId)];
+  var modalLiveOut = dOut2 !== undefined ? dOut2 : (parseFloat(defRec.OUTSTANDING)||0);
+  gel('modal-pay-grid').innerHTML =
+    '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">LAST PAID AMT</div>'+
+    '<div style="font-size:14px;font-weight:700;color:#059669;">₹'+Math.round(defRec.PAY_AMT||0).toLocaleString()+'</div></div>'+
+    '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">PAID DATE</div>'+
+    '<div style="font-size:12px;font-weight:700;color:#1D4ED8;">'+(defRec.PAY_DATE||'-')+'</div></div>'+
+    '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">OUTSTANDING</div>'+
+    '<div style="font-size:14px;font-weight:700;color:'+(modalLiveOut>0?'#F43F5E':'#059669')+';">₹'+Math.round(modalLiveOut).toLocaleString()+'</div></div>';
+
+  // ATR section
+  var atrSec = gel('modal-atr-section');
+  atrSec.style.display = 'block';
+  atrSec.querySelector('div:first-child').textContent = '📋 ATR STATUS — DEFAULTER ACTION REPORT';
+  var sel = gel('modal-atr-sel');
+  sel.innerHTML = '<option value="PENDING">⏳ PENDING</option><option value="PAID">✅ PAID</option><option value="PARTIAL">💰 PARTIAL PAYMENT</option><option value="PROMISE">🤝 PROMISE TO PAY</option><option value="LOCK">🔒 LOCK / AWAY</option><option value="DISPUTE">⚖️ DISPUTE</option><option value="TD">🔌 TEMP DISCONNECTED</option><option value="OTHER">📝 OTHER</option>';
+  var defSaved = {};
+  try{ defSaved = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+  var defEntry = defSaved[String(acctId)] || {};
+  var savedAtr = typeof defEntry==='object' ? (defEntry.atr||'PENDING') : (defEntry||'PENDING');
+  var currentAtr = savedAtr !== 'PENDING' ? savedAtr : (defRec.ATR_STATUS || 'PENDING');
+  sel.value = currentAtr;
+  updateAtrSelectStyle();
+  var isSubmitted = currentAtr !== 'PENDING';
+  var isLocked = isAtrLocked(defRec.ACCT_ID, 'defaulter');
+  sel.disabled = isLocked;
+  sel.style.opacity = isLocked ? '0.7' : '1';
+  var defComment = typeof defEntry==='object' ? (defEntry.comment||'') : '';
+  var defCommentBox = gel('modal-atr-comment');
+  var defCommentWrap = gel('modal-atr-comment-wrap');
+  if(defCommentBox){ defCommentBox.value=defComment; defCommentBox.disabled=isSubmitted; }
+  if(defCommentWrap){
+    var showFor=['OTHER','DISPUTE','PROMISE','PARTIAL'];
+    defCommentWrap.style.display=(showFor.indexOf(currentAtr)>=0||defComment)?'block':'none';
+  }
+  atrSec.querySelectorAll('.save-atr-btn').forEach(function(b){
+    if(isLocked){
+      b.disabled=true; b.style.opacity='0.7'; b.style.cursor='not-allowed';
+      b.style.background='#9CA3AF'; b.textContent='🔒 PUSH TO SHEET TO UNLOCK'; b.style.fontSize='11px';
+    } else if(isSubmitted){
+      b.disabled=false; b.style.opacity='1'; b.style.cursor='pointer';
+      b.style.background='#6366F1'; b.textContent='✏️ EDIT ATR'; b.style.fontSize='';
+      b.onclick=function(){
+        var ds=gel('modal-def-atr-sel'), dc=gel('modal-def-atr-comment');
+        if(ds){ds.disabled=false;ds.style.opacity='1';ds.style.cursor='pointer';}
+        if(dc){dc.disabled=false;}
+        b.style.background='#F59E0B'; b.textContent='💾 SAVE ATR STATUS'; b.onclick=null;
+        b.addEventListener('click',function sh(){saveDefModalAtr();b.removeEventListener('click',sh);});
+      };
+    } else {
+      b.disabled=false; b.style.opacity='1'; b.style.cursor='pointer';
+      b.style.background='#F59E0B'; b.textContent='💾 SAVE ATR STATUS'; b.style.fontSize='';
+    }
+  });
+  atrSec.dataset.type = 'defaulter';
+
+  // Nearby defaulters
+  if(lat&&lon){
+    gel('modal-nearby-section').style.display='block';
+    gel('modal-nearby-section').querySelector('div:first-child').textContent='📍 NEARBY DEFAULTERS';
+    modalNearbyLat=lat; modalNearbyLon=lon;
+    var nearby=DEF_ALL.filter(function(x){
+      return String(x.ACCT_ID)!==String(acctId)&&x.LAT&&x.LON;
+    }).map(function(x){
+      var xl=parseFloat(x.LAT),xo=parseFloat(x.LON);
+      return Object.assign({},x,{_dist:haversine(lat,lon,xl,xo),_lat:xl,_lon:xo});
+    }).filter(function(x){return x._dist<=0.5;})
+    .sort(function(a,b){return a._dist-b._dist;}).slice(0,8);
+    var cnt=gel('modal-nb-count'); if(cnt) cnt.textContent=nearby.length+' FOUND';
+    var lst=gel('modal-nb-list'); if(lst) lst.innerHTML=nearby.length?nearby.map(function(x){
+      var dist=x._dist<1?(x._dist*1000).toFixed(0)+'m':x._dist.toFixed(2)+'km';
+      var out=Math.round(x.OUTSTANDING||0);
+      return '<div class="nb-card" onclick="closeModal();setTimeout(function(){openFromDefaulter(\''+x.ACCT_ID+'\');},100)">'+
+        '<div style="display:flex;justify-content:space-between;">'+
+          '<div><div style="font-size:12px;font-weight:700;">'+x.NAME+'</div>'+
+          '<div style="font-size:10px;color:var(--muted);">'+x.ACCT_ID+'</div></div>'+
+          '<div><div style="font-size:11px;font-weight:700;color:#4F46E5;">'+dist+'</div>'+
+          '<div style="font-size:12px;font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</div></div>'+
+        '</div></div>';
+    }).join(''):'<div style="padding:10px;text-align:center;color:var(--muted);font-size:12px;">No nearby defaulters within 500m</div>';
+  } else gel('modal-nearby-section').style.display='none';
+
+  var mapBtn=gel('modal-map-btn');
+  if(lat&&lon){
+    mapBtn.href='#';
+    mapBtn.onclick=function(e){e.preventDefault();closeModal();openDefaulterMap(String(acctId));};
+    mapBtn.innerHTML='📍 VIEW ON MAP WITH NEARBY';
+    mapBtn.style.display='inline-flex';
+  } else mapBtn.style.display='none';
+
+  gel('detail-modal').classList.add('open');
+  document.body.style.overflow='hidden';
+  modalCurrentAcct=String(acctId); modalIsdc=false;
+}
+
+function openFromDefRow(el){
+  try{
+    var data = JSON.parse(decodeURIComponent(el.dataset.row));
+    // Inject live outstanding from D array
+    if(!window._dOutMap){
+      window._dOutMap={};
+      D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
+    }
+    var liveOut = window._dOutMap[String(data.ACCT_ID)];
+    if(liveOut !== undefined) data.OUTSTANDING = liveOut;
+    openDefaulterModalDirect(data);
+  } catch(e){
+    openFromDefaulter(el.dataset.id);
+  }
+}
+
+function openDefaulterModalDirect(d){
+  var lat=parseFloat(d.LAT||0), lon=parseFloat(d.LON||0);
+  if(lat>50){var t=lat;lat=lon;lon=t;}
+
+  gel('modal-title').textContent = d.NAME || 'Consumer Details';
+  gel('modal-grid').innerHTML =
+    '<div class="modal-field"><div class="lbl">MOBILE</div><div class="val">'+(d.MOBILE||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">METER NO</div><div class="val" style="font-family:var(--fh);color:#1D4ED8;font-weight:700;">'+(d.METER_NO||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">SUPPLY TYPE</div><div class="val">'+catBadge(d.SUPPLY_TYPE)+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">SUBSTATION</div><div class="val">'+(d.SUBSTATION||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">FEEDER</div><div class="val">'+(d.FEEDER||'-')+'</div></div>'+
+    '<div class="modal-field" style="grid-column:span 2"><div class="lbl">ADDRESS</div><div class="val">'+(d.ADDRESS||'-')+'</div></div>';
+
+  // Payment - directly from row data (same source as table)
+  gel('modal-pay-section').style.display='block';
+  gel('modal-pay-grid').innerHTML =
+    '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">LAST PAID AMT</div>'+
+    '<div style="font-size:14px;font-weight:700;color:#059669;">₹'+Math.round(d.PAY_AMT||0).toLocaleString()+'</div></div>'+
+    '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">PAID DATE</div>'+
+    '<div style="font-size:12px;font-weight:700;color:#1D4ED8;">'+(d.PAY_DATE||'-')+'</div></div>'+
+    '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">OUTSTANDING</div>'+
+    '<div style="font-size:14px;font-weight:700;color:'+(d.OUTSTANDING>0?'#F43F5E':'#059669')+';">₹'+Math.round(d.OUTSTANDING||0).toLocaleString()+'</div></div>';
+
+  // ATR section
+  var atrSec=gel('modal-atr-section');
+  atrSec.style.display='block';
+  atrSec.querySelector('div:first-child').textContent='📋 ATR STATUS — DEFAULTER ACTION REPORT';
+  var sel=gel('modal-atr-sel');
+  sel.innerHTML='<option value="PENDING">⏳ PENDING</option><option value="PAID">✅ PAID</option><option value="PARTIAL">💰 PARTIAL PAYMENT</option><option value="PROMISE">🤝 PROMISE TO PAY</option><option value="LOCK">🔒 LOCK / AWAY</option><option value="DISPUTE">⚖️ DISPUTE</option><option value="TD">🔌 TEMP DISCONNECTED</option><option value="OTHER">📝 OTHER</option>';
+  var currentAtr=d.ATR_STATUS||'PENDING';
+  sel.value=currentAtr;
+  updateAtrSelectStyle();
+  var defSaved={};
+  try{defSaved=JSON.parse(localStorage.getItem('def_atr_data')||'{}');}catch(e){}
+  var defEntry=defSaved[String(d.ACCT_ID)]||{};
+  var _lsAtr2=typeof defEntry==='object'?(defEntry.atr||'PENDING'):(defEntry||'PENDING');
+  if(_lsAtr2!=='PENDING') currentAtr=_lsAtr2;
+  sel.value=currentAtr; updateAtrSelectStyle();
+  var isSubmitted=currentAtr!=='PENDING';
+  var isLocked = isAtrLocked(d.ACCT_ID, 'defaulter');
+  sel.disabled=isLocked; sel.style.opacity=isLocked?'0.7':'1';
+  var defComment=typeof defEntry==='object'?(defEntry.comment||''):'';
+  var cb=gel('modal-atr-comment'), cw=gel('modal-atr-comment-wrap');
+  if(cb){cb.value=defComment;cb.disabled=isLocked;}
+  if(cw){var sf=['OTHER','DISPUTE','PROMISE','PARTIAL'];cw.style.display=(sf.indexOf(currentAtr)>=0||defComment)?'block':'none';}
+  atrSec.querySelectorAll('.save-atr-btn').forEach(function(b){
+    b.textContent=isLocked?'🔒 PUSH TO SHEET TO UNLOCK':isSubmitted?'✏️ EDIT ATR':'💾 SAVE ATR STATUS'; b.style.background=isLocked?'#9CA3AF':isSubmitted?'#6366F1':'#F59E0B'; b.disabled=isLocked; b.style.opacity=isLocked?'0.7':'1'; b.style.cursor=isLocked?'not-allowed':'pointer'; b.style.fontSize=isLocked?'11px':'';
+  });
+  atrSec.dataset.type='defaulter';
+
+  // Nearby
+  if(lat&&lon&&DEF_ALL.length){
+    gel('modal-nearby-section').style.display='block';
+    modalNearbyLat=lat; modalNearbyLon=lon;
+    var nearby=DEF_ALL.filter(function(x){return String(x.ACCT_ID)!==String(d.ACCT_ID)&&x.LAT&&x.LON;})
+      .map(function(x){var xl=parseFloat(x.LAT),xo=parseFloat(x.LON);return Object.assign({},x,{_dist:haversine(lat,lon,xl,xo)});})
+      .filter(function(x){return x._dist<=0.5;}).sort(function(a,b){return a._dist-b._dist;}).slice(0,8);
+    var cnt=gel('modal-nb-count');if(cnt)cnt.textContent=nearby.length+' FOUND';
+    var lst=gel('modal-nb-list');
+    if(lst)lst.innerHTML=nearby.length?nearby.map(function(x){
+      var dist=x._dist<1?(x._dist*1000).toFixed(0)+'m':x._dist.toFixed(2)+'km';
+      return '<div class="nb-card" onclick="closeModal();setTimeout(function(){openFromDefaulter(\''+x.ACCT_ID+'\');},100)">'+
+        '<div style="display:flex;justify-content:space-between;">'+
+        '<div><div style="font-size:12px;font-weight:700;">'+x.NAME+'</div>'+
+        '<div style="font-size:10px;color:var(--muted);">'+x.ACCT_ID+'</div></div>'+
+        '<div><div style="font-family:var(--fh);font-size:12px;font-weight:700;color:#F43F5E;">₹'+Math.round(x.OUTSTANDING||0).toLocaleString()+'</div>'+
+        '<div style="font-size:10px;color:#4F46E5;">'+dist+'</div></div></div></div>';
+    }).join(''):'<div style="padding:10px;text-align:center;color:var(--muted);font-size:12px;">None within 500m</div>';
+  } else gel('modal-nearby-section').style.display='none';
+
+  var mapBtn=gel('modal-map-btn');
+  if(lat&&lon){
+    mapBtn.href='#';
+    mapBtn.onclick=function(e){e.preventDefault();closeModal();openDefaulterMap(String(d.ACCT_ID));};
+    mapBtn.innerHTML='📍 VIEW ON MAP WITH NEARBY';
+    mapBtn.style.display='inline-flex';
+  } else mapBtn.style.display='none';
+
+  gel('detail-modal').classList.add('open');
+  document.body.style.overflow='hidden';
+  modalCurrentAcct=String(d.ACCT_ID); modalIsdc=false;
+}
+
+function openFromDefaulter(acctId){
+  // ALWAYS use DEF_ALL for defaulter tab - never use EUDD/PAY_DATA
+  if(DEF_ALL.length){
+    var defRec = DEF_ALL.find(function(x){return String(x.ACCT_ID)===String(acctId);});
+    if(defRec){ openDefaulterModal(acctId); return; }
+  }
+  // DEF_ALL not loaded yet - show loading message
+  if(!DEF_ALL.length){
+    alert('⏳ Defaulter data still loading. Please wait a moment and try again.');
+    return;
+  }
+  var inp=gel('li'); if(inp)inp.value=acctId;
+  st('lookup'); dl();
+}
+
+function openDefaulterMap(acctId){
+  var r=DEF_ALL.find(function(x){return String(x.ACCT_ID)===String(acctId);});
+  if(!r||!r.LAT||!r.LON)return;
+  var lat=parseFloat(r.LAT), lon=parseFloat(r.LON);
+  if(lat>50){var t=lat;lat=lon;lon=t;}
+
+  // Find nearby defaulters within 2km
+  var nearby=DEF_ALL.filter(function(x){
+    var lt=parseFloat(x.LAT),lg=parseFloat(x.LON);
+    return String(x.ACCT_ID)!==String(acctId)&&lt&&lg&&!isNaN(lt)&&!isNaN(lg)&&lt>20&&lt<30;
+  }).map(function(x){
+    var xLat=parseFloat(x.LAT),xLon=parseFloat(x.LON);
+    if(xLat>50){var t=xLat;xLat=xLon;xLon=t;}
+    return Object.assign({},x,{_dist:haversine(lat,lon,xLat,xLon),_lat:xLat,_lon:xLon});
+  }).filter(function(x){return x._dist<=5&&x._lat&&x._lon&&!isNaN(x._lat);})
+  .sort(function(a,b){return a._dist-b._dist;})
+  .slice(0,15);
+
+  var data=[{
+    lat:lat,lon:lon,name:r.NAME||'Unknown',acct:String(r.ACCT_ID),
+    mobile:r.MOBILE_NO||r.MOBILE||'-',out:Math.round(r.OUTSTANDING||0),
+    sub:r.SUBSTATION||'-',feed:r.FEEDER||'-',
+    addr:(r.ADDRESS||'-').substring(0,100),
+    lmv:r.SUPPLY_TYPE||'-',atr:'DEFAULTER',main:true,dist:0
+  }].concat(nearby.map(function(x){
+    return {
+      lat:x._lat,lon:x._lon,name:x.NAME||'Unknown',acct:String(x.ACCT_ID),
+      mobile:x.MOBILE_NO||x.MOBILE||'-',out:Math.round(x.OUTSTANDING||0),
+      sub:x.SUBSTATION||'-',feed:x.FEEDER||'-',
+      addr:(x.ADDRESS||'-').substring(0,100),
+      lmv:x.SUPPLY_TYPE||'-',atr:'DEFAULTER',main:false,dist:x._dist
+    };
+  }));
+
+  try{localStorage.setItem('uppcl_map_data',JSON.stringify({data:data,lat:lat,lon:lon}));}catch(e){}
+  window.open('https://anshu10kumar04-pixel.github.io/uppcl-data/map.html','_blank');
+}
+
+
+function expDefaultersX(){
+  if(!DEF_DATA.length)return alert('No data.');
+  var rows = DEF_DATA.map(function(r){
+    var sc = collectionProbability(r), lb = collectionLabel(sc);
+    return {
+      ACCT_ID:     r.ACCT_ID,
+      NAME:        r.NAME,
+      MOBILE:      r.MOBILE,
+      METER_NO:    METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'',
+      TARIFF:      r.SUPPLY_TYPE,
+      LOAD_KW:     r.LOAD,
+      ADDRESS:     r.ADDRESS,
+      OUTSTANDING: Math.round(r.OUTSTANDING||0),
+      LP_DATE:     r.PAY_DATE,
+      LP_AMT:      Math.round(r.PAY_AMT||0),
+      CA:          r.CA||'',
+      BILL_BASIS:  billBasisInfo(r.BILL_BASIS).label,
+      AI_COLLECTION_PROB: sc,
+      AI_LABEL:    lb.label,
+      ATR_STATUS:  r.ATR_STATUS||'PENDING',
+      SUBSTATION:  r.SUBSTATION,
+      FEEDER:      r.FEEDER
+    };
+  });
+  var ws=XLSX.utils.json_to_sheet(rows);
+  var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Defaulters');
+  XLSX.writeFile(wb,'Defaulters_'+Date.now()+'.xlsx');
+}
+
+// ─── POLE DC (DFP) ────────────────────────────────────────────────────────────
+let DFP_ALL=[], DFP_FD=[], _dfpLoaded=false, dfpPage=1, _dfpSortCol=null, _dfpSortAsc=true;
+
+function loadDfp(){
+  if(_dfpLoaded)return;
+  var tbody=gel('dfp-tbody');
+  if(tbody) tbody.innerHTML='<tr><td colspan="8" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Pole DC data…</td></tr>';
+  fetch(DFP_FILE)
+    .then(r => r.ok ? r.text() : Promise.reject('DFP file not found'))
+    .then(text => {
+      _dfpLoaded=true;
+      DFP_ALL=[];
+      var nl=text.indexOf('\n'); if(nl<0)return;
+      var hdrs=text.substring(0,nl).replace(/\r/,'').split(',').map(h=>h.replace(/"/g,'').trim().toUpperCase());
+      var iAcct=findCol(hdrs,['ACCT_ID','ACCOUNT_ID']), iName=findCol(hdrs,['NAME']), iMob=findCol(hdrs,['MOBILE','MOBILE_NO']),
+          iOut=findCol(hdrs,['TOTAL OUTSTANDING','OUTSTANDING']), iSub=findCol(hdrs,['SUBSTATION']), iFeed=findCol(hdrs,['FEEDER']),
+          iLat=findCol(hdrs,['LAT']), iLon=findCol(hdrs,['LON']);
+      
+      var pos=nl+1, len=text.length;
+      while(pos<len){
+        var end=text.indexOf('\n',pos); if(end<0)end=len;
+        var line=text.substring(pos,end).trim(); pos=end+1;
+        if(!line)continue;
+        
+        // Better CSV split handling for quoted commas
+        var v=[], inQuotes=false, current='';
+        for(var i=0; i<line.length; i++){
+          var c=line[i];
+          if(c==='"'&&(i===0||line[i-1]!=='\\')){inQuotes=!inQuotes;}
+          else if(c===','&&!inQuotes){v.push(current.trim());current='';}
+          else{current+=c;}
+        }
+        v.push(current.trim());
+        v=v.map(val=>val.replace(/^"|"$/g,'').trim());
+
+        var acct=v[iAcct]; if(!acct)continue;
+        var lat=v[iLat]||'', lon=v[iLon]||'';
+        if(parseFloat(lat)>50){var t=lat;lat=lon;lon=t;}
+        DFP_ALL.push({
+          ACCT_ID:acct, NAME:v[iName]||'', MOBILE_NO:v[iMob]||'',
+          OUTSTANDING:parseFloat(v[iOut])||0, SUBSTATION:v[iSub]||'', FEEDER:v[iFeed]||'',
+          LAT:lat, LON:lon
+        });
+      }
+      DFP_FD=DFP_ALL.slice();
+      buildDfpPanel();
+    })
+    .catch(e => { if(tbody) tbody.innerHTML='<tr><td colspan="8" style="padding:40px;text-align:center;color:#F43F5E;">⚠ Error: '+e+'</td></tr>'; });
+}
+
+function buildDfpPanel(){
+  var subs=[...new Set(DFP_ALL.map(r=>r.SUBSTATION).filter(Boolean))].sort();
+  var sel=gel('dfp-sub'); if(sel){
+    while(sel.options.length>1)sel.remove(1);
+    subs.forEach(s=>{var o=document.createElement('option');o.value=o.textContent=s;sel.appendChild(o);});
+  }
+  runDfpFilter();
+}
+
+function runDfpFilter(){
+  var q=(gel('dfp-search')?gel('dfp-search').value:'').toLowerCase();
+  var sub=gel('dfp-sub')?gel('dfp-sub').value:'';
+  DFP_FD=DFP_ALL.filter(r=>{
+    if(sub&&r.SUBSTATION!==sub)return false;
+    if(q&&!String(r.ACCT_ID).includes(q)&&!(r.NAME&&r.NAME.toLowerCase().includes(q))&&!(r.MOBILE_NO&&r.MOBILE_NO.includes(q)))return false;
+    return true;
+  });
+  var ci=gel('dfp-count-info'); if(ci)ci.textContent='Showing '+DFP_FD.length+' of '+DFP_ALL.length+' records';
+  renderDfpTable(1);
+}
+
+function renderDfpTable(page){
+  dfpPage=page; var tbody=gel('dfp-tbody'); if(!tbody)return;
+  var slice=DFP_FD.slice((page-1)*PS, page*PS);
+  tbody.innerHTML=slice.map((r,i)=>{
+    var rank=(page-1)*PS+i+1;
+    var out=Math.round(r.OUTSTANDING);
+    return '<tr>'+
+      '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;cursor:pointer;" onclick="openFromDfpRow(\''+r.ACCT_ID+'\')">'+r.ACCT_ID+'</td>'+
+      '<td style="font-weight:600;">'+r.NAME+'</td>'+
+      '<td>'+r.MOBILE_NO+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
+      '<td>'+r.SUBSTATION+'</td>'+
+      '<td style="display:none">'+r.FEEDER+'</td>'+
+      '<td>'+(r.LAT?'<a class="ml" href="https://www.google.com/maps?q='+r.LAT+','+r.LON+'" target="_blank">📍</a>':'')+'</td>'+
+    '</tr>';
+  }).join('');
+  rp('dfp-pg',page,Math.ceil(DFP_FD.length/PS),renderDfpTable);
+}
+
+function sortDfpCol(col){
+  if(_dfpSortCol===col)_dfpSortAsc=!_dfpSortAsc; else{_dfpSortCol=col;_dfpSortAsc=true;}
+  DFP_FD.sort((a,b)=>{
+    var av=col==='OUTSTANDING'?a[col]:String(a[col]||'').toLowerCase();
+    var bv=col==='OUTSTANDING'?b[col]:String(b[col]||'').toLowerCase();
+    if(av<bv)return _dfpSortAsc?-1:1; if(av>bv)return _dfpSortAsc?1:-1; return 0;
+  });
+  renderDfpTable(1);
+}
+
+function openFromDfpRow(acctId){
+  var r=DFP_ALL.find(x=>String(x.ACCT_ID)===String(acctId)); if(!r)return;
+  var lat=parseFloat(r.LAT), lon=parseFloat(r.LON);
+  gel('modal-title').textContent='POLE DISCONNECTED — '+r.NAME;
+  gel('modal-grid').innerHTML=
+    '<div class="modal-field"><div class="lbl">ACCT ID</div><div class="val">'+r.ACCT_ID+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">MOBILE</div><div class="val">'+(r.MOBILE_NO||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">SUBSTATION</div><div class="val">'+r.SUBSTATION+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">FEEDER</div><div class="val">'+r.FEEDER+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">OUTSTANDING</div><div class="val" style="font-size:16px;font-weight:700;color:#F43F5E;">₹'+Math.round(r.OUTSTANDING).toLocaleString()+'</div></div>';
+  
+  gel('modal-pay-section').style.display='none';
+  gel('modal-atr-section').style.display='none';
+  
+  if(lat&&lon){
+    gel('modal-nearby-section').style.display='block';
+    gel('modal-nearby-section').querySelector('div:first-child').textContent='📍 NEARBY CONSUMERS (Pole DC & Defaulters)';
+    modalNearbyLat=lat; modalNearbyLon=lon;
+    
+    // Combine DFP and Defaulters for nearby
+    var pool = DFP_ALL.map(x=>Object.assign({},x,{_type:'POLE DC'}))
+      .concat(DEF_ALL.map(x=>Object.assign({},x,{_type:'DEFAULTER'})));
+      
+    var nearby=pool.filter(x=>String(x.ACCT_ID)!==String(acctId)&&x.LAT&&x.LON)
+      .map(x=>{var xl=parseFloat(x.LAT),xo=parseFloat(x.LON); return Object.assign({},x,{_dist:haversine(lat,lon,xl,xo)});})
+      .filter(x=>x._dist<=0.5).sort((a,b)=>a._dist-b._dist).slice(0,10);
+      
+    var lst=gel('modal-nb-list'); if(lst) lst.innerHTML=nearby.map(x=>{
+      var dist=x._dist<1?(x._dist*1000).toFixed(0)+'m':x._dist.toFixed(2)+'km';
+      var cls=x._type==='DEFAULTER'?'#F43F5E':'#4F46E5';
+      return '<div class="nb-card">'+
+        '<div style="display:flex;justify-content:space-between;">'+
+        '<div><div style="font-size:12px;font-weight:700;">'+x.NAME+'</div><div style="font-size:10px;color:var(--muted);">'+x.ACCT_ID+' | <b style="color:'+cls+'">'+x._type+'</b></div></div>'+
+        '<div style="text-align:right"><div style="font-size:11px;font-weight:700;color:#4F46E5;">'+dist+'</div><div style="font-size:12px;font-weight:700;">₹'+Math.round(x.OUTSTANDING).toLocaleString()+'</div></div>'+
+        '</div></div>';
+    }).join('');
+    gel('modal-nb-count').textContent=nearby.length+' FOUND';
+    gel('modal-map-btn').style.display='inline-flex';
+    gel('modal-map-btn').href='#';
+    gel('modal-map-btn').onclick=function(e){e.preventDefault(); closeModal(); openDfpMap(acctId);};
+    gel('modal-map-btn').textContent='📍 VIEW ON MAP WITH NEARBY';
+  } else {
+    gel('modal-nearby-section').style.display='none';
+    gel('modal-map-btn').style.display='none';
+  }
+  
+  gel('detail-modal').classList.add('open'); document.body.style.overflow='hidden';
+}
+
+function openDfpMap(acctId){
+  var r=DFP_ALL.find(x=>String(x.ACCT_ID)===String(acctId)); if(!r)return;
+  var lat=parseFloat(r.LAT), lon=parseFloat(r.LON);
+  if(lat>50){var t=lat;lat=lon;lon=t;}
+
+  var pool = DFP_ALL.map(x=>Object.assign({},x,{_type:'POLE DC'}))
+    .concat(DEF_ALL.map(x=>Object.assign({},x,{_type:'DEFAULTER'})));
+
+  var nearby=pool.filter(x=>{
+    var lt=parseFloat(x.LAT),lg=parseFloat(x.LON);
+    return String(x.ACCT_ID)!==String(acctId)&&lt&&lg&&!isNaN(lt)&&!isNaN(lg);
+  }).map(x=>{
+    var xLat=parseFloat(x.LAT),xLon=parseFloat(x.LON);
+    if(xLat>50){var t=xLat;xLat=xLon;xLon=t;}
+    return Object.assign({},x,{_dist:haversine(lat,lon,xLat,xLon),_lat:xLat,_lon:xLon});
+  }).filter(x=>x._dist<=2).sort((a,b)=>a._dist-b._dist).slice(0,15);
+
+  var data=[{
+    lat:lat,lon:lon,name:r.NAME||'Unknown',acct:String(r.ACCT_ID),
+    mobile:r.MOBILE_NO||'-',out:Math.round(r.OUTSTANDING||0),
+    sub:r.SUBSTATION||'-',feed:r.FEEDER||'-',
+    addr:'-', lmv:'-', atr:r._type||'POLE DC', main:true, dist:0
+  }].concat(nearby.map(x=>{
+    return {
+      lat:x._lat,lon:x._lon,name:x.NAME||'Unknown',acct:String(x.ACCT_ID),
+      mobile:x.MOBILE_NO||'-',out:Math.round(x.OUTSTANDING||0),
+      sub:x.SUBSTATION||'-',feed:x.FEEDER||'-',
+      addr:'-', lmv:'-', atr:x._type, main:false, dist:x._dist
+    };
+  }));
+
+  try{localStorage.setItem('uppcl_map_data',JSON.stringify({data:data,lat:lat,lon:lon}));}catch(e){}
+  window.open('https://anshu10kumar04-pixel.github.io/uppcl-data/map.html','_blank');
+}
+
+function resetDfp(){ gel('dfp-search').value=''; gel('dfp-sub').value=''; runDfpFilter(); }
+function expDfpX(){ if(!DFP_FD.length)return alert('No data.'); XLSX.writeFile(XLSX.utils.book_new().appendChild(XLSX.utils.json_to_sheet(DFP_FD),'Pole DC'),'Pole_DC_'+Date.now()+'.xlsx'); }
+
+window.loadDefaulters=loadDefaulters;
+window.renderDefaulters=renderDefaulters;
+</script>
+</body>
+</html>
