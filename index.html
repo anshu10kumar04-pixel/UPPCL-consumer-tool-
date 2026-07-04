@@ -1393,18 +1393,16 @@ function loadPrevYearData(callback){
           var hdrs = lines[0].split(',').map(function(h){return h.trim().replace(/"/g,'');});
           var iAcct=hdrs.indexOf('ACCT_ID'), iSS=hdrs.indexOf('SUBSTATION'),
               iST=hdrs.indexOf('SUPPLY_TYPE'), iMR=hdrs.indexOf('MR_SOURCE_CD'),
-              iPay=hdrs.indexOf('PAY_AMT'), iDate=hdrs.indexOf('PAY_DATE'),
-              iCA=hdrs.indexOf('CURRENT_ASSESSMENT');
+              iPay=hdrs.indexOf('PAY_AMT'), iDay=hdrs.indexOf('PAY_DAY');
           for(var i=1;i<lines.length;i++){
-            var v=lines[i].split(',').map(function(x){return x.trim().replace(/^"|"$/g,'');});
+            var v=lines[i].split(',');
             var acct=v[iAcct]||''; if(!acct) continue;
             PY_DATA[acct]={
-              ss:    v[iSS]||'',
-              st:    v[iST]||'',
-              mr:    v[iMR]||'',
-              pay:   parseFloat(v[iPay]||0)||0,
-              date:  v[iDate]||'',
-              ca:    parseFloat(v[iCA]||0)||0
+              ss:  v[iSS]||'',
+              st:  v[iST]||'',
+              mr:  v[iMR]||'',
+              pay: parseFloat(v[iPay]||0)||0,
+              day: parseInt(v[iDay]||0)||0
             };
           }
         }
@@ -1418,7 +1416,7 @@ function loadPrevYearData(callback){
 function buildYoYReport(){
   var el = gel('yoy-section');
   if(!el) return;
-  el.innerHTML = '<div style="padding:20px;text-align:center;color:#6B7280;font-family:var(--fh);">⏳ Loading Jul 2025 data...</div>';
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:#6B7280;font-family:var(--fh);">⏳ Loading Jul 2025 comparison data (~5MB)... please wait</div>';
 
   loadPrevYearData(function(){
     // Current year: use _smLookup for SM/NonSM classification
@@ -1490,11 +1488,7 @@ function buildYoYReport(){
       py[ss].tariff[tariff].rev+=lpAmt; py[ss].tariff[tariff].cnt++;
 
       // Upto same day-of-month bucket
-      var payDay = 0;
-      try{
-        var dp=r.date; // DD-MON-YYYY or similar
-        if(dp){ var parts=dp.split('-'); payDay=parseInt(parts[0])||0; }
-      }catch(e){}
+      var payDay = r.day||0;  // pre-extracted day number
       if(payDay > 0 && payDay <= dataDateDay){
         if(!pyD[ss]) pyD[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
         pyD[ss].total_rev+=lpAmt; pyD[ss].total_cnt++;
