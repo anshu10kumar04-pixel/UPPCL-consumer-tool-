@@ -1518,6 +1518,7 @@ function buildYoYReport(){
     allSS.forEach(function(ss, si){
       var c=cy[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
       var p=py[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
+      var pd=pyD[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
       grandPY.rev+=p.total_rev; grandPY.cnt+=p.total_cnt;
       grandPYD.rev+=pd.total_rev; grandPYD.cnt+=pd.total_cnt;
       grandCY.rev+=c.total_rev; grandCY.cnt+=c.total_cnt;
@@ -1528,7 +1529,6 @@ function buildYoYReport(){
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:center;">';
       h += '<span style="cursor:pointer;color:#1D4ED8;font-weight:700;" onclick="toggleYoY('+si+')" id="yoy-btn-'+si+'">➕</span></td>';
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;font-weight:700;color:#1E3A5F;">'+ss+'</td>';
-      var pd = pyD[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#1E40AF;font-weight:600;">'+fL(p.total_rev)+'</td>';
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#1E40AF;">'+p.total_cnt+'</td>';
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#1D4ED8;font-weight:600;">'+fL(pd.total_rev)+'</td>';
@@ -1577,7 +1577,8 @@ function buildYoYReport(){
         h += '<tr class="yoy-sub-'+si+'" style="display:none;background:#F0FDF4;">';
         h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;"></td>';
         h += '<td style="padding:3px 6px 3px 28px;border:1px solid #BBF7D0;font-size:10px;color:#374151;">↳ '+t+'</td>';
-        var pdt=pd.tariff?pd.tariff[t]||{rev:0,cnt:0}:{rev:0,cnt:0};
+        var pd2=pyD[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
+        var pdt=(pd2.tariff&&pd2.tariff[t])||{rev:0,cnt:0};
         h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;color:#1E40AF;">'+fL(pt.rev)+'</td>';
         h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;color:#1E40AF;">'+pt.cnt+'</td>';
         h += '<td style="padding:3px 6px;border:1px solid #BBF7D0;text-align:right;font-size:10px;color:#1D4ED8;">'+fL(pdt.rev)+'</td>';
@@ -4970,9 +4971,9 @@ function openDefaulterModal(acctId){
 
   // Payment section
   gel('modal-pay-section').style.display = 'block';
-  // Use exact same calculation as renderDefaulters list
+  // Use EXACT same logic as renderDefaulters list row
   var dOut2 = window._dOutMap ? window._dOutMap[String(acctId)] : undefined;
-  var modalLiveOut = Math.round(dOut2 !== undefined ? dOut2 : (parseFloat(defRec.OUTSTANDING)||0));
+  var modalLiveOut = dOut2 !== undefined ? dOut2 : (parseFloat(defRec.OUTSTANDING)||0);
   gel('modal-pay-grid').innerHTML =
     '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">LAST PAID AMT</div>'+
     '<div style="font-size:14px;font-weight:700;color:#059669;">₹'+Math.round(defRec.PAY_AMT||0).toLocaleString()+'</div></div>'+
