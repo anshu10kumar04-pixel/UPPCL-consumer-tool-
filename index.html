@@ -5151,11 +5151,9 @@ function openDefaulterModal(acctId){
 
   // Payment section
   gel('modal-pay-section').style.display = 'block';
-  // Build _dOutMap if not exists (may not be built if filter never ran)
-  if(!window._dOutMap){
-    window._dOutMap={};
-    D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
-  }
+  // Always rebuild _dOutMap fresh to ensure accuracy
+  window._dOutMap={};
+  D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
   var dOut2 = window._dOutMap[String(acctId)];
   var modalLiveOut = dOut2 !== undefined ? dOut2 : (parseFloat(defRec.OUTSTANDING)||0);
   gel('modal-pay-grid').innerHTML =
