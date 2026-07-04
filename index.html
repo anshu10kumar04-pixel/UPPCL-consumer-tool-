@@ -1396,6 +1396,32 @@ function loadPrevYearData(callback){
     .catch(function(){ PY_LOADED=true; if(callback) callback(); });
 }
 
+function buildCYAgg(dataDate){
+  if(window._cyAgg && window._cyAggDate===dataDate.getDate()) return window._cyAgg;
+  var cy={};
+  var ddDay=dataDate.getDate(), ddMon=dataDate.getMonth(), ddYear=dataDate.getFullYear();
+  D.forEach(function(r){
+    var ss=r.SUBSTATION||''; if(!ss) return;
+    var lpDate=parseDate(r.LAST_PAY_DATE||r.PAY_DATE||'');
+    var lpAmt=parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0;
+    if(!lpDate||lpDate.getFullYear()!==ddYear||lpDate.getMonth()!==ddMon) return;
+    if(lpDate.getDate()>ddDay||lpAmt<=0) return;
+    var mrSrc=String(r.MR_SOURCE_CD||'').toUpperCase();
+    if(!mrSrc&&window._smLookup) mrSrc=(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
+    var isSM=mrSrc==='SM';
+    var tariff=String(r.CATEGORY||r.TARIFF_TYPE||'').trim();
+    if(!tariff||!/^(LMV|HV|EHV)/i.test(tariff)) tariff=stToTariff(r.SUPPLY_TYPE)||'OTHER';
+    if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
+    cy[ss].total_rev+=lpAmt; cy[ss].total_cnt++;
+    if(isSM){cy[ss].sm_rev+=lpAmt;cy[ss].sm_cnt++;}
+    else    {cy[ss].nsm_rev+=lpAmt;cy[ss].nsm_cnt++;}
+    if(!cy[ss].tariff[tariff]) cy[ss].tariff[tariff]={rev:0,cnt:0};
+    cy[ss].tariff[tariff].rev+=lpAmt; cy[ss].tariff[tariff].cnt++;
+  });
+  window._cyAgg=cy; window._cyAggDate=ddDay;
+  return cy;
+}
+
 function buildYoYReport(){
   var el = gel('yoy-section');
   if(!el) return;
