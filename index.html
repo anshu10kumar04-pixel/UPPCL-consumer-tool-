@@ -4975,13 +4975,16 @@ function openDefaulterModal(acctId){
 
   // Payment section
   gel('modal-pay-section').style.display = 'block';
+  var modalLiveOut = (window._dOutMap && window._dOutMap[String(acctId)] !== undefined)
+    ? window._dOutMap[String(acctId)]
+    : (parseFloat(defRec.OUTSTANDING)||0);
   gel('modal-pay-grid').innerHTML =
     '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">LAST PAID AMT</div>'+
     '<div style="font-size:14px;font-weight:700;color:#059669;">₹'+Math.round(defRec.PAY_AMT||0).toLocaleString()+'</div></div>'+
     '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">PAID DATE</div>'+
     '<div style="font-size:12px;font-weight:700;color:#1D4ED8;">'+(defRec.PAY_DATE||'-')+'</div></div>'+
     '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">OUTSTANDING</div>'+
-    '<div style="font-size:14px;font-weight:700;color:'+(defRec.OUTSTANDING>0?'#F43F5E':'#059669')+';">₹'+Math.round(defRec.OUTSTANDING||0).toLocaleString()+'</div></div>';
+    '<div style="font-size:14px;font-weight:700;color:'+(modalLiveOut>0?'#F43F5E':'#059669')+';">₹'+Math.round(modalLiveOut).toLocaleString()+'</div></div>';
 
   // ATR section
   var atrSec = gel('modal-atr-section');
