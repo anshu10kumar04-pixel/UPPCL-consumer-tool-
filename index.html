@@ -1459,7 +1459,7 @@ function buildYoYReport(){
       Object.keys(divAgg).forEach(function(ss){
         var ssAgg = divAgg[ss];
         var full = ssAgg.full||{};
-        var upto = (ssAgg.upto||{})[dataDateDay] || {sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
+        var upto = (ssAgg.upto||{})[String(dataDateDay)] || {sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
 
         // Full month
         if(!py[ss]) py[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{}};
