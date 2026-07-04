@@ -5252,6 +5252,13 @@ function openDefaulterModal(acctId){
 function openFromDefRow(el){
   try{
     var data = JSON.parse(decodeURIComponent(el.dataset.row));
+    // Inject live outstanding from D array
+    if(!window._dOutMap){
+      window._dOutMap={};
+      D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
+    }
+    var liveOut = window._dOutMap[String(data.ACCT_ID)];
+    if(liveOut !== undefined) data.OUTSTANDING = liveOut;
     openDefaulterModalDirect(data);
   } catch(e){
     openFromDefaulter(el.dataset.id);
