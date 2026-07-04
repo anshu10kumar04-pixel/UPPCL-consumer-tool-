@@ -1425,7 +1425,7 @@ function buildCYAgg(dataDate){
 function buildYoYReport(){
   var el = gel('yoy-section');
   if(!el) return;
-  el.innerHTML = '<div style="padding:20px;text-align:center;color:#6B7280;font-family:var(--fh);">⏳ Loading Jul 2025 comparison data (~5MB)... please wait</div>';
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:#6B7280;font-family:var(--fh);">⏳ Building comparison...</div>';
 
   loadPrevYearData(function(){
     // Current year: use _smLookup for SM/NonSM classification
@@ -1610,6 +1610,10 @@ function buildYoYReport(){
     h += '</tbody></table></div>';
 
     el.innerHTML = h;
+  } catch(e) {
+    console.error('YoY error:', e);
+    gel('yoy-section').innerHTML = '<div style="padding:20px;color:#DC2626;font-family:var(--fh);">⚠️ Error: '+e.message+'</div>';
+  }
   });
 }
 
