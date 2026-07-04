@@ -1510,7 +1510,7 @@ function buildYoYReport(){
     h += '<tr style="background:#1E3A5F;color:#fff;">';
     ['REV','CNT','REV','CNT','REV','CNT','REV Δ','CNT Δ'].forEach(function(hd,i){
       var bg=['#1E40AF','#1E40AF','#1D4ED8','#1D4ED8','#059669','#059669','#7C3AED','#7C3AED'][i];
-      h += '<th style="padding:5px 6px;border:1px solid #374151;font-family:var(--fh);font-size:9px;text-align:right;background:'+bg+';">'+hd+'</th>';
+      h += '<th style="padding:5px 6px;border:1px solid #374151;font-family:var(--fh);font-size:9px;text-align:right;background:'+bg+';color:#fff;">'+hd+'</th>';
     });
     h += '</tr></thead><tbody>';
 
@@ -4971,8 +4971,12 @@ function openDefaulterModal(acctId){
 
   // Payment section
   gel('modal-pay-section').style.display = 'block';
-  // Use EXACT same logic as renderDefaulters list row
-  var dOut2 = window._dOutMap ? window._dOutMap[String(acctId)] : undefined;
+  // Build _dOutMap if not exists (may not be built if filter never ran)
+  if(!window._dOutMap){
+    window._dOutMap={};
+    D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
+  }
+  var dOut2 = window._dOutMap[String(acctId)];
   var modalLiveOut = dOut2 !== undefined ? dOut2 : (parseFloat(defRec.OUTSTANDING)||0);
   gel('modal-pay-grid').innerHTML =
     '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">LAST PAID AMT</div>'+
