@@ -1562,7 +1562,7 @@ function buildYoYReport(){
       var allTariffs = [...new Set([...Object.keys(c.tariff||{}),...Object.keys(p.tariff||{})])].sort();
 
       // SM row
-      h += '<tr class="yoy-sub-'+si+'" style="display:none;background:#EFF6FF;">';
+      h += '<tr class="yoy-sub-'+si+'" id="yoy-sm-row-'+si+'" style="display:none;background:#EFF6FF;">';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:center;"><span style="cursor:pointer;color:#1D4ED8;font-weight:700;font-size:11px;" onclick="toggleYoYSub(\'sm-'+si+'\')" id="yoy-sm-btn-'+si+'">➕</span></td>';
       h += '<td style="padding:4px 6px 4px 20px;border:1px solid #BFDBFE;font-size:10px;font-weight:700;color:#1D4ED8;">📶 SM (Smart Meter)</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;color:#1E40AF;">'+fL(p.sm_rev)+'</td>';
@@ -1576,7 +1576,7 @@ function buildYoYReport(){
       h += '</tr>';
 
       // Non-SM row
-      h += '<tr class="yoy-sub-'+si+'" style="display:none;background:#FFF7ED;">';
+      h += '<tr class="yoy-sub-'+si+'" id="yoy-nsm-row-'+si+'" style="display:none;background:#FFF7ED;">';
       h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:center;"><span style="cursor:pointer;color:#EA580C;font-weight:700;font-size:11px;" onclick="toggleYoYSub(\'nsm-'+si+'\')" id="yoy-nsm-btn-'+si+'">➕</span></td>';
       h += '<td style="padding:4px 6px 4px 20px;border:1px solid #FED7AA;font-size:10px;font-weight:700;color:#EA580C;">📊 Non-SM</td>';
       h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;color:#1E40AF;">'+fL(p.nsm_rev)+'</td>';
@@ -1763,9 +1763,25 @@ function toggleYoYSub(id){
   var si = parts[1];
   var rows = document.querySelectorAll('.yoy-cat-'+type+'-'+si);
   var btn = gel('yoy-'+type+'-btn-'+si);
-  var open = rows.length && rows[0].style.display !== 'none';
-  rows.forEach(function(r){ r.style.display = open ? 'none' : ''; });
-  if(btn) btn.textContent = open ? '➕' : '➖';
+  if(!rows.length) return;
+  var open = rows[0].style.display !== 'none';
+  if(open){
+    rows.forEach(function(r){ r.style.display='none'; });
+    if(btn) btn.textContent='➕';
+  } else {
+    // Find parent row and insert tariff rows after it
+    var parentRow = gel('yoy-'+type+'-row-'+si);
+    if(parentRow && parentRow.parentNode){
+      var nextSibling = parentRow.nextSibling;
+      rows.forEach(function(r){
+        r.style.display='';
+        parentRow.parentNode.insertBefore(r, nextSibling);
+      });
+    } else {
+      rows.forEach(function(r){ r.style.display=''; });
+    }
+    if(btn) btn.textContent='➖';
+  }
 }
 
 function buildDashboard(){
