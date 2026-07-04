@@ -2440,16 +2440,26 @@ function dashRenderFiltered(){
     resultEl.innerHTML = '<div style="padding:14px 16px;font-size:12px;color:#9CA3AF;font-family:var(--fh);border-top:1px solid #E5E7EB;">Select Substation, Feeder, and/or Bill Basis above, then click APPLY.</div>';
     return;
   }
-  var scopeD = D.filter(function(r){
-    if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
-    if(fd && dashNorm(r.FEEDER)!==fdN) return false;
-    if(basis && dashNorm(r.BILL_BASIS)!==basisN) return false;
+
+  // Build single-value shortcuts for backward compat with scopeLabel etc.
+  var ss    = selSS.length===1    ? selSS[0]    : '';
+  var fd    = selFeed.length===1  ? selFeed[0]  : '';
+  var basis = selBasis.length===1 ? selBasis[0] : '';
+  var div   = '';
+  var ssN   = dashNorm(ss), fdN = dashNorm(fd), basisN = dashNorm(basis);copeD = D.filter(function(r){
+    if(selSS.length    && selSS.indexOf(r.SUBSTATION)<0)  return false;
+    if(selFeed.length  && selFeed.indexOf(r.FEEDER)<0)    return false;
+    if(selBasis.length && selBasis.indexOf(String(r.BILL_BASIS||'').trim().toUpperCase())<0) return false;
     return true;
   });
   var scopeDef = DEF_ALL.filter(function(r){
-    if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
-    if(fd && dashNorm(r.FEEDER)!==fdN) return false;
-    if(basis){ var rb=dashNorm(r.BILL_BASIS)||(window._basisLookupGlobal&&window._basisLookupGlobal[String(r.ACCT_ID)])||''; if(rb!==basisN) return false; }
+    if(selSS.length   && selSS.indexOf(r.SUBSTATION)<0)   return false;
+    if(selFeed.length && selFeed.indexOf(r.FEEDER)<0)      return false;
+    if(selBasis.length){
+      var rb=String(r.BILL_BASIS||'').trim().toUpperCase();
+      if(!rb && window._basisLookupGlobal) rb=window._basisLookupGlobal[String(r.ACCT_ID)]||'';
+      if(!rb || selBasis.indexOf(rb)<0) return false;
+    }
     return true;
   });
 
@@ -2508,7 +2518,7 @@ function dashRenderFiltered(){
     return ia-ib;
   });
 
-  var scopeLabel = (div?div+' → ':'') + (ss?ss:'All Substations') + (fd?' → '+fd:'');
+  var scopeLabel = (selSS.length?selSS.join(', '):'All Substations') + (selFeed.length?' → '+selFeed.join(', '):'');
 
   var h = '<div style="padding:14px 16px;border-top:1px solid #E5E7EB;">';
   h += '<div style="font-family:var(--fh);font-weight:700;font-size:13px;color:#4338CA;margin-bottom:12px;">📍 '+scopeLabel+'</div>';
@@ -2900,9 +2910,9 @@ function dashExportFiltered(){
   var basis = gel('dash-basis-sel') ? gel('dash-basis-sel').value : '';
   var ssN = dashNorm(ss), fdN = dashNorm(fd), basisN = dashNorm(basis);
   var scopeD = D.filter(function(r){
-    if(ss && dashNorm(r.SUBSTATION)!==ssN) return false;
-    if(fd && dashNorm(r.FEEDER)!==fdN) return false;
-    if(basis && dashNorm(r.BILL_BASIS)!==basisN) return false;
+    if(selSS.length    && selSS.indexOf(r.SUBSTATION)<0)  return false;
+    if(selFeed.length  && selFeed.indexOf(r.FEEDER)<0)    return false;
+    if(selBasis.length && selBasis.indexOf(String(r.BILL_BASIS||'').trim().toUpperCase())<0) return false;
     return true;
   }).map(function(r){
     return {
