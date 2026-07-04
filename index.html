@@ -1578,7 +1578,7 @@ function buildYoYReport(){
       allTariffs.forEach(function(t){
         var ct=c.tariff[t]||{rev:0,cnt:0};
         var pt=p.tariff[t]||{rev:0,cnt:0};
-        h += '<tr class="yoy-sub-'+si+' yoy-cat-sm-'+si+'" style="display:none;background:#E0F2FE;">';
+        h += '<tr class="yoy-cat-sm-'+si+'" style="display:none;background:#E0F2FE;">';
         h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;"></td>';
         h += '<td style="padding:3px 6px 3px 36px;border:1px solid #BAE6FD;font-size:10px;color:#0369A1;">↳ '+t+'</td>';
         var pd2=pyD[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
@@ -3532,7 +3532,10 @@ function startDownloads(){
         allTexts=null;
         sl('BUILDING INDEX…',93);
         sl('BUILDING INDEX…',93);
-        setTimeout(function(){ ia(); hl2(); },20);
+        setTimeout(function(){
+          window._cyAgg = null; // Reset CY cache so SM classification rebuilds with master data
+          ia(); hl2();
+        },20);
         // Preload Jul 2025 comparison data in background
         if(!PY_LOADED) loadPrevYearData(function(){
           if(window._lastTab==='progress') buildYoYReport();
