@@ -1396,7 +1396,7 @@ function loadPrevYearData(callback){
     .catch(function(){ PY_LOADED=true; if(callback) callback(); });
 }
 
-function buildCYAgg(dataDate){ /* v2 */
+function buildCYAgg(dataDate){
   if(window._cyAgg && window._cyAggDate===dataDate.getDate()) return window._cyAgg;
   var cy={};
   var ddDay=dataDate.getDate(), ddMon=dataDate.getMonth(), ddYear=dataDate.getFullYear();
@@ -1737,7 +1737,7 @@ function buildDashboard(){
   var liveDefCount = 0;
   DEF_ALL.forEach(function(r){
     var o = dOutMap[String(r.ACCT_ID)];
-    if(o === undefined) o = r.OUTSTANDING||0;  // fallback to CSV if not in D
+    if(o === undefined) o = parseFloat(r.OUTSTANDING)||0;  // fallback for master/unbilled consumers
     if(o < 2000) return;  // skip if paid
     liveDefCount++;
     defOut += o;
@@ -4750,8 +4750,9 @@ function runDefaulterFilter(){
 
   // Fast filter on pre-built array
   var all = DEF_ALL.filter(function(r){
-    // Use live outstanding from D array if available
-    var liveOut = window._dOutMap ? (window._dOutMap[String(r.ACCT_ID)] || 0) : (r.OUTSTANDING || 0);
+    // Use live outstanding from D array if available, fallback to DEF_ALL value
+    var dOut = window._dOutMap ? window._dOutMap[String(r.ACCT_ID)] : undefined;
+    var liveOut = (dOut !== undefined) ? dOut : (parseFloat(r.OUTSTANDING)||0);
     if(liveOut < minOut) return false;
     if(sub.length    && sub.indexOf(r.SUBSTATION)<0)    return false;
     if(feed.length   && feed.indexOf(r.FEEDER)<0)        return false;
@@ -4895,8 +4896,8 @@ function renderDefaulters(page){
   slice.forEach(function(r){
     globalRank++;
     var rIcon=globalRank===1?'🥇':globalRank===2?'🥈':globalRank===3?'🥉':globalRank;
-    var liveOut = window._dOutMap[String(r.ACCT_ID)];
-    var out=Math.round(liveOut !== undefined ? liveOut : (r.OUTSTANDING||0));
+    var dOut2 = window._dOutMap ? window._dOutMap[String(r.ACCT_ID)] : undefined;
+    var out=Math.round(dOut2 !== undefined ? dOut2 : (parseFloat(r.OUTSTANDING)||0));
     var outColor=out>100000?'#F43F5E':out>25000?'#EA580C':'#F59E0B';
     var paid=Math.round(r.PAY_AMT||0);
     var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
