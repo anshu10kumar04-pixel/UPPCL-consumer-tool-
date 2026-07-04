@@ -1309,7 +1309,11 @@ function buildProgressReport(){
   h += '<div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;margin-top:20px;">';
   h += '<div style="background:#1E3A5F;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">';
   h += '<div style="font-family:var(--fh);font-weight:700;font-size:13px;">📊 SS-WISE REVENUE COMPARISON — JUL 2025 vs JUL 2026</div>';
+  h += '<div style="display:flex;gap:8px;align-items:center;">';
   h += '<span style="font-size:10px;opacity:0.7;">SM/Non-SM + Tariff-wise. Click ➕ to expand.</span>';
+  h += '<button onclick="yoyExportXLSX()" style="background:#059669;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">⬇ XLSX</button>';
+  h += '<button onclick="yoyExportPDF()" style="background:#DC2626;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">🖨 PDF</button>';
+  h += '</div>';
   h += '</div>';
   h += '<div id="yoy-section"></div>';
   h += '</div>';
@@ -1607,6 +1611,103 @@ function buildYoYReport(){
 
     el.innerHTML = h;
   });
+}
+
+
+function yoyExportXLSX(){
+  var agg = window.PY_AGG||{};
+  var cy = window._cyAgg||{};
+  var today = new Date();
+  var dataDate = today;
+  try{
+    var mss=window._manifest_cache&&window._manifest_cache.sync_status;
+    var bd=(mss&&(mss['233511']||mss['233512']))?(mss['233511']||mss['233512']).billed_date:'';
+    if(bd&&bd.length===8){
+      var dd2=parseInt(bd.slice(0,2)),mm2=parseInt(bd.slice(2,4))-1,yy2=parseInt(bd.slice(4,8));
+      dataDate=new Date(new Date(yy2,mm2,dd2).getTime()-86400000);
+    }
+  }catch(e){}
+  var dayN = dataDate.getDate();
+  var uptoLabel = 'Upto '+dayN+' Jul';
+
+  // Build rows
+  var rows = [['SUBSTATION','JUL 2025 FULL REV','JUL 2025 FULL CNT','JUL 2025 '+uptoLabel+' REV','JUL 2025 '+uptoLabel+' CNT','JUL 2026 '+uptoLabel+' REV','JUL 2026 '+uptoLabel+' CNT','GROWTH REV','GROWTH CNT']];
+
+  var py={}, pyD={};
+  ['eudd1','eudd2'].forEach(function(div){
+    var divAgg=agg[div]||{};
+    Object.keys(divAgg).forEach(function(ss){
+      var ssAgg=divAgg[ss];
+      var full=ssAgg.full||{};
+      var upto=(ssAgg.upto||{})[String(dayN)]||{sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
+      if(!py[ss]) py[ss]={total_rev:0,total_cnt:0,tariff:{}};
+      if(!pyD[ss]) pyD[ss]={total_rev:0,total_cnt:0};
+      py[ss].total_rev+=(full.sm_rev||0)+(full.nsm_rev||0);
+      py[ss].total_cnt+=(full.sm_cnt||0)+(full.nsm_cnt||0);
+      pyD[ss].total_rev+=(upto.sm_rev||0)+(upto.nsm_rev||0);
+      pyD[ss].total_cnt+=(upto.sm_cnt||0)+(upto.nsm_cnt||0);
+      Object.keys(full.tariff||{}).forEach(function(t){
+        if(!py[ss].tariff[t]) py[ss].tariff[t]={rev:0,cnt:0};
+        py[ss].tariff[t].rev+=full.tariff[t].rev||0;
+        py[ss].tariff[t].cnt+=full.tariff[t].cnt||0;
+      });
+    });
+  });
+
+  var allSS=Object.keys(cy).concat(Object.keys(py)).filter(function(v,i,a){return a.indexOf(v)===i;})
+    .sort(function(a,b){return (cy[b]?cy[b].total_rev:0)-(cy[a]?cy[a].total_rev:0);}).slice(0,16);
+
+  allSS.forEach(function(ss){
+    var c=cy[ss]||{total_rev:0,total_cnt:0,tariff:{}};
+    var p=py[ss]||{total_rev:0,total_cnt:0,tariff:{}};
+    var pd=pyD[ss]||{total_rev:0,total_cnt:0};
+    var gr=pd.total_rev>0?((c.total_rev-pd.total_rev)/pd.total_rev*100).toFixed(1):'—';
+    var gc=pd.total_cnt>0?((c.total_cnt-pd.total_cnt)/pd.total_cnt*100).toFixed(1):'—';
+    rows.push([ss,
+      (p.total_rev/100000).toFixed(2),(p.total_cnt),
+      (pd.total_rev/100000).toFixed(2),(pd.total_cnt),
+      (c.total_rev/100000).toFixed(2),(c.total_cnt),
+      gr+'%',gc+'%'
+    ]);
+    // Tariff rows
+    var allT=[...new Set([...Object.keys(c.tariff||{}),...Object.keys(p.tariff||{})])].sort();
+    allT.forEach(function(t){
+      var ct=c.tariff[t]||{rev:0,cnt:0};
+      var pt=p.tariff[t]||{rev:0,cnt:0};
+      rows.push(['  ↳ '+t,
+        (pt.rev/100000).toFixed(2),pt.cnt,'','',
+        (ct.rev/100000).toFixed(2),ct.cnt,'',''
+      ]);
+    });
+  });
+
+  // Build CSV
+  var NL = String.fromCharCode(10);
+  var csv = rows.map(function(r){ return r.map(function(v){ return '"'+String(v||'').replace(/"/g,'""')+'"'; }).join(','); }).join(NL);
+  var blob = new Blob([csv], {type:'text/csv'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'YoY_Comparison_Jul2025_vs_Jul2026.csv';
+  a.click();
+}
+
+function yoyExportPDF(){
+  // Expand all rows first, then print
+  var allBtns = document.querySelectorAll('[id^="yoy-btn-"]');
+  allBtns.forEach(function(btn){ if(btn.textContent==='➕') btn.click(); });
+  setTimeout(function(){
+    var table = document.getElementById('yoy-table');
+    if(!table){ alert('Report not loaded yet'); return; }
+    var win = window.open('','_blank');
+    win.document.write('<html><head><title>YoY Revenue Comparison</title>');
+    win.document.write('<style>body{font-family:Arial,sans-serif;font-size:11px;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ccc;padding:4px 6px;}th{background:#1E3A5F;color:#fff;}tr:nth-child(even){background:#f9f9f9;}</style>');
+    win.document.write('</head><body>');
+    win.document.write('<h3>SS-WISE REVENUE COMPARISON — JUL 2025 vs JUL 2026</h3>');
+    win.document.write(table.outerHTML);
+    win.document.write('</body></html>');
+    win.document.close();
+    win.print();
+  }, 500);
 }
 
 function toggleYoY(si){
