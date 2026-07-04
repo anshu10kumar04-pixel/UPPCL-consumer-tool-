@@ -1416,9 +1416,11 @@ function buildCYAgg(dataDate){
     var lpAmt=parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0;
     if(!lpDate||lpDate.getFullYear()!==ddYear||lpDate.getMonth()!==ddMon) return;
     if(lpDate.getDate()>ddDay||lpAmt<=0) return;
+    // SM = GE meter OR MR_SOURCE_CD=SM from master lookup
+    var serial=String(r.SERIAL_NBR||r.METER_SERIAL_NBR||'').replace(/^'/,'').toUpperCase();
     var mrSrc=String(r.MR_SOURCE_CD||'').toUpperCase();
-    if(!mrSrc&&window._smLookup) mrSrc=(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
-    var isSM=mrSrc==='SM';
+    if(!mrSrc && window._smLookup) mrSrc=(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
+    var isSM = serial.startsWith('GE') || mrSrc==='SM';
     var tariff=String(r.CATEGORY||r.TARIFF_TYPE||'').trim();
     if(!tariff||!/^(LMV|HV|EHV)/i.test(tariff)) tariff=stToTariff(r.SUPPLY_TYPE)||'OTHER';
     if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{},sm_tariff:{},nsm_tariff:{}};
@@ -1625,6 +1627,7 @@ function buildYoYReport(){
         h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;">'+dEl(ct.cnt,pdt.cnt)+'</td>';
         h += '</tr>';
       });
+    });
     // Grand total
     h += '<tr style="background:#1E3A5F;color:#fff;font-weight:700;">';
     h += '<td colspan="2" style="padding:6px 10px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL</td>';
@@ -3638,6 +3641,7 @@ function parseFileInto(text, type){
   var _iPayAmtM = findCol(hdrs, ['PAY_AMT','LP AMT','LAST_PAY_AMT']);
   var _iPayDateM= findCol(hdrs, ['PAY_DATE','LP DATE','LAST_PAY_DATE']);
   var _iMrSrcM  = findCol(hdrs, ['MR_SOURCE_CD','MR SOURCE CD']);
+  var _iSerialM = findCol(hdrs, ['SERIAL_NBR','SERIAL_NUMBER','MTR_SRL_NO']);
 
   var pos=nl+1,len=text.length;
   while(pos<len){
@@ -3679,7 +3683,10 @@ function parseFileInto(text, type){
       };
       // Build SM lookup from master (most complete MR_SOURCE_CD source)
       if(!window._smLookup) window._smLookup={};
-      if(mrSrcM) window._smLookup[key]=mrSrcM.trim().toUpperCase();
+      // SM = GE meter serial OR MR_SOURCE_CD=SM
+      var serialM = _iSerialM>=0 ? String(v[_iSerialM]||'').replace(/^'/,'').toUpperCase() : '';
+      var isSMM = serialM.startsWith('GE') || String(mrSrcM).trim().toUpperCase()==='SM';
+      window._smLookup[key] = isSMM ? 'SM' : (mrSrcM||'');
       continue;
     }
 
