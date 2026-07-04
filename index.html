@@ -2149,51 +2149,62 @@ function buildDashboard(){
 
   function buildRecoveryTable(records, label){
     if(!records.length) return '<div style="padding:10px 16px;font-size:12px;color:#9CA3AF;">No records found for this period.</div>';
-    var ssMap2={}, catMap2={};
+    // Build SS x Tariff matrix
+    var ssMap2={}, allCats=new Set();
     records.forEach(function(r){
       var ss=r.SUBSTATION||'Unknown', cat=r.CATEGORY||'Unknown';
       var amt=Math.max(0,parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);
-      if(!ssMap2[ss]) ssMap2[ss]={count:0,amt:0,cats:{}};
-      ssMap2[ss].count++; ssMap2[ss].amt+=amt;
+      allCats.add(cat);
+      if(!ssMap2[ss]) ssMap2[ss]={total:{count:0,amt:0},cats:{}};
+      ssMap2[ss].total.count++; ssMap2[ss].total.amt+=amt;
       if(!ssMap2[ss].cats[cat]) ssMap2[ss].cats[cat]={count:0,amt:0};
       ssMap2[ss].cats[cat].count++; ssMap2[ss].cats[cat].amt+=amt;
-      if(!catMap2[cat]) catMap2[cat]={count:0,amt:0};
-      catMap2[cat].count++; catMap2[cat].amt+=amt;
     });
-    var h2='';
-    // SS-wise + category breakdown
-    h2 += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
-    h2 += '<thead><tr style="background:#F0FDF4;"><th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">SUBSTATION</th>';
-    h2 += '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">TARIFF</th>';
-    h2 += '<th style="padding:7px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">CONSUMERS PAID</th>';
-    h2 += '<th style="padding:7px 10px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BBF7D0;">AMOUNT COLLECTED</th></tr></thead><tbody>';
-    var rIdx=0;
-    Object.keys(ssMap2).sort().forEach(function(ss){
+    var cats=[...allCats].sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+    var h2='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px;">';
+    // Header row 1 - tariff groups (CNT+AMT per tariff)
+    h2 += '<thead><tr style="background:#065F46;color:#fff;">';
+    h2 += '<th rowspan="2" style="padding:6px 10px;text-align:left;font-family:var(--fh);font-size:10px;border:1px solid #047857;min-width:150px;">SUBSTATION</th>';
+    cats.forEach(function(cat){
+      h2 += '<th colspan="2" style="padding:5px 6px;text-align:center;font-family:var(--fh);font-size:10px;border:1px solid #047857;">'+cat+'</th>';
+    });
+    h2 += '<th colspan="2" style="padding:5px 6px;text-align:center;font-family:var(--fh);font-size:10px;border:1px solid #047857;background:#047857;">TOTAL</th>';
+    h2 += '</tr><tr style="background:#047857;color:#fff;">';
+    cats.forEach(function(){
+      h2 += '<th style="padding:4px 6px;text-align:right;font-size:9px;border:1px solid #065F46;">CNT</th>';
+      h2 += '<th style="padding:4px 6px;text-align:right;font-size:9px;border:1px solid #065F46;">AMT</th>';
+    });
+    h2 += '<th style="padding:4px 6px;text-align:right;font-size:9px;border:1px solid #065F46;">CNT</th>';
+    h2 += '<th style="padding:4px 6px;text-align:right;font-size:9px;border:1px solid #065F46;">AMT</th>';
+    h2 += '</tr></thead><tbody>';
+    // Grand totals accumulator
+    var grandCats={}, grandTotal={count:0,amt:0};
+    Object.keys(ssMap2).sort().forEach(function(ss,si){
       var sd=ssMap2[ss];
-      var cats=Object.keys(sd.cats).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
-      cats.forEach(function(cat,ci){
-        var cd=sd.cats[cat];
-        h2 += '<tr style="background:'+(rIdx++%2?'#F9FAFB':'#fff')+'">';
-        h2 += '<td style="padding:7px 10px;font-weight:700;color:#065F46;font-family:var(--fh);">'+(ci===0?ss:'')+'</td>';
-        h2 += '<td style="padding:7px 10px;"><span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;background:#D1FAE5;color:#065F46;">'+cat+'</span></td>';
-        h2 += '<td style="padding:7px 10px;text-align:right;font-weight:700;color:#059669;">'+cd.count+'</td>';
-        h2 += '<td style="padding:7px 10px;text-align:right;font-weight:700;color:#1D4ED8;">'+cr(cd.amt)+'</td>';
-        h2 += '</tr>';
+      h2 += '<tr style="background:'+(si%2?'#F9FAFB':'#fff')+'">';
+      h2 += '<td style="padding:5px 10px;font-weight:700;color:#065F46;font-family:var(--fh);border:1px solid #D1FAE5;">'+ss+'</td>';
+      cats.forEach(function(cat){
+        var cd=sd.cats[cat]||{count:0,amt:0};
+        if(!grandCats[cat]) grandCats[cat]={count:0,amt:0};
+        grandCats[cat].count+=cd.count; grandCats[cat].amt+=cd.amt;
+        h2 += '<td style="padding:4px 6px;text-align:right;border:1px solid #D1FAE5;color:#059669;font-weight:700;">'+(cd.count||'-')+'</td>';
+        h2 += '<td style="padding:4px 6px;text-align:right;border:1px solid #D1FAE5;color:#1D4ED8;">'+(cd.count?cr(cd.amt):'-')+'</td>';
       });
-      // SS subtotal
-      h2 += '<tr style="background:#F0FDF4;">';
-      h2 += '<td style="padding:5px 10px;font-weight:800;color:#065F46;font-family:var(--fh);">'+ss+' TOTAL</td>';
-      h2 += '<td></td>';
-      h2 += '<td style="padding:5px 10px;text-align:right;font-weight:800;color:#059669;">'+sd.count+'</td>';
-      h2 += '<td style="padding:5px 10px;text-align:right;font-weight:800;color:#1D4ED8;">'+cr(sd.amt)+'</td>';
+      grandTotal.count+=sd.total.count; grandTotal.amt+=sd.total.amt;
+      h2 += '<td style="padding:4px 6px;text-align:right;border:1px solid #BBF7D0;font-weight:800;color:#059669;">'+sd.total.count+'</td>';
+      h2 += '<td style="padding:4px 6px;text-align:right;border:1px solid #BBF7D0;font-weight:800;color:#1D4ED8;">'+cr(sd.total.amt)+'</td>';
       h2 += '</tr>';
     });
-    // Grand total
-    var gTotal=records.length, gAmt=records.reduce(function(s,r){return s+Math.max(0,parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);},0);
-    h2 += '<tr style="background:#D1FAE5;border-top:2px solid #6EE7B7;">';
-    h2 += '<td style="padding:8px 10px;font-weight:800;font-family:var(--fh);color:#065F46;">GRAND TOTAL</td><td></td>';
-    h2 += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#059669;">'+gTotal+'</td>';
-    h2 += '<td style="padding:8px 10px;text-align:right;font-weight:800;color:#1D4ED8;">'+cr(gAmt)+'</td>';
+    // Grand total row
+    h2 += '<tr style="background:#D1FAE5;font-weight:800;">';
+    h2 += '<td style="padding:6px 10px;font-family:var(--fh);color:#065F46;border:1px solid #6EE7B7;">TOTAL</td>';
+    cats.forEach(function(cat){
+      var gc=grandCats[cat]||{count:0,amt:0};
+      h2 += '<td style="padding:4px 6px;text-align:right;border:1px solid #6EE7B7;color:#059669;">'+gc.count+'</td>';
+      h2 += '<td style="padding:4px 6px;text-align:right;border:1px solid #6EE7B7;color:#1D4ED8;">'+cr(gc.amt)+'</td>';
+    });
+    h2 += '<td style="padding:4px 6px;text-align:right;border:1px solid #6EE7B7;color:#059669;">'+grandTotal.count+'</td>';
+    h2 += '<td style="padding:4px 6px;text-align:right;border:1px solid #6EE7B7;color:#1D4ED8;">'+cr(grandTotal.amt)+'</td>';
     h2 += '</tr></tbody></table></div>';
     return h2;
   }
@@ -2448,6 +2459,12 @@ function dashRenderFiltered(){
   var basis = selBasis.length===1 ? selBasis[0] : '';
   var div   = '';
   var ssN   = dashNorm(ss), fdN = dashNorm(fd), basisN = dashNorm(basis);copeD = D.filter(function(r){
+    if(selSS.length    && selSS.indexOf(r.SUBSTATION)<0)  return false;
+    if(selFeed.length  && selFeed.indexOf(r.FEEDER)<0)    return false;
+    if(selBasis.length && selBasis.indexOf(String(r.BILL_BASIS||'').trim().toUpperCase())<0) return false;
+    return true;
+  });
+  var scopeD = D.filter(function(r){
     if(selSS.length    && selSS.indexOf(r.SUBSTATION)<0)  return false;
     if(selFeed.length  && selFeed.indexOf(r.FEEDER)<0)    return false;
     if(selBasis.length && selBasis.indexOf(String(r.BILL_BASIS||'').trim().toUpperCase())<0) return false;
