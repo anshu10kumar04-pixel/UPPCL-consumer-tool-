@@ -530,7 +530,8 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:100px">MOBILE</th>
         <th style="width:85px">METER NO</th>
         <th style="width:80px;cursor:pointer" onclick="defSort('LOAD')">LOAD <span id="dsrt-LOAD">⇅</span></th>
-        <th style="width:75px;cursor:pointer" onclick="defSort(&#39;SUPPLY_TYPE&#39;)">SUPPLY <span id="dsrt-SUPPLY_TYPE">⇅</span></th>
+        <th style="width:75px;cursor:pointer" onclick="defSort('SUPPLY_TYPE')">SUPPLY <span id="dsrt-SUPPLY_TYPE">⇅</span></th>
+        <th style="width:75px;cursor:pointer" onclick="defSort('SOURCE')">STATUS <span id="dsrt-SOURCE">⇅</span></th>
         <th style="min-width:150px;cursor:pointer" onclick="defSort(&#39;ADDRESS&#39;)">ADDRESS <span id="dsrt-ADDRESS">⇅</span></th>
         <th style="width:110px;cursor:pointer" onclick="defSort(&#39;OUTSTANDING&#39;)">OUTSTANDING <span id="dsrt-OUTSTANDING">⇅</span></th>
         <th style="width:85px;cursor:pointer" onclick="defSort(&#39;PAY_DATE&#39;)">LP DATE <span id="dsrt-PAY_DATE">⇅</span></th>
@@ -4904,6 +4905,7 @@ function renderDefaulters(page){
       '<td style="font-family:var(--fh);font-size:11px;color:#1D4ED8;font-weight:700;">'+meterNo+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD?r.LOAD+' kW':'-')+'</td>'+
       '<td><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:#EEF2FF;color:#4338CA;">'+r.SUPPLY_TYPE+'</span></td>'+
+      '<td style="text-align:center;">'+(function(){var src=String(r.SOURCE||'billed');if(src==='billed')return '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#D1FAE5;color:#059669;">✔ BILLED</span>';return '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#FEF3C7;color:#D97706;">⚡ UNBILLED</span>';})()+'</td>'+
       '<td style="font-size:11px;color:#374151;" title="'+r.ADDRESS+'">'+r.ADDRESS+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';font-size:13px;">₹'+out.toLocaleString()+'</td>'+
       '<td style="font-size:11px;color:var(--muted);">'+r.PAY_DATE+'</td>'+
