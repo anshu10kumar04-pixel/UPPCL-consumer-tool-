@@ -1744,8 +1744,18 @@ function buildDashboard(){
     {label:'₹50K–1L',  min:50000,  max:100000, count:0, out:0},
     {label:'Above ₹1L',min:100000, max:Infinity,count:0,out:0}
   ];
+
+  // Build live outstanding map from D array
+  var dOutMap = {};
+  D.forEach(function(d){ dOutMap[String(d.ACCT_ID)] = parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
+
+  // Only count consumers whose LIVE outstanding >= 5000 (dashboard threshold)
+  var liveDefCount = 0;
   DEF_ALL.forEach(function(r){
-    var o = r.OUTSTANDING||0;
+    var o = dOutMap[String(r.ACCT_ID)];
+    if(o === undefined) o = r.OUTSTANDING||0;  // fallback to CSV if not in D
+    if(o < 2000) return;  // skip if paid
+    liveDefCount++;
     defOut += o;
     var ss=r.SUBSTATION||'Unknown';
     if(!defSsMap[ss]) defSsMap[ss]={count:0,out:0};
@@ -1941,7 +1951,7 @@ function buildDashboard(){
   html += card('👥','TOTAL CONSUMERS',D.length.toLocaleString(),'Billed: '+billed.length+' | Unbilled: '+unbilled.length,'#EFF6FF','#1D4ED8');
   html += card('💰','TOTAL OUTSTANDING',cr(totalOut),'All consumers','#FFF7ED','#EA580C');
   html += card('📋','TOTAL CA',cr(totalCA),'Current arrear','#FEF2F2','#DC2626');
-  html += card('⚠️','DEFAULTERS',DEF_ALL.length.toLocaleString(),'Outstanding > ₹5,000','#FEF3C7','#D97706');
+  html += card('⚠️','DEFAULTERS',liveDefCount.toLocaleString(),'Outstanding > ₹2,000','#FEF3C7','#D97706');
   html += card('🔴','DEF OUTSTANDING',cr(defOut),'Total recoverable','#FFF1F2','#F43F5E');
   html += '</div>';
 
@@ -2052,7 +2062,7 @@ function buildDashboard(){
   var rangeBgs=['#FFF1F2','#FEE2E2','#FFE4E6','#FFF7ED'];
   var rangeTc=['#BE123C','#DC2626','#E11D48','#C2410C'];
   defRanges.forEach(function(rng,i){
-    var pct = DEF_ALL.length ? (rng.count/DEF_ALL.length*100).toFixed(1) : '0.0';
+    var pct = liveDefCount ? (rng.count/liveDefCount*100).toFixed(1) : '0.0';
     html += '<div style="flex:1;min-width:140px;padding:16px 18px;background:'+rangeBgs[i]+';border-right:1px solid #FECACA;">';
     html += '<div style="font-size:11px;font-weight:700;color:'+rangeTc[i]+';font-family:var(--fh);margin-bottom:4px;">'+rng.label+'</div>';
     html += '<div style="font-size:22px;font-weight:800;color:'+rangeTc[i]+';font-family:var(--fh);">'+rng.count.toLocaleString()+'</div>';
