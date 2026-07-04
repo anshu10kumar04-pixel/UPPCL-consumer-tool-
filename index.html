@@ -1610,10 +1610,6 @@ function buildYoYReport(){
     h += '</tbody></table></div>';
 
     el.innerHTML = h;
-  } catch(e) {
-    console.error('YoY error:', e);
-    gel('yoy-section').innerHTML = '<div style="padding:20px;color:#DC2626;font-family:var(--fh);">⚠️ Error: '+e.message+'</div>';
-  }
   });
 }
 
@@ -3296,8 +3292,10 @@ function st(name){
     if(name==='dashboard') buildDashboard();
     if(name==='progress'){
       buildProgressReport();
-      // If PY already loaded, build YoY immediately; else it will auto-build when ready
-      if(PY_LOADED) setTimeout(buildYoYReport, 200);
+      // Always trigger YoY - loadPrevYearData returns immediately if already loaded
+      setTimeout(function(){
+        loadPrevYearData(function(){ buildYoYReport(); });
+      }, 300);
     }
     if(name==='settings'){
       if(!_settingsBuilt) buildSettingsPanel();
