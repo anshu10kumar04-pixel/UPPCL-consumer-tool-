@@ -1498,13 +1498,13 @@ function buildYoYReport(){
     // Header row 1
     h += '<tr style="background:#1E3A5F;color:#fff;">';
     h += '<th rowspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;width:32px;"></th>';
-    h += '<th rowspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:left;min-width:160px;">SUBSTATION</th>';
+    h += '<th rowspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:left;min-width:160px;color:#fff;">SUBSTATION</th>';
     var ddStr = dataDate.getDate()+'-'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dataDate.getMonth()]+'-'+dataDate.getFullYear();
     var uptoLabel = 'Upto '+dataDate.getDate()+' Jul';
-    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1E40AF;">JUL 2025 FULL MONTH</th>';
-    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1D4ED8;">JUL 2025 '+uptoLabel+'</th>';
-    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#059669;">JUL 2026 '+uptoLabel+'</th>';
-    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#7C3AED;">GROWTH (YoY)</th>';
+    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1E40AF;color:#fff;">JUL 2025 FULL MONTH</th>';
+    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1D4ED8;color:#fff;">JUL 2025 '+uptoLabel+'</th>';
+    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#059669;color:#fff;">JUL 2026 '+uptoLabel+'</th>';
+    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#7C3AED;color:#fff;">GROWTH (YoY)</th>';
     h += '</tr>';
     // Header row 2
     h += '<tr style="background:#1E3A5F;color:#fff;">';
@@ -3486,6 +3486,7 @@ function parseFileInto(text, type){
   var _iTotOutM = findCol(hdrs, ['TOTAL_OUTSTANDING','TOTAL OUTSTANDING']);
   var _iPayAmtM = findCol(hdrs, ['PAY_AMT','LP AMT','LAST_PAY_AMT']);
   var _iPayDateM= findCol(hdrs, ['PAY_DATE','LP DATE','LAST_PAY_DATE']);
+  var _iMrSrcM  = findCol(hdrs, ['MR_SOURCE_CD','MR SOURCE CD']);
 
   var pos=nl+1,len=text.length;
   while(pos<len){
@@ -3518,11 +3519,15 @@ function parseFileInto(text, type){
       rawAmt   = _iPayAmtM>=0 ? (v[_iPayAmtM]||'0') : '0';
       rawDate  = _iPayDateM>=0? (v[_iPayDateM]||'-') : '-';
 
+      var mrSrcM = _iMrSrcM>=0 ? (v[_iMrSrcM]||'') : '';
       MASTER_MAP[key] = {
         TOTAL_OUTSTANDING: outValue,
         LP_DATE: rawDate,
-        LP_AMT: rawAmt
+        LP_AMT: rawAmt,
+        MR_SOURCE_CD: mrSrcM
       };
+      // Build SM lookup from master (most complete MR_SOURCE_CD source)
+      if(mrSrcM) { if(!window._smLookup) window._smLookup={}; window._smLookup[key]=mrSrcM.trim().toUpperCase(); }
       continue;
     }
 
