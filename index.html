@@ -3506,6 +3506,7 @@ function loginSuccess(role){
   var b=gel('role-indicator'); if(b){b.textContent=role==='admin'?'👑 ADMIN':'👤 USER'; b.className='role-badge '+(role==='admin'?'badge-admin':'badge-user');}
   applyRoleRestrictions(role);
   if(role==='user'){
+    applyTabTheme('dashboard');
     if(D.length===0) autoFetch();
     function runSplashLoop(){
       showUserSplash(function(){
@@ -3589,6 +3590,68 @@ function showHelp(){var m=gel('help-modal');if(!m)return;var info=gel('help-logi
 function closeHelp(){ var m=gel('help-modal'); if(m){m.classList.remove('open');document.body.style.overflow='';} }
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
+
+// ── DAILY TAB COLOUR SCHEME ──
+var _TAB_THEMES = (function(){
+  var dayMap=[6,0,1,2,3,4,5]; // Sun=6,Mon=0..Sat=5
+  var dIdx=dayMap[new Date().getDay()];
+  var DAYS=[
+    // MON - Indigo family
+    {lookup:{bg:"#EEF2FF",accent:"#4F46E5",border:"#C7D2FE",text:"#3730A3"},
+     defaulter:{bg:"#F5F3FF",accent:"#7C3AED",border:"#DDD6FE",text:"#6D28D9"},
+     dashboard:{bg:"#EFF6FF",accent:"#2563EB",border:"#BFDBFE",text:"#1D4ED8"},
+     progress:{bg:"#ECFEFF",accent:"#0891B2",border:"#A5F3FC",text:"#0E7490"}},
+    // TUE - Emerald family
+    {lookup:{bg:"#ECFDF5",accent:"#059669",border:"#A7F3D0",text:"#047857"},
+     defaulter:{bg:"#F0FDFA",accent:"#0D9488",border:"#99F6E4",text:"#0F766E"},
+     dashboard:{bg:"#F0FDF4",accent:"#16A34A",border:"#BBF7D0",text:"#15803D"},
+     progress:{bg:"#F7FEE7",accent:"#65A30D",border:"#D9F99D",text:"#4D7C0F"}},
+    // WED - Amber family
+    {lookup:{bg:"#FFFBEB",accent:"#D97706",border:"#FDE68A",text:"#B45309"},
+     defaulter:{bg:"#FFF7ED",accent:"#EA580C",border:"#FED7AA",text:"#C2410C"},
+     dashboard:{bg:"#FEF2F2",accent:"#DC2626",border:"#FECACA",text:"#B91C1C"},
+     progress:{bg:"#FEFCE8",accent:"#CA8A04",border:"#FEF08A",text:"#A16207"}},
+    // THU - Violet family
+    {lookup:{bg:"#F5F3FF",accent:"#7C3AED",border:"#DDD6FE",text:"#6D28D9"},
+     defaulter:{bg:"#FAF5FF",accent:"#9333EA",border:"#E9D5FF",text:"#7E22CE"},
+     dashboard:{bg:"#FDF2F8",accent:"#DB2777",border:"#FBCFE8",text:"#BE185D"},
+     progress:{bg:"#EEF2FF",accent:"#6366F1",border:"#C7D2FE",text:"#4F46E5"}},
+    // FRI - Rose family
+    {lookup:{bg:"#FFF1F2",accent:"#E11D48",border:"#FECDD3",text:"#BE123C"},
+     defaulter:{bg:"#FDF2F8",accent:"#DB2777",border:"#FBCFE8",text:"#BE185D"},
+     dashboard:{bg:"#FEF2F2",accent:"#DC2626",border:"#FECACA",text:"#B91C1C"},
+     progress:{bg:"#FDF4FF",accent:"#C026D3",border:"#F0ABFC",text:"#A21CAF"}},
+    // SAT - Teal family
+    {lookup:{bg:"#F0FDFA",accent:"#0F766E",border:"#99F6E4",text:"#0F766E"},
+     defaulter:{bg:"#F0F9FF",accent:"#0369A1",border:"#BAE6FD",text:"#075985"},
+     dashboard:{bg:"#F1F5F9",accent:"#334155",border:"#CBD5E1",text:"#1E293B"},
+     progress:{bg:"#F8FAFC",accent:"#475569",border:"#E2E8F0",text:"#334155"}},
+    // SUN - Warm family
+    {lookup:{bg:"#FFFBEB",accent:"#92400E",border:"#FDE68A",text:"#78350F"},
+     defaulter:{bg:"#FFF7ED",accent:"#9A3412",border:"#FED7AA",text:"#7C2D12"},
+     dashboard:{bg:"#FEF3C7",accent:"#78350F",border:"#FDE68A",text:"#6B2100"},
+     progress:{bg:"#FEFCE8",accent:"#713F12",border:"#FEF08A",text:"#5C2900"}},
+  ];
+  return DAYS[dIdx];
+})();
+
+function applyTabTheme(tabName){
+  var map={lookup:'lookup',dc:'lookup',dfp:'lookup',defaulter:'defaulter',dashboard:'dashboard',progress:'progress',settings:'dashboard'};
+  var key=map[tabName]||'dashboard';
+  var t=_TAB_THEMES[key];
+  if(!t) return;
+  var r=document.documentElement;
+  r.style.setProperty('--bg', t.bg);
+  r.style.setProperty('--border', t.border);
+  r.style.setProperty('--accent', t.accent);
+  r.style.setProperty('--text', t.text);
+  // Update sbar/tab active color
+  document.querySelectorAll('.tab.active').forEach(function(el){
+    el.style.color=t.accent;
+    el.style.borderColor=t.accent;
+  });
+}
+
 function st(name){
   if(name==='dashboard' && window.innerWidth<=768){ name='lookup'; }
   if(name===_lastTab)return; _lastTab=name;
@@ -3598,6 +3661,7 @@ function st(name){
   ['lookup','dc','dfp','defaulter','dashboard','settings','progress'].forEach(function(n){
     var p=gel('panel-'+n); if(p)p.classList.toggle('active',n===name);
   });
+  applyTabTheme(name);
   requestAnimationFrame(function(){
     if(name==='dc'&&!_dcLoaded) loadDC();
     if(name==='dfp'&&!_dfpLoaded) loadDfp();
