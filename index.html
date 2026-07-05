@@ -3506,12 +3506,11 @@ function loginSuccess(role){
   var b=gel('role-indicator'); if(b){b.textContent=role==='admin'?'👑 ADMIN':'👤 USER'; b.className='role-badge '+(role==='admin'?'badge-admin':'badge-user');}
   applyRoleRestrictions(role);
   if(role==='user'){
-    gel('app').style.display='none';
-    gel('sbar').style.display='none';
+    // Start loading data immediately in background
+    if(D.length===0) autoFetch();
+    // Show splash on top while data loads
     showUserSplash(function(){
-      gel('app').style.display='block';
-      gel('sbar').style.display='flex';
-      if(D.length===0) autoFetch();
+      // Splash done - app already visible and loading
     });
   } else {
     if(D.length===0) autoFetch();
