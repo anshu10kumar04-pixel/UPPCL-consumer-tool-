@@ -3591,46 +3591,46 @@ function closeHelp(){ var m=gel('help-modal'); if(m){m.classList.remove('open');
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
 
-// ── DAILY TAB COLOUR SCHEME ──
+// ── DAILY TAB COLOUR SCHEME (from theme_light) ──
 var _TAB_THEMES = (function(){
-  var dayMap=[6,0,1,2,3,4,5]; // Sun=6,Mon=0..Sat=5
+  var dayMap=[6,0,1,2,3,4,5];
   var dIdx=dayMap[new Date().getDay()];
   var DAYS=[
-    // MON - Indigo family
-    {lookup:{bg:"#EEF2FF",accent:"#4F46E5",border:"#C7D2FE",text:"#3730A3"},
-     defaulter:{bg:"#F5F3FF",accent:"#7C3AED",border:"#DDD6FE",text:"#6D28D9"},
-     dashboard:{bg:"#EFF6FF",accent:"#2563EB",border:"#BFDBFE",text:"#1D4ED8"},
-     progress:{bg:"#ECFEFF",accent:"#0891B2",border:"#A5F3FC",text:"#0E7490"}},
-    // TUE - Emerald family
-    {lookup:{bg:"#ECFDF5",accent:"#059669",border:"#A7F3D0",text:"#047857"},
-     defaulter:{bg:"#F0FDFA",accent:"#0D9488",border:"#99F6E4",text:"#0F766E"},
-     dashboard:{bg:"#F0FDF4",accent:"#16A34A",border:"#BBF7D0",text:"#15803D"},
-     progress:{bg:"#F7FEE7",accent:"#65A30D",border:"#D9F99D",text:"#4D7C0F"}},
-    // WED - Amber family
-    {lookup:{bg:"#FFFBEB",accent:"#D97706",border:"#FDE68A",text:"#B45309"},
-     defaulter:{bg:"#FFF7ED",accent:"#EA580C",border:"#FED7AA",text:"#C2410C"},
-     dashboard:{bg:"#FEF2F2",accent:"#DC2626",border:"#FECACA",text:"#B91C1C"},
-     progress:{bg:"#FEFCE8",accent:"#CA8A04",border:"#FEF08A",text:"#A16207"}},
-    // THU - Violet family
-    {lookup:{bg:"#F5F3FF",accent:"#7C3AED",border:"#DDD6FE",text:"#6D28D9"},
-     defaulter:{bg:"#FAF5FF",accent:"#9333EA",border:"#E9D5FF",text:"#7E22CE"},
-     dashboard:{bg:"#FDF2F8",accent:"#DB2777",border:"#FBCFE8",text:"#BE185D"},
-     progress:{bg:"#EEF2FF",accent:"#6366F1",border:"#C7D2FE",text:"#4F46E5"}},
-    // FRI - Rose family
-    {lookup:{bg:"#FFF1F2",accent:"#E11D48",border:"#FECDD3",text:"#BE123C"},
-     defaulter:{bg:"#FDF2F8",accent:"#DB2777",border:"#FBCFE8",text:"#BE185D"},
-     dashboard:{bg:"#FEF2F2",accent:"#DC2626",border:"#FECACA",text:"#B91C1C"},
-     progress:{bg:"#FDF4FF",accent:"#C026D3",border:"#F0ABFC",text:"#A21CAF"}},
-    // SAT - Teal family
-    {lookup:{bg:"#F0FDFA",accent:"#0F766E",border:"#99F6E4",text:"#0F766E"},
-     defaulter:{bg:"#F0F9FF",accent:"#0369A1",border:"#BAE6FD",text:"#075985"},
-     dashboard:{bg:"#F1F5F9",accent:"#334155",border:"#CBD5E1",text:"#1E293B"},
-     progress:{bg:"#F8FAFC",accent:"#475569",border:"#E2E8F0",text:"#334155"}},
-    // SUN - Warm family
-    {lookup:{bg:"#FFFBEB",accent:"#92400E",border:"#FDE68A",text:"#78350F"},
-     defaulter:{bg:"#FFF7ED",accent:"#9A3412",border:"#FED7AA",text:"#7C2D12"},
-     dashboard:{bg:"#FEF3C7",accent:"#78350F",border:"#FDE68A",text:"#6B2100"},
-     progress:{bg:"#FEFCE8",accent:"#713F12",border:"#FEF08A",text:"#5C2900"}},
+    // MON - Sky Blue
+    {lookup:{bg:"#F0F7FF",accent:"#5B9BD5",border:"#D6EAFF",text:"#2A5A8A"},
+     defaulter:{bg:"#F0F7FF",accent:"#7EB8E8",border:"#DDF0FF",text:"#3A7AAA"},
+     dashboard:{bg:"#F0F7FF",accent:"#4A9CC5",border:"#CCE8F8",text:"#1A6A90"},
+     progress:{bg:"#F0F7FF",accent:"#6AACCA",border:"#D0EAF5",text:"#2A7A9A"}},
+    // TUE - Mint Green
+    {lookup:{bg:"#F0FBF4",accent:"#5BB87A",border:"#D0F0DC",text:"#1A6A3A"},
+     defaulter:{bg:"#F0FBF4",accent:"#4EAA8E",border:"#C8F0E5",text:"#1A6A58"},
+     dashboard:{bg:"#F0FBF4",accent:"#72C495",border:"#D8F5E5",text:"#2A7A50"},
+     progress:{bg:"#F0FBF4",accent:"#60B565",border:"#CCEECC",text:"#2A6A2A"}},
+    // WED - Peach Amber
+    {lookup:{bg:"#FFF8F0",accent:"#E8935A",border:"#FFE0CC",text:"#A05020"},
+     defaulter:{bg:"#FFF8F0",accent:"#D4826A",border:"#FFD8CC",text:"#904030"},
+     dashboard:{bg:"#FFF8F0",accent:"#C8A44A",border:"#FAEACC",text:"#806020"},
+     progress:{bg:"#FFF8F0",accent:"#D4955A",border:"#FFE4CC",text:"#904020"}},
+    // THU - Lavender
+    {lookup:{bg:"#F7F0FF",accent:"#9B7ED4",border:"#E8DAFF",text:"#5A3A9A"},
+     defaulter:{bg:"#F7F0FF",accent:"#B87EB8",border:"#F0DAEE",text:"#784A78"},
+     dashboard:{bg:"#F7F0FF",accent:"#8890D4",border:"#D8DCFF",text:"#4850A0"},
+     progress:{bg:"#F7F0FF",accent:"#A87AAA",border:"#ECD8EC",text:"#684A68"}},
+    // FRI - Rose Pink
+    {lookup:{bg:"#FFF0F5",accent:"#D47A95",border:"#FFD0E0",text:"#943050"},
+     defaulter:{bg:"#FFF0F5",accent:"#C87090",border:"#FFCCE0",text:"#882848"},
+     dashboard:{bg:"#FFF0F5",accent:"#E08090",border:"#FFD8DC",text:"#A04050"},
+     progress:{bg:"#FFF0F5",accent:"#C888A8",border:"#FFDCEE",text:"#884868"}},
+    // SAT - Teal Mist
+    {lookup:{bg:"#F0FAFA",accent:"#4AACAA",border:"#C8EEEC",text:"#1A6A68"},
+     defaulter:{bg:"#F0FAFA",accent:"#5AACBC",border:"#CCF0F5",text:"#1A6A78"},
+     dashboard:{bg:"#F0FAFA",accent:"#4A9898",border:"#C5E8E8",text:"#1A5858"},
+     progress:{bg:"#F0FAFA",accent:"#60B0A8",border:"#CCE8E5",text:"#206858"}},
+    // SUN - Warm Sand
+    {lookup:{bg:"#FBF6EE",accent:"#C8956A",border:"#F5DEC8",text:"#885030"},
+     defaulter:{bg:"#FBF6EE",accent:"#B88860",border:"#EED8C0",text:"#784020"},
+     dashboard:{bg:"#FBF6EE",accent:"#AA8858",border:"#EAD8B8",text:"#6A4818"},
+     progress:{bg:"#FBF6EE",accent:"#C8A870",border:"#F5E8C0",text:"#886028"}},
   ];
   return DAYS[dIdx];
 })();
@@ -3645,12 +3645,9 @@ function applyTabTheme(tabName){
   r.style.setProperty('--border', t.border);
   r.style.setProperty('--accent', t.accent);
   r.style.setProperty('--text', t.text);
-  // Update sbar/tab active color
-  document.querySelectorAll('.tab.active').forEach(function(el){
-    el.style.color=t.accent;
-    el.style.borderColor=t.accent;
-  });
+  r.style.setProperty('--accent2', t.accent);
 }
+
 
 function st(name){
   if(name==='dashboard' && window.innerWidth<=768){ name='lookup'; }
