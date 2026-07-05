@@ -4964,7 +4964,8 @@ function runDefaulterFilter(){
   var all = DEF_ALL.filter(function(r){
     // Use live outstanding from D array if available, fallback to DEF_ALL value
     var dOut = window._dOutMap ? window._dOutMap[String(r.ACCT_ID)] : undefined;
-    var liveOut = (dOut !== undefined) ? dOut : (parseFloat(r.OUTSTANDING)||0);
+    var defOut = parseFloat(r.OUTSTANDING)||0;
+    var liveOut = (dOut !== undefined && dOut > 0) ? dOut : defOut;
     if(liveOut < minOut) return false;
     if(sub.length    && sub.indexOf(r.SUBSTATION)<0)    return false;
     if(feed.length   && feed.indexOf(r.FEEDER)<0)        return false;
