@@ -3506,12 +3506,18 @@ function loginSuccess(role){
   var b=gel('role-indicator'); if(b){b.textContent=role==='admin'?'👑 ADMIN':'👤 USER'; b.className='role-badge '+(role==='admin'?'badge-admin':'badge-user');}
   applyRoleRestrictions(role);
   if(role==='user'){
-    // Start loading data immediately in background
     if(D.length===0) autoFetch();
-    // Show splash on top while data loads
-    showUserSplash(function(){
-      // Splash done - app already visible and loading
-    });
+    function runSplashLoop(){
+      showUserSplash(function(){
+        // Splash cycle done - check if data loaded
+        if(D.length===0){
+          // Still loading - run again
+          runSplashLoop();
+        }
+        // else data ready - splash stops, tool visible
+      });
+    }
+    runSplashLoop();
   } else {
     if(D.length===0) autoFetch();
   }
