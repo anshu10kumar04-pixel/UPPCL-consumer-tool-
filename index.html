@@ -5111,7 +5111,8 @@ function renderDefaulters(page){
     globalRank++;
     var rIcon=globalRank===1?'🥇':globalRank===2?'🥈':globalRank===3?'🥉':globalRank;
     var dOut2 = window._dOutMap ? window._dOutMap[String(r.ACCT_ID)] : undefined;
-    var out=Math.round(dOut2 !== undefined ? dOut2 : (parseFloat(r.OUTSTANDING)||0));
+    var defOut2 = parseFloat(r.OUTSTANDING)||0;
+    var out=Math.round((dOut2 !== undefined && dOut2 > 0) ? dOut2 : defOut2);
     var outColor=out>100000?'#F43F5E':out>25000?'#EA580C':'#F59E0B';
     var paid=Math.round(r.PAY_AMT||0);
     var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
@@ -5294,7 +5295,7 @@ function openFromDefRow(el){
       D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
     }
     var liveOut = window._dOutMap[String(data.ACCT_ID)];
-    if(liveOut !== undefined) data.OUTSTANDING = liveOut;
+    if(liveOut !== undefined && liveOut > 0) data.OUTSTANDING = liveOut;
     openDefaulterModalDirect(data);
   } catch(e){
     openFromDefaulter(el.dataset.id);
