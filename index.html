@@ -4966,6 +4966,7 @@ function runDefaulterFilter(){
     var dOut = window._dOutMap ? window._dOutMap[String(r.ACCT_ID)] : undefined;
     var defOut = parseFloat(r.OUTSTANDING)||0;
     var liveOut = (dOut !== undefined && dOut > 0) ? dOut : defOut;
+    r.OUTSTANDING = liveOut; // always sync display value
     if(liveOut < minOut) return false;
     if(sub.length    && sub.indexOf(r.SUBSTATION)<0)    return false;
     if(feed.length   && feed.indexOf(r.FEEDER)<0)        return false;
