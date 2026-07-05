@@ -1649,8 +1649,10 @@ function buildYoYReport(){
       });
     });
     // Grand total
+    // Grand Total row with + button (same as SS rows)
     h += '<tr style="background:#1E3A5F;color:#fff;font-weight:700;">';
-    h += '<td colspan="2" style="padding:6px 10px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL</td>';
+    h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:center;"><span id="yoy-grand-btn" onclick="toggleYoYGrand()" style="cursor:pointer;font-weight:700;font-size:13px;">&#10133;</span></td>';
+    h += '<td style="padding:6px 10px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL</td>';
     h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#93C5FD;">'+fL(grandPY.rev)+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#93C5FD;">'+grandPY.cnt+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#60A5FA;">'+fL(grandPYD.rev)+'</td>';
@@ -1660,9 +1662,10 @@ function buildYoYReport(){
     h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+dEl(grandCY.rev,grandPYD.rev)+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+dEl(grandCY.cnt,grandPYD.cnt)+'</td>';
     h += '</tr>';
-    // SM Grand Total row
-    h += '<tr style="background:#EFF6FF;font-weight:700;">';
-    h += '<td colspan="2" style="padding:5px 10px;border:1px solid #BFDBFE;font-size:11px;color:#1D4ED8;font-family:var(--fh);">&#8627; TOTAL SM (Smart Meter)</td>';
+    // SM Grand Total row - hidden by default
+    h += '<tr class="yoy-grand-sub" style="display:none;background:#EFF6FF;font-weight:700;">';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;"></td>';
+    h += '<td style="padding:4px 6px 4px 20px;border:1px solid #BFDBFE;font-size:11px;font-weight:700;color:#1D4ED8;">&#128246; SM (Smart Meter)</td>';
     h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#1E40AF;">'+fL(grandPY.sm_rev)+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#1E40AF;">'+grandPY.sm_cnt+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#1D4ED8;">'+fL(grandPYD.sm_rev)+'</td>';
@@ -1672,9 +1675,10 @@ function buildYoYReport(){
     h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+dEl(grandCY.sm_rev,grandPYD.sm_rev)+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+dEl(grandCY.sm_cnt,grandPYD.sm_cnt)+'</td>';
     h += '</tr>';
-    // Non-SM Grand Total row
-    h += '<tr style="background:#FFF7ED;font-weight:700;">';
-    h += '<td colspan="2" style="padding:5px 10px;border:1px solid #FED7AA;font-size:11px;color:#C2410C;font-family:var(--fh);">&#8627; TOTAL Non-SM</td>';
+    // Non-SM Grand Total row - hidden by default
+    h += '<tr class="yoy-grand-sub" style="display:none;background:#FFF7ED;font-weight:700;">';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;"></td>';
+    h += '<td style="padding:4px 6px 4px 20px;border:1px solid #FED7AA;font-size:11px;font-weight:700;color:#C2410C;">&#128246; Non-SM</td>';
     h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#92400E;">'+fL(grandPY.nsm_rev)+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#92400E;">'+grandPY.nsm_cnt+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#C2410C;">'+fL(grandPYD.nsm_rev)+'</td>';
@@ -1690,6 +1694,15 @@ function buildYoYReport(){
   });
 }
 
+
+
+function toggleYoYGrand(){
+  var rows = document.querySelectorAll('.yoy-grand-sub');
+  var btn = document.getElementById('yoy-grand-btn');
+  var open = rows.length && rows[0].style.display !== 'none';
+  rows.forEach(function(r){ r.style.display = open ? 'none' : ''; });
+  if(btn) btn.innerHTML = open ? '&#10133;' : '&#10134;';
+}
 
 function yoyExportXLSX(){
   var agg = window.PY_AGG||{};
