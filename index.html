@@ -1553,8 +1553,14 @@ function buildYoYReport(){
       var p=py[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
       var pd=pyD[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
       grandPY.rev+=p.total_rev; grandPY.cnt+=p.total_cnt;
+      grandPY.sm_rev+=(p.sm_rev||0); grandPY.sm_cnt+=(p.sm_cnt||0);
+      grandPY.nsm_rev+=(p.nsm_rev||0); grandPY.nsm_cnt+=(p.nsm_cnt||0);
       grandPYD.rev+=pd.total_rev; grandPYD.cnt+=pd.total_cnt;
+      grandPYD.sm_rev+=(pd.sm_rev||0); grandPYD.sm_cnt+=(pd.sm_cnt||0);
+      grandPYD.nsm_rev+=(pd.nsm_rev||0); grandPYD.nsm_cnt+=(pd.nsm_cnt||0);
       grandCY.rev+=c.total_rev; grandCY.cnt+=c.total_cnt;
+      grandCY.sm_rev+=(c.sm_rev||0); grandCY.sm_cnt+=(c.sm_cnt||0);
+      grandCY.nsm_rev+=(c.nsm_rev||0); grandCY.nsm_cnt+=(c.nsm_cnt||0);
       var rowBg=si%2?'#fff':'#F9FAFB';
 
       // SS row
@@ -1653,6 +1659,30 @@ function buildYoYReport(){
     h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+grandCY.cnt+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+dEl(grandCY.rev,grandPYD.rev)+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+dEl(grandCY.cnt,grandPYD.cnt)+'</td>';
+    h += '</tr>';
+    // SM Grand Total row
+    h += '<tr style="background:#EFF6FF;font-weight:700;">';
+    h += '<td colspan="2" style="padding:5px 10px;border:1px solid #BFDBFE;font-size:11px;color:#1D4ED8;font-family:var(--fh);">&#8627; TOTAL SM (Smart Meter)</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#1E40AF;">'+fL(grandPY.sm_rev)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#1E40AF;">'+grandPY.sm_cnt+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#1D4ED8;">'+fL(grandPYD.sm_rev)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#1D4ED8;">'+grandPYD.sm_cnt+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#059669;">'+fL(grandCY.sm_rev)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#059669;">'+grandCY.sm_cnt+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+dEl(grandCY.sm_rev,grandPYD.sm_rev)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+dEl(grandCY.sm_cnt,grandPYD.sm_cnt)+'</td>';
+    h += '</tr>';
+    // Non-SM Grand Total row
+    h += '<tr style="background:#FFF7ED;font-weight:700;">';
+    h += '<td colspan="2" style="padding:5px 10px;border:1px solid #FED7AA;font-size:11px;color:#C2410C;font-family:var(--fh);">&#8627; TOTAL Non-SM</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#92400E;">'+fL(grandPY.nsm_rev)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#92400E;">'+grandPY.nsm_cnt+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#C2410C;">'+fL(grandPYD.nsm_rev)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#C2410C;">'+grandPYD.nsm_cnt+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#D97706;">'+fL(grandCY.nsm_rev)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#D97706;">'+grandCY.nsm_cnt+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+dEl(grandCY.nsm_rev,grandPYD.nsm_rev)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+dEl(grandCY.nsm_cnt,grandPYD.nsm_cnt)+'</td>';
     h += '</tr>';
     h += '</tbody></table></div>';
 
