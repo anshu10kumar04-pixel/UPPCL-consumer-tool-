@@ -1548,7 +1548,7 @@ function buildYoYReport(){
     });
     h += '</tr></thead><tbody>';
 
-    var grandPY={rev:0,cnt:0}, grandPYD={rev:0,cnt:0}, grandCY={rev:0,cnt:0};
+    var grandPY={rev:0,cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0}, grandPYD={rev:0,cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0}, grandCY={rev:0,cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0};
     allSS.forEach(function(ss, si){
       var c=cy[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
       var p=py[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
