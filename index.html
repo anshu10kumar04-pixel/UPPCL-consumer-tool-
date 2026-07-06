@@ -1554,16 +1554,8 @@ function buildYoYReport(){
       var p=py[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
       var pd=pyD[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
       grandPY.rev+=p.total_rev; grandPY.cnt+=p.total_cnt;
-      grandPY.sm_rev+=parseFloat(p.sm_rev||0); grandPY.sm_cnt+=parseInt(p.sm_cnt||0);
-      grandPY.nsm_rev+=parseFloat(p.nsm_rev||0); grandPY.nsm_cnt+=parseInt(p.nsm_cnt||0);
       grandPYD.rev+=pd.total_rev; grandPYD.cnt+=pd.total_cnt;
-      grandPYD.sm_rev+=parseFloat(pd.sm_rev||0); grandPYD.sm_cnt+=parseInt(pd.sm_cnt||0);
-      grandPYD.nsm_rev+=parseFloat(pd.nsm_rev||0); grandPYD.nsm_cnt+=parseInt(pd.nsm_cnt||0);
-      // Use raw cy data directly for SM accuracy
-      var rawC=cy[ss]||null;
       grandCY.rev+=c.total_rev; grandCY.cnt+=c.total_cnt;
-      grandCY.sm_rev+=rawC?parseFloat(rawC.sm_rev||0):0; grandCY.sm_cnt+=rawC?parseInt(rawC.sm_cnt||0):0;
-      grandCY.nsm_rev+=rawC?parseFloat(rawC.nsm_rev||0):0; grandCY.nsm_cnt+=rawC?parseInt(rawC.nsm_cnt||0):0;
       var rowBg=si%2?'#fff':'#F9FAFB';
 
       // SS row
@@ -1583,6 +1575,14 @@ function buildYoYReport(){
 
       // Expandable: SM / Non-SM + Tariff rows
       var allTariffs = [...new Set([...Object.keys(c.tariff||{}),...Object.keys(p.tariff||{})])].sort();
+
+      // Accumulate grand SM/NSM totals here using same p,pd,c as per-SS rows
+      grandPY.sm_rev+=parseFloat(p.sm_rev||0); grandPY.sm_cnt+=parseInt(p.sm_cnt||0);
+      grandPY.nsm_rev+=parseFloat(p.nsm_rev||0); grandPY.nsm_cnt+=parseInt(p.nsm_cnt||0);
+      grandPYD.sm_rev+=parseFloat(pd.sm_rev||0); grandPYD.sm_cnt+=parseInt(pd.sm_cnt||0);
+      grandPYD.nsm_rev+=parseFloat(pd.nsm_rev||0); grandPYD.nsm_cnt+=parseInt(pd.nsm_cnt||0);
+      grandCY.sm_rev+=parseFloat(c.sm_rev||0); grandCY.sm_cnt+=parseInt(c.sm_cnt||0);
+      grandCY.nsm_rev+=parseFloat(c.nsm_rev||0); grandCY.nsm_cnt+=parseInt(c.nsm_cnt||0);
 
       // SM row
       h += '<tr class="yoy-sub-'+si+'" id="yoy-sm-row-'+si+'" style="display:none;background:#EFF6FF;">';
