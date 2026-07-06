@@ -1463,7 +1463,8 @@ function buildYoYReport(){
     var dataDateMonth = dataDate.getMonth();  // 6 = July
     var dataDateYear = dataDate.getFullYear();
 
-    // CY: use cached aggregate (computed once after D loads)
+    // CY: force rebuild to ensure SM lookup is ready
+    window._cyAgg = null; // invalidate cache
     var cy = buildCYAgg(dataDate);
 
     // PY from pre-aggregated JSON — instant, no row iteration needed
@@ -1558,9 +1559,11 @@ function buildYoYReport(){
       grandPYD.rev+=pd.total_rev; grandPYD.cnt+=pd.total_cnt;
       grandPYD.sm_rev+=parseFloat(pd.sm_rev||0); grandPYD.sm_cnt+=parseInt(pd.sm_cnt||0);
       grandPYD.nsm_rev+=parseFloat(pd.nsm_rev||0); grandPYD.nsm_cnt+=parseInt(pd.nsm_cnt||0);
+      // Use raw cy data directly for SM accuracy
+      var rawC=cy[ss]||null;
       grandCY.rev+=c.total_rev; grandCY.cnt+=c.total_cnt;
-      grandCY.sm_rev+=parseFloat(c.sm_rev||0); grandCY.sm_cnt+=parseInt(c.sm_cnt||0);
-      grandCY.nsm_rev+=parseFloat(c.nsm_rev||0); grandCY.nsm_cnt+=parseInt(c.nsm_cnt||0);
+      grandCY.sm_rev+=rawC?parseFloat(rawC.sm_rev||0):0; grandCY.sm_cnt+=rawC?parseInt(rawC.sm_cnt||0):0;
+      grandCY.nsm_rev+=rawC?parseFloat(rawC.nsm_rev||0):0; grandCY.nsm_cnt+=rawC?parseInt(rawC.nsm_cnt||0):0;
       var rowBg=si%2?'#fff':'#F9FAFB';
 
       // SS row
