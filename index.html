@@ -1423,8 +1423,9 @@ function buildSMReport(){
   // Build ssMap with SM/NSM split
   var smMap = {};
   D.forEach(function(r){
-    var ss = r.SUBSTATION||'Unknown';
-    var div2 = (SUB_DIVISION_MAP&&SUB_DIVISION_MAP[ss])==='eudd2'?'233512':'233511';
+    var ss = String(r.SUBSTATION||'').replace(/_[0-9]+$/, '').trim() || 'Unknown';
+    var ssRaw = r.SUBSTATION||'';
+    var div2 = (SUB_DIVISION_MAP&&SUB_DIVISION_MAP[ssRaw])==='eudd2'?'233512':(ssRaw.indexOf('20201')>=0||ssRaw.indexOf('20202')>=0?'233512':'233511');
     // Skip invalid SS
     if(!ss||ss==='Unknown'||ss==='N'||ss==='NA'||/^[0-9]+$/.test(ss)||ss.match(/^[0-9]{6,}/)) return;
     if(!smMap[ss]) smMap[ss]={div:div2,
@@ -1432,22 +1433,25 @@ function buildSMReport(){
       sm: {billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0},
       nsm:{billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0}
     };
-    var ca  = Math.max(0,parseFloat(r.CA||0)||0);
-    var lp  = Math.max(0,parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);
+    var lp  = Math.max(0, parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
+    var ca  = Math.max(0, parseFloat(r.CA||0)||0);
+    var lpAmt = Math.max(0, parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);
     var lpDate = r.LAST_PAY_DATE||r.PAY_DATE||'';
     var basis  = String(r.BILL_BASIS||'').trim().toUpperCase();
     var isBilled   = r.SOURCE==='billed';
+    var isUnbilled = r.SOURCE==='unbilled' || r.SOURCE==='master';
     var isMU   = basis==='MU';
     var isProv = basis==='PROV';
-    var pdObj = parseDate(lpDate);
-    var paidCurMonth = pdObj&&pdObj.getFullYear()===dataDate.getFullYear()&&pdObj.getMonth()===dataDate.getMonth();
-    var isToday = pdObj&&pdObj.getDate()===dataDate.getDate()&&pdObj.getMonth()===dataDate.getMonth()&&pdObj.getFullYear()===dataDate.getFullYear();
+    var pdObj  = parseDate(lpDate);
+    var paidCurMonth = pdObj && pdObj.getFullYear()===dataDate.getFullYear() && pdObj.getMonth()===dataDate.getMonth();
+    var isToday = pdObj && pdObj.getDate()===dataDate.getDate() && pdObj.getMonth()===dataDate.getMonth() && pdObj.getFullYear()===dataDate.getFullYear();
 
-    // SM detection
+    // SM detection - same as buildProgressReport
     var serial = String(r.METER_SERIAL_NBR||r.SERIAL_NBR||r.MTR_SRL_NO||'').trim().toUpperCase().replace(/^'/,'');
-    var mrSrc3=''; if(window._smLookup) mrSrc3=(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
-    var isSM = serial.startsWith('GE')||mrSrc3==='SM';
-    var tariff3 = String(r.CATEGORY||r.SUPPLY_TYPE||r.TARIFF_TYPE||'').toUpperCase();
+    var mrSrc3 = ''; if(window._smLookup) mrSrc3=(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
+    var isSM   = serial.startsWith('GE') || mrSrc3==='SM';
+    var tariff3 = String(r.CATEGORY||r.TARIFF_TYPE||'').trim();
+    if(!tariff3||!/^(LMV|HV|EHV)/i.test(tariff3)) tariff3 = stToTariff ? (stToTariff(r.SUPPLY_TYPE)||'OTHER') : 'OTHER';
     var isLMV3b = tariff3==='LMV3';
 
     var obj = smMap[ss];
@@ -1461,8 +1465,8 @@ function buildSMReport(){
     if(isBilled&&isMU){ tgt.muCnt++; tot.muCnt++; }
     if(isBilled&&isProv){ tgt.provCnt++; tot.provCnt++; }
     if(isBilled){ tgt.currAsst+=ca; tot.currAsst+=ca; }
-    if(paidCurMonth&&lp>0){ tgt.uptoRev+=lp; tot.uptoRev+=lp; tgt.uptoPaid++; tot.uptoPaid++; }
-    if(isToday&&lp>0){ tgt.todayRev+=lp; tot.todayRev+=lp; tgt.todayPaid++; tot.todayPaid++; }
+    if(paidCurMonth&&lpAmt>0){ tgt.uptoRev+=lpAmt; tot.uptoRev+=lpAmt; tgt.uptoPaid++; tot.uptoPaid++; }
+    if(isToday&&lpAmt>0){ tgt.todayRev+=lpAmt; tot.todayRev+=lpAmt; tgt.todayPaid++; tot.todayPaid++; }
   });
 
   var ssList2 = Object.keys(smMap).sort();
