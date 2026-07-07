@@ -1190,6 +1190,8 @@ function buildProgressReport(){
     if(isToday && lp > 0){
       f.todayRev  += lp; t.todayRev  += lp;
       f.todayPaid++;     t.todayPaid++;
+      if(isSM){ t.smTodayRev+=lp; t.smTodayPaid++; }
+      else     { t.nsmTodayRev+=lp; t.nsmTodayPaid++; }
     }
   });
 
