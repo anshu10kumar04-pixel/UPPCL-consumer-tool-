@@ -1165,8 +1165,17 @@ function buildProgressReport(){
     // CURR. ASST. = CA of billed consumers (in Rs)
     if(isBilled){ f.currAsst += ca; t.currAsst += ca; }
     // SM / Non-SM accumulation in tots
-    if(isSM){ t.smBillable++; if(isBilled){t.smBilled++;} if(isBilled&&isMU)t.smMuCnt++; }
-    else     { t.nsmBillable++; if(isBilled){t.nsmBilled++;} if(isBilled&&isMU)t.nsmMuCnt++; }
+    if(isSM){
+      t.smBillable++;
+      if(!isLMV3) t.smMeterBillable=(t.smMeterBillable||0)+1;
+      if(isBilled){t.smBilled++;}
+      if(isBilled&&isMU)t.smMuCnt++;
+    } else {
+      t.nsmBillable++;
+      if(!isLMV3) t.nsmMeterBillable=(t.nsmMeterBillable||0)+1;
+      if(isBilled){t.nsmBilled++;}
+      if(isBilled&&isMU)t.nsmMuCnt++;
+    }
     // SM Revenue accumulation
     if(isSM){ t.smCurrAsst += isBilled?ca:0; }
     else     { t.nsmCurrAsst += isBilled?ca:0; }
@@ -1196,6 +1205,7 @@ function buildProgressReport(){
 
   // ─── Build HTML ─────────────────────────────────────────────────────────
   // Top 16 SS by billable consumers
+  window._prSSMap = ssMap; window._prDataDate = dataDate; // Share with SM report
   var ssList = Object.keys(ssMap).sort(function(a,b){return ssMap[b].tots.billable-ssMap[a].tots.billable;}).slice(0,16);
   var grand = {billable:0,billed:0,unbilled:0,meterBillable:0,muCnt:0,provCnt:0,currAsst:0,uptoRev:0,todayRev:0,todayPaid:0,uptoPaid:0,smBillable:0,smBilled:0,smMuCnt:0,smCurrAsst:0,smTodayRev:0,smUptoRev:0,smTodayPaid:0,smUptoPaid:0,nsmBillable:0,nsmBilled:0,nsmMuCnt:0,nsmCurrAsst:0,nsmTodayRev:0,nsmUptoRev:0,nsmTodayPaid:0,nsmUptoPaid:0};
   ssList.forEach(function(ss){
@@ -1418,64 +1428,54 @@ function buildSMReport(){
   }catch(e){}
   var smDateStr = dataDate.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 
-  // Build ssMap with SM/NSM split
+  // Use ssMap from buildProgressReport (same data, no recalculation)
   var smMap = {};
-  D.forEach(function(r){
-    var ss = String(r.SUBSTATION||'').trim() || 'Unknown';
+  var srcMap = window._prSSMap || {};
+  Object.keys(srcMap).forEach(function(ss){
+    var t = srcMap[ss].tots;
     var div2 = (SUB_DIVISION_MAP&&SUB_DIVISION_MAP[ss])==='eudd2'?'233512':'233511';
-    // Skip invalid SS
-    if(!ss||ss==='Unknown'||ss==='N'||ss==='NA'||/^[0-9]+$/.test(ss)||ss.match(/^[0-9]{6,}/)) return;
-    if(!smMap[ss]) smMap[ss]={div:div2,
-      tot:{billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0},
-      sm: {billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0},
-      nsm:{billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0}
+    smMap[ss] = {
+      div: div2,
+      tot: {
+        billable:t.billable, meterBillable:t.meterBillable, billed:t.billed,
+        muCnt:t.muCnt, provCnt:t.provCnt, currAsst:t.currAsst,
+        todayRev:t.todayRev, uptoRev:t.uptoRev, todayPaid:t.todayPaid, uptoPaid:t.uptoPaid,
+        smBillable:t.smBillable||0, smMeterBillable:t.smMeterBillable||t.smBillable||0,
+        smBilled:t.smBilled||0, smMuCnt:t.smMuCnt||0, smProvCnt:t.smProvCnt||0,
+        smCurrAsst:t.smCurrAsst||0, smTodayRev:t.smTodayRev||0, smUptoRev:t.smUptoRev||0,
+        smTodayPaid:t.smTodayPaid||0, smUptoPaid:t.smUptoPaid||0,
+        nsmBillable:t.nsmBillable||0, nsmMeterBillable:t.nsmMeterBillable||t.nsmBillable||0,
+        nsmBilled:t.nsmBilled||0, nsmMuCnt:t.nsmMuCnt||0, nsmProvCnt:t.nsmProvCnt||0,
+        nsmCurrAsst:t.nsmCurrAsst||0, nsmTodayRev:t.nsmTodayRev||0, nsmUptoRev:t.nsmUptoRev||0,
+        nsmTodayPaid:t.nsmTodayPaid||0, nsmUptoPaid:t.nsmUptoPaid||0
+      },
+      sm:  {billable:t.smBillable||0, meterBillable:t.smBillable||0, billed:t.smBilled||0,
+             muCnt:t.smMuCnt||0, provCnt:0, currAsst:t.smCurrAsst||0,
+             todayRev:t.smTodayRev||0, uptoRev:t.smUptoRev||0, todayPaid:t.smTodayPaid||0, uptoPaid:t.smUptoPaid||0},
+      nsm: {billable:t.nsmBillable||0, meterBillable:t.nsmBillable||0, billed:t.nsmBilled||0,
+             muCnt:t.nsmMuCnt||0, provCnt:0, currAsst:t.nsmCurrAsst||0,
+             todayRev:t.nsmTodayRev||0, uptoRev:t.nsmUptoRev||0, todayPaid:t.nsmTodayPaid||0, uptoPaid:t.nsmUptoPaid||0}
     };
-    var lp  = Math.max(0, parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
-    var ca  = Math.max(0, parseFloat(r.CA||0)||0);
-    var lpAmt = Math.max(0, parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);
-    var lpDate = r.LAST_PAY_DATE||r.PAY_DATE||'';
-    var basis  = String(r.BILL_BASIS||'').trim().toUpperCase();
-    var isBilled   = r.SOURCE==='billed';
-    var isUnbilled = r.SOURCE==='unbilled' || r.SOURCE==='master';
-    var isMU   = basis==='MU';
-    var isProv = basis==='PROV';
-    var pdObj  = parseDate(lpDate);
-    var paidCurMonth = pdObj && pdObj.getFullYear()===dataDate.getFullYear() && pdObj.getMonth()===dataDate.getMonth();
-    var isToday = pdObj && pdObj.getDate()===dataDate.getDate() && pdObj.getMonth()===dataDate.getMonth() && pdObj.getFullYear()===dataDate.getFullYear();
-
-    // SM detection - same as buildProgressReport
-    var serial = String(r.METER_SERIAL_NBR||r.SERIAL_NBR||r.MTR_SRL_NO||'').trim().toUpperCase().replace(/^'/,'');
-    var mrSrc3 = ''; if(window._smLookup) mrSrc3=(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
-    var isSM   = serial.startsWith('GE') || mrSrc3==='SM';
-    var tariff3 = String(r.CATEGORY||r.TARIFF_TYPE||'').trim();
-    if(!tariff3||!/^(LMV|HV|EHV)/i.test(tariff3)) tariff3 = stToTariff ? (stToTariff(r.SUPPLY_TYPE)||'OTHER') : 'OTHER';
-    var isLMV3b = tariff3==='LMV3';
-
-    var obj = smMap[ss];
-    var tgt = isSM ? obj.sm : obj.nsm;
-    var tot = obj.tot;
-
-    // Billable
-    tgt.billable++; tot.billable++;
-    if(!isLMV3b){ tgt.meterBillable++; tot.meterBillable++; }
-    if(isBilled){ tgt.billed++; tot.billed++; }
-    if(isBilled&&isMU){ tgt.muCnt++; tot.muCnt++; }
-    if(isBilled&&isProv){ tgt.provCnt++; tot.provCnt++; }
-    if(isBilled){ tgt.currAsst+=ca; tot.currAsst+=ca; }
-    if(paidCurMonth&&lpAmt>0){ tgt.uptoRev+=lpAmt; tot.uptoRev+=lpAmt; tgt.uptoPaid++; tot.uptoPaid++; }
-    if(isToday&&lpAmt>0){ tgt.todayRev+=lpAmt; tot.todayRev+=lpAmt; tgt.todayPaid++; tot.todayPaid++; }
   });
-
-  var ssList2 = Object.keys(smMap).sort();
+    var ssList2 = Object.keys(smMap).sort();
   var grand={billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
   var gSM={billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
   var gNSM={billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
 
   ssList2.forEach(function(ss){
     var o=smMap[ss];
-    ['billable','meterBillable','billed','muCnt','provCnt','currAsst','todayRev','uptoRev','todayPaid','uptoPaid'].forEach(function(k){
-      grand[k]+=o.tot[k]||0; gSM[k]+=o.sm[k]||0; gNSM[k]+=o.nsm[k]||0;
-    });
+    grand.billable+=o.tot.billable||0; grand.meterBillable+=o.tot.meterBillable||0;
+    grand.billed+=o.tot.billed||0; grand.muCnt+=o.tot.muCnt||0; grand.provCnt+=o.tot.provCnt||0;
+    grand.currAsst+=o.tot.currAsst||0; grand.todayRev+=o.tot.todayRev||0;
+    grand.uptoRev+=o.tot.uptoRev||0; grand.todayPaid+=o.tot.todayPaid||0; grand.uptoPaid+=o.tot.uptoPaid||0;
+    gSM.billable+=o.sm.billable||0; gSM.meterBillable+=o.sm.meterBillable||0;
+    gSM.billed+=o.sm.billed||0; gSM.muCnt+=o.sm.muCnt||0;
+    gSM.currAsst+=o.sm.currAsst||0; gSM.todayRev+=o.sm.todayRev||0;
+    gSM.uptoRev+=o.sm.uptoRev||0; gSM.todayPaid+=o.sm.todayPaid||0; gSM.uptoPaid+=o.sm.uptoPaid||0;
+    gNSM.billable+=o.nsm.billable||0; gNSM.meterBillable+=o.nsm.meterBillable||0;
+    gNSM.billed+=o.nsm.billed||0; gNSM.muCnt+=o.nsm.muCnt||0;
+    gNSM.currAsst+=o.nsm.currAsst||0; gNSM.todayRev+=o.nsm.todayRev||0;
+    gNSM.uptoRev+=o.nsm.uptoRev||0; gNSM.todayPaid+=o.nsm.todayPaid||0; gNSM.uptoPaid+=o.nsm.uptoPaid||0;
   });
 
   function cr3(n){n=n||0;if(n===0)return '0';var a=Math.abs(n);if(a>=10000000)return (n/10000000).toFixed(2)+' Cr';if(a>=100000)return (n/100000).toFixed(2)+' L';return '\u20B9'+Math.round(n).toLocaleString();}
