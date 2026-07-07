@@ -1485,22 +1485,12 @@ function buildSMReport(){
   h2+='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
 
   // Header
-  var thS='padding:8px 8px;border:1px solid #374151;text-align:center;font-size:10px;letter-spacing:0.8px;text-transform:uppercase;white-space:nowrap;background:#0F4C81;color:#fff;';
-  var thS2='padding:7px 8px;border:1px solid #374151;text-align:center;font-size:10px;letter-spacing:0.5px;white-space:nowrap;background:#0F4C81;color:#93C5FD;';
-  h2+='<thead>';
-  h2+='<tr>';
-  h2+='<th style="'+thS+'" rowspan="2">DIV</th>';
-  h2+='<th style="'+thS+';text-align:left;min-width:150px;" rowspan="2">SUBSTATION</th>';
-  h2+='<th style="'+thS+'" colspan="2">CONSUMERS</th>';
-  h2+='<th style="'+thS+'" colspan="3">BILLING</th>';
-  h2+='<th style="'+thS+'" colspan="3">METERING</th>';
-  h2+='<th style="'+thS+'" rowspan="2">CURR.<br>ASST.</th>';
-  h2+='<th style="'+thS+'" colspan="2">TODAY</th>';
-  h2+='<th style="'+thS+'" colspan="2">UPTO DATE</th>';
-  h2+='<th style="'+thS+'" colspan="2">EFFICIENCY</th>';
-  h2+='</tr><tr>';
-  ['BILLABLE','BILLED','% BILLED','EX.PROV','MU CNT','% MU','GAP','REV','PAID','REV','PAID','% COLL','TURN UP%'].forEach(function(c){
-    h2+='<th style="'+thS2+'">'+c+'</th>';
+  var smCols=['DIV','SUBSTATION','BILLABLE CONS','METER BILLABLE','BILLED','% Billed','% Billed (Excpt Prov)','MU CNT','% MU','GAP (Billed & MU)','CURR. ASST.','TODAY REVENUE','Upto REVENUE','TODAY Paid Cnt','Upto Paid Cnt','% Coll. effic.','Turn Up%'];
+  var smColW=['40px','150px','60px','60px','60px','55px','70px','60px','55px','70px','80px','90px','90px','80px','80px','65px','65px'];
+  h2+='<thead><tr>';
+  smCols.forEach(function(c,i){
+    var isRed=(c==='TODAY REVENUE'||c==='TODAY Paid Cnt');
+    h2+='<th style="padding:5px 6px;border:1px solid #374151;font-family:var(--fh);font-size:10px;font-weight:700;letter-spacing:0.5px;white-space:nowrap;background:#0F4C81;color:'+(isRed?'#FCA5A5':'#93C5FD')+';text-align:'+(c==='SUBSTATION'?'left':'center')+';min-width:'+smColW[i]+';">'+c+'</th>';
   });
   h2+='</tr></thead><tbody>';
 
