@@ -1425,10 +1425,12 @@ function buildSMReport(){
   D.forEach(function(r){
     var ss = r.SUBSTATION||'Unknown';
     var div2 = (SUB_DIVISION_MAP&&SUB_DIVISION_MAP[ss])==='eudd2'?'233512':'233511';
+    // Skip invalid SS
+    if(!ss||ss==='Unknown'||ss==='N'||ss==='NA'||/^[0-9]+$/.test(ss)||ss.match(/^[0-9]{6,}/)) return;
     if(!smMap[ss]) smMap[ss]={div:div2,
-      tot:{billable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0},
-      sm: {billable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0},
-      nsm:{billable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0}
+      tot:{billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0},
+      sm: {billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0},
+      nsm:{billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0}
     };
     var ca  = Math.max(0,parseFloat(r.CA||0)||0);
     var lp  = Math.max(0,parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);
@@ -1445,6 +1447,8 @@ function buildSMReport(){
     var serial = String(r.METER_SERIAL_NBR||r.SERIAL_NBR||r.MTR_SRL_NO||'').trim().toUpperCase().replace(/^'/,'');
     var mrSrc3=''; if(window._smLookup) mrSrc3=(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
     var isSM = serial.startsWith('GE')||mrSrc3==='SM';
+    var tariff3 = String(r.CATEGORY||r.SUPPLY_TYPE||r.TARIFF_TYPE||'').toUpperCase();
+    var isLMV3b = tariff3==='LMV3';
 
     var obj = smMap[ss];
     var tgt = isSM ? obj.sm : obj.nsm;
@@ -1452,6 +1456,7 @@ function buildSMReport(){
 
     // Billable
     tgt.billable++; tot.billable++;
+    if(!isLMV3b){ tgt.meterBillable++; tot.meterBillable++; }
     if(isBilled){ tgt.billed++; tot.billed++; }
     if(isBilled&&isMU){ tgt.muCnt++; tot.muCnt++; }
     if(isBilled&&isProv){ tgt.provCnt++; tot.provCnt++; }
@@ -1461,14 +1466,14 @@ function buildSMReport(){
   });
 
   var ssList2 = Object.keys(smMap).sort();
-  var grand={billable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
-  var gSM={billable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
-  var gNSM={billable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
+  var grand={billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
+  var gSM={billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
+  var gNSM={billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
 
   ssList2.forEach(function(ss){
     var o=smMap[ss];
-    ['billable','billed','muCnt','provCnt','currAsst','todayRev','uptoRev','todayPaid','uptoPaid'].forEach(function(k){
-      grand[k]+=o.tot[k]; gSM[k]+=o.sm[k]; gNSM[k]+=o.nsm[k];
+    ['billable','meterBillable','billed','muCnt','provCnt','currAsst','todayRev','uptoRev','todayPaid','uptoPaid'].forEach(function(k){
+      grand[k]+=o.tot[k]||0; gSM[k]+=o.sm[k]||0; gNSM[k]+=o.nsm[k]||0;
     });
   });
 
@@ -1508,9 +1513,10 @@ function buildSMReport(){
     h2+='<span onclick="toggleSMRow('+si+')" id="smr-btn-'+si+'" style="cursor:pointer;color:#1D4ED8;font-weight:700;margin-right:4px;display:inline-block;width:16px;">&#10133;</span>'+ss;
     h2+='</td>';
     h2+=ntd(t.billable.toLocaleString('en-IN'));
+    h2+=ntd(t.meterBillable.toLocaleString('en-IN'));
     h2+=ntd(t.billed.toLocaleString('en-IN'));
-    h2+=ntd(pc2(t.billed,t.billable),'color:#64748B;');
-    h2+=ntd(pc2(t.billed-t.provCnt,t.billable),'color:#64748B;');
+    h2+=ntd(pc2(t.billed,t.meterBillable),'color:#64748B;');
+    h2+=ntd(pc2(t.billed-t.provCnt,t.meterBillable),'color:#64748B;');
     h2+=ntd(t.muCnt.toLocaleString('en-IN'));
     h2+=ntd(pc2(t.muCnt,t.billed),'color:#64748B;');
     h2+=ntd(gap>0?gap:0);
@@ -1528,9 +1534,10 @@ function buildSMReport(){
     h2+='<td style="padding:4px 7px;border:1px solid #BFDBFE;"></td>';
     h2+='<td style="padding:4px 7px 4px 24px;border:1px solid #BFDBFE;font-size:11px;font-weight:700;color:#1D4ED8;">&#9889; SM (Smart Meter)</td>';
     h2+=ntd(sm.billable.toLocaleString('en-IN'),'border:1px solid #BFDBFE;font-size:11px;');
+    h2+=ntd(sm.meterBillable.toLocaleString('en-IN'),'border:1px solid #BFDBFE;font-size:11px;');
     h2+=ntd(sm.billed.toLocaleString('en-IN'),'border:1px solid #BFDBFE;font-size:11px;');
-    h2+=ntd(pc2(sm.billed,sm.billable),'border:1px solid #BFDBFE;font-size:11px;color:#64748B;');
-    h2+=ntd(pc2(sm.billed-sm.provCnt,sm.billable),'border:1px solid #BFDBFE;font-size:11px;color:#64748B;');
+    h2+=ntd(pc2(sm.billed,sm.meterBillable),'border:1px solid #BFDBFE;font-size:11px;color:#64748B;');
+    h2+=ntd(pc2(sm.billed-sm.provCnt,sm.meterBillable),'border:1px solid #BFDBFE;font-size:11px;color:#64748B;');
     h2+=ntd(sm.muCnt.toLocaleString('en-IN'),'border:1px solid #BFDBFE;font-size:11px;');
     h2+=ntd(pc2(sm.muCnt,sm.billed),'border:1px solid #BFDBFE;font-size:11px;color:#64748B;');
     h2+=ntd(smGap>0?smGap:0,'border:1px solid #BFDBFE;font-size:11px;');
@@ -1548,9 +1555,10 @@ function buildSMReport(){
     h2+='<td style="padding:4px 7px;border:1px solid #FED7AA;"></td>';
     h2+='<td style="padding:4px 7px 4px 24px;border:1px solid #FED7AA;font-size:11px;font-weight:700;color:#C2410C;">&#128202; Non-SM</td>';
     h2+=ntd(nsm.billable.toLocaleString('en-IN'),'border:1px solid #FED7AA;font-size:11px;');
+    h2+=ntd(nsm.meterBillable.toLocaleString('en-IN'),'border:1px solid #FED7AA;font-size:11px;');
     h2+=ntd(nsm.billed.toLocaleString('en-IN'),'border:1px solid #FED7AA;font-size:11px;');
-    h2+=ntd(pc2(nsm.billed,nsm.billable),'border:1px solid #FED7AA;font-size:11px;color:#64748B;');
-    h2+=ntd(pc2(nsm.billed-nsm.provCnt,nsm.billable),'border:1px solid #FED7AA;font-size:11px;color:#64748B;');
+    h2+=ntd(pc2(nsm.billed,nsm.meterBillable),'border:1px solid #FED7AA;font-size:11px;color:#64748B;');
+    h2+=ntd(pc2(nsm.billed-nsm.provCnt,nsm.meterBillable),'border:1px solid #FED7AA;font-size:11px;color:#64748B;');
     h2+=ntd(nsm.muCnt.toLocaleString('en-IN'),'border:1px solid #FED7AA;font-size:11px;');
     h2+=ntd(pc2(nsm.muCnt,nsm.billed),'border:1px solid #FED7AA;font-size:11px;color:#64748B;');
     h2+=ntd(nsmGap>0?nsmGap:0,'border:1px solid #FED7AA;font-size:11px;');
@@ -1569,9 +1577,10 @@ function buildSMReport(){
   h2+='<tr style="background:#1E3A5F;color:#fff;font-weight:700;">';
   h2+='<td colspan="2" style="padding:7px 14px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+grand.billable.toLocaleString('en-IN')+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+grand.meterBillable.toLocaleString('en-IN')+'</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+grand.billed.toLocaleString('en-IN')+'</td>';
-  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+pc2(grand.billed,grand.billable)+'</td>';
-  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+pc2(grand.billed-grand.provCnt,grand.billable)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+pc2(grand.billed,grand.meterBillable)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+pc2(grand.billed-grand.provCnt,grand.meterBillable)+'</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+grand.muCnt.toLocaleString('en-IN')+'</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+pc2(grand.muCnt,grand.billed)+'</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+(gg>0?gg:0)+'</td>';
