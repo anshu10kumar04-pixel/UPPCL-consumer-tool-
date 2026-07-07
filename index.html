@@ -1450,11 +1450,11 @@ function buildSMReport(){
         nsmCurrAsst:t.nsmCurrAsst||0, nsmTodayRev:t.nsmTodayRev||0, nsmUptoRev:t.nsmUptoRev||0,
         nsmTodayPaid:t.nsmTodayPaid||0, nsmUptoPaid:t.nsmUptoPaid||0
       },
-      sm:  {billable:t.smBillable||0, meterBillable:t.smBillable||0, billed:t.smBilled||0,
-             muCnt:t.smMuCnt||0, provCnt:0, currAsst:t.smCurrAsst||0,
+      sm:  {billable:t.smBillable||0, meterBillable:t.smMeterBillable||t.smBillable||0, billed:t.smBilled||0,
+             muCnt:t.smMuCnt||0, provCnt:t.smProvCnt||0, currAsst:t.smCurrAsst||0,
              todayRev:t.smTodayRev||0, uptoRev:t.smUptoRev||0, todayPaid:t.smTodayPaid||0, uptoPaid:t.smUptoPaid||0},
-      nsm: {billable:t.nsmBillable||0, meterBillable:t.nsmBillable||0, billed:t.nsmBilled||0,
-             muCnt:t.nsmMuCnt||0, provCnt:0, currAsst:t.nsmCurrAsst||0,
+      nsm: {billable:t.nsmBillable||0, meterBillable:t.nsmMeterBillable||t.nsmBillable||0, billed:t.nsmBilled||0,
+             muCnt:t.nsmMuCnt||0, provCnt:t.nsmProvCnt||0, currAsst:t.nsmCurrAsst||0,
              todayRev:t.nsmTodayRev||0, uptoRev:t.nsmUptoRev||0, todayPaid:t.nsmTodayPaid||0, uptoPaid:t.nsmUptoPaid||0}
     };
   });
@@ -1600,9 +1600,10 @@ function buildSMReport(){
   h2+='<td style="padding:6px 7px;border:1px solid #166534;"></td>';
   h2+='<td style="padding:6px 14px;border:1px solid #166534;font-size:11px;">&#8627; &#9889; Total SM</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+gSM.billable.toLocaleString('en-IN')+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+gSM.meterBillable.toLocaleString('en-IN')+'</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+gSM.billed.toLocaleString('en-IN')+'</td>';
-  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+pc2(gSM.billed,gSM.billable)+'</td>';
-  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+pc2(gSM.billed-gSM.provCnt,gSM.billable)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+pc2(gSM.billed,gSM.meterBillable)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+pc2(gSM.billed-gSM.provCnt,gSM.meterBillable)+'</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+gSM.muCnt.toLocaleString('en-IN')+'</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+pc2(gSM.muCnt,gSM.billed)+'</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+(gsg>0?gsg:0)+'</td>';
@@ -1620,9 +1621,10 @@ function buildSMReport(){
   h2+='<td style="padding:6px 7px;border:1px solid #92400E;"></td>';
   h2+='<td style="padding:6px 14px;border:1px solid #92400E;font-size:11px;">&#8627; &#128202; Total Non-SM</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+gNSM.billable.toLocaleString('en-IN')+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+gNSM.meterBillable.toLocaleString('en-IN')+'</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+gNSM.billed.toLocaleString('en-IN')+'</td>';
-  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+pc2(gNSM.billed,gNSM.billable)+'</td>';
-  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+pc2(gNSM.billed-gNSM.provCnt,gNSM.billable)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+pc2(gNSM.billed,gNSM.meterBillable)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+pc2(gNSM.billed-gNSM.provCnt,gNSM.meterBillable)+'</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+gNSM.muCnt.toLocaleString('en-IN')+'</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+pc2(gNSM.muCnt,gNSM.billed)+'</td>';
   h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+(gng>0?gng:0)+'</td>';
