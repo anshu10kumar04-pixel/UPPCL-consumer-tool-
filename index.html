@@ -1392,10 +1392,260 @@ function buildProgressReport(){
   h += '</div>';
 
   el.innerHTML = h;
+  // Build SM/NonSM report section below
+  buildSMReport();
   // Auto-load YoY if prev year data already cached
   if(PY_LOADED) setTimeout(buildYoYReport, 100);
 }
 
+
+
+function buildSMReport(){
+  var el = gel('panel-progress');
+  if(!el || !D.length) return;
+
+  // Get dataDate same as buildProgressReport
+  var today = new Date();
+  var dataDate = today;
+  try{
+    var ss2 = window._manifestData||{};
+    var bd = (ss2.sync_status||{});
+    var dstr = Object.values(bd).map(function(v){return v.billed_date||'';}).filter(Boolean)[0];
+    if(dstr){
+      var p=dstr.split('-'); if(p.length===3){
+        var months={JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+        var d=parseInt(p[0]),m=months[p[1].toUpperCase()],y=parseInt(p[2]);
+        if(!isNaN(d)&&m!==undefined&&!isNaN(y)) dataDate=new Date(y,m,d);
+      }
+    }
+  }catch(e){}
+
+  // Build ssMap with SM/NSM split
+  var smMap = {};
+  D.forEach(function(r){
+    var ss = r.SUBSTATION||'Unknown';
+    var div2 = (SUB_DIVISION_MAP&&SUB_DIVISION_MAP[ss])==='eudd2'?'233512':'233511';
+    if(!smMap[ss]) smMap[ss]={div:div2,
+      tot:{billable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0},
+      sm: {billable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0},
+      nsm:{billable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0}
+    };
+    var ca  = Math.max(0,parseFloat(r.CA||0)||0);
+    var lp  = Math.max(0,parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);
+    var lpDate = r.LAST_PAY_DATE||r.PAY_DATE||'';
+    var basis  = String(r.BILL_BASIS||'').trim().toUpperCase();
+    var isBilled   = r.SOURCE==='billed';
+    var isMU   = basis==='MU';
+    var isProv = basis==='PROV';
+    var pdObj = parseDate(lpDate);
+    var paidCurMonth = pdObj&&pdObj.getFullYear()===dataDate.getFullYear()&&pdObj.getMonth()===dataDate.getMonth();
+    var isToday = pdObj&&pdObj.getDate()===dataDate.getDate()&&pdObj.getMonth()===dataDate.getMonth()&&pdObj.getFullYear()===dataDate.getFullYear();
+
+    // SM detection
+    var serial = String(r.METER_SERIAL_NBR||r.SERIAL_NBR||r.MTR_SRL_NO||'').trim().toUpperCase().replace(/^'/,'');
+    var mrSrc3=''; if(window._smLookup) mrSrc3=(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
+    var isSM = serial.startsWith('GE')||mrSrc3==='SM';
+
+    var obj = smMap[ss];
+    var tgt = isSM ? obj.sm : obj.nsm;
+    var tot = obj.tot;
+
+    // Billable
+    tgt.billable++; tot.billable++;
+    if(isBilled){ tgt.billed++; tot.billed++; }
+    if(isBilled&&isMU){ tgt.muCnt++; tot.muCnt++; }
+    if(isBilled&&isProv){ tgt.provCnt++; tot.provCnt++; }
+    if(isBilled){ tgt.currAsst+=ca; tot.currAsst+=ca; }
+    if(paidCurMonth&&lp>0){ tgt.uptoRev+=lp; tot.uptoRev+=lp; tgt.uptoPaid++; tot.uptoPaid++; }
+    if(isToday&&lp>0){ tgt.todayRev+=lp; tot.todayRev+=lp; tgt.todayPaid++; tot.todayPaid++; }
+  });
+
+  var ssList2 = Object.keys(smMap).sort();
+  var grand={billable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
+  var gSM={billable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
+  var gNSM={billable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
+
+  ssList2.forEach(function(ss){
+    var o=smMap[ss];
+    ['billable','billed','muCnt','provCnt','currAsst','todayRev','uptoRev','todayPaid','uptoPaid'].forEach(function(k){
+      grand[k]+=o.tot[k]; gSM[k]+=o.sm[k]; gNSM[k]+=o.nsm[k];
+    });
+  });
+
+  function cr3(n){n=n||0;if(n===0)return '0';var a=Math.abs(n);if(a>=10000000)return (n/10000000).toFixed(2)+' Cr';if(a>=100000)return (n/100000).toFixed(2)+' L';return '\u20B9'+Math.round(n).toLocaleString();}
+  function pc2(a,b){return b>0?(a/b*100).toFixed(1)+'%':'—';}
+  function ntd(v,c){return '<td style="padding:5px 7px;border:1px solid #E5E7EB;text-align:right;'+(c||'')+'">'+(v||'0')+'</td>';}
+
+  var h2='';
+  h2+='<div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;margin-top:16px;">';
+  h2+='<div style="background:#0F4C81;color:#fff;padding:11px 16px;display:flex;justify-content:space-between;align-items:center;">';
+  h2+='<div style="font-family:var(--fh);font-weight:700;font-size:13px;">⚡ SM / Non-SM WISE BILLING & COLLECTION SUMMARY &nbsp;<span style="color:#93C5FD;font-size:11px;">(Amt in Lacs)</span></div>';
+  h2+='<span style="font-size:11px;opacity:0.8;">upto <b style="background:#3B82F6;padding:2px 8px;border-radius:4px;">'+dataDate.getDate().toString().padStart(2,'0')+' '+ ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dataDate.getMonth()]+' '+dataDate.getFullYear()+'</b></span>';
+  h2+='</div>';
+  h2+='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+
+  // Header
+  var thS='padding:8px 8px;border:1px solid #374151;text-align:center;font-size:10px;letter-spacing:0.8px;text-transform:uppercase;white-space:nowrap;background:#0F4C81;color:#fff;';
+  var thS2='padding:7px 8px;border:1px solid #374151;text-align:center;font-size:10px;letter-spacing:0.5px;white-space:nowrap;background:#0F4C81;color:#93C5FD;';
+  h2+='<thead>';
+  h2+='<tr>';
+  h2+='<th style="'+thS+'" rowspan="2">DIV</th>';
+  h2+='<th style="'+thS+';text-align:left;min-width:150px;" rowspan="2">SUBSTATION</th>';
+  h2+='<th style="'+thS+'" colspan="2">CONSUMERS</th>';
+  h2+='<th style="'+thS+'" colspan="3">BILLING</th>';
+  h2+='<th style="'+thS+'" colspan="3">METERING</th>';
+  h2+='<th style="'+thS+'" rowspan="2">CURR.<br>ASST.</th>';
+  h2+='<th style="'+thS+'" colspan="2">TODAY</th>';
+  h2+='<th style="'+thS+'" colspan="2">UPTO DATE</th>';
+  h2+='<th style="'+thS+'" colspan="2">EFFICIENCY</th>';
+  h2+='</tr><tr>';
+  ['BILLABLE','BILLED','% BILLED','EX.PROV','MU CNT','% MU','GAP','REV','PAID','REV','PAID','% COLL','TURN UP%'].forEach(function(c){
+    h2+='<th style="'+thS2+'">'+c+'</th>';
+  });
+  h2+='</tr></thead><tbody>';
+
+  // SS rows
+  ssList2.forEach(function(ss,si){
+    var o=smMap[ss];
+    var t=o.tot,sm=o.sm,nsm=o.nsm;
+    var rowBg=si%2===0?'#F9FAFB':'#fff';
+    var gap=t.billed-t.muCnt, smGap=sm.billed-sm.muCnt, nsmGap=nsm.billed-nsm.muCnt;
+
+    // SS main row
+    h2+='<tr style="background:'+rowBg+';">';
+    h2+='<td style="padding:5px 7px;border:1px solid #E5E7EB;text-align:center;font-size:11px;color:#6B7280;">'+o.div+'</td>';
+    h2+='<td style="padding:5px 7px;border:1px solid #E5E7EB;font-weight:700;color:#1E3A5F;">';
+    h2+='<span onclick="toggleSMRow('+si+')" id="smr-btn-'+si+'" style="cursor:pointer;color:#1D4ED8;font-weight:700;margin-right:4px;display:inline-block;width:16px;">&#10133;</span>'+ss;
+    h2+='</td>';
+    h2+=ntd(t.billable.toLocaleString('en-IN'));
+    h2+=ntd(t.billed.toLocaleString('en-IN'));
+    h2+=ntd(pc2(t.billed,t.billable),'color:#64748B;');
+    h2+=ntd(pc2(t.billed-t.provCnt,t.billable),'color:#64748B;');
+    h2+=ntd(t.muCnt.toLocaleString('en-IN'));
+    h2+=ntd(pc2(t.muCnt,t.billed),'color:#64748B;');
+    h2+=ntd(gap>0?gap:0);
+    h2+=ntd(cr3(t.currAsst));
+    h2+=ntd(cr3(t.todayRev),'color:#DC2626;font-weight:700;');
+    h2+=ntd(t.todayPaid,'color:#DC2626;');
+    h2+=ntd(cr3(t.uptoRev),'color:#1D4ED8;');
+    h2+=ntd(t.uptoPaid,'color:#1D4ED8;');
+    h2+=ntd(pc2(t.uptoRev,t.currAsst),'color:#059669;font-weight:600;');
+    h2+=ntd(pc2(t.uptoPaid,t.billed),'color:#64748B;');
+    h2+='</tr>';
+
+    // SM sub-row (hidden)
+    h2+='<tr class="smr-sub-'+si+'" style="display:none;background:#EFF6FF;">';
+    h2+='<td style="padding:4px 7px;border:1px solid #BFDBFE;"></td>';
+    h2+='<td style="padding:4px 7px 4px 24px;border:1px solid #BFDBFE;font-size:11px;font-weight:700;color:#1D4ED8;">&#9889; SM (Smart Meter)</td>';
+    h2+=ntd(sm.billable.toLocaleString('en-IN'),'border:1px solid #BFDBFE;font-size:11px;');
+    h2+=ntd(sm.billed.toLocaleString('en-IN'),'border:1px solid #BFDBFE;font-size:11px;');
+    h2+=ntd(pc2(sm.billed,sm.billable),'border:1px solid #BFDBFE;font-size:11px;color:#64748B;');
+    h2+=ntd(pc2(sm.billed-sm.provCnt,sm.billable),'border:1px solid #BFDBFE;font-size:11px;color:#64748B;');
+    h2+=ntd(sm.muCnt.toLocaleString('en-IN'),'border:1px solid #BFDBFE;font-size:11px;');
+    h2+=ntd(pc2(sm.muCnt,sm.billed),'border:1px solid #BFDBFE;font-size:11px;color:#64748B;');
+    h2+=ntd(smGap>0?smGap:0,'border:1px solid #BFDBFE;font-size:11px;');
+    h2+=ntd(cr3(sm.currAsst),'border:1px solid #BFDBFE;font-size:11px;');
+    h2+=ntd(cr3(sm.todayRev),'border:1px solid #BFDBFE;font-size:11px;color:#DC2626;font-weight:700;');
+    h2+=ntd(sm.todayPaid,'border:1px solid #BFDBFE;font-size:11px;color:#DC2626;');
+    h2+=ntd(cr3(sm.uptoRev),'border:1px solid #BFDBFE;font-size:11px;color:#1D4ED8;');
+    h2+=ntd(sm.uptoPaid,'border:1px solid #BFDBFE;font-size:11px;color:#1D4ED8;');
+    h2+=ntd(pc2(sm.uptoRev,sm.currAsst),'border:1px solid #BFDBFE;font-size:11px;color:#059669;');
+    h2+=ntd(pc2(sm.uptoPaid,sm.billed),'border:1px solid #BFDBFE;font-size:11px;color:#64748B;');
+    h2+='</tr>';
+
+    // NSM sub-row (hidden)
+    h2+='<tr class="smr-sub-'+si+'" style="display:none;background:#FFF7ED;">';
+    h2+='<td style="padding:4px 7px;border:1px solid #FED7AA;"></td>';
+    h2+='<td style="padding:4px 7px 4px 24px;border:1px solid #FED7AA;font-size:11px;font-weight:700;color:#C2410C;">&#128202; Non-SM</td>';
+    h2+=ntd(nsm.billable.toLocaleString('en-IN'),'border:1px solid #FED7AA;font-size:11px;');
+    h2+=ntd(nsm.billed.toLocaleString('en-IN'),'border:1px solid #FED7AA;font-size:11px;');
+    h2+=ntd(pc2(nsm.billed,nsm.billable),'border:1px solid #FED7AA;font-size:11px;color:#64748B;');
+    h2+=ntd(pc2(nsm.billed-nsm.provCnt,nsm.billable),'border:1px solid #FED7AA;font-size:11px;color:#64748B;');
+    h2+=ntd(nsm.muCnt.toLocaleString('en-IN'),'border:1px solid #FED7AA;font-size:11px;');
+    h2+=ntd(pc2(nsm.muCnt,nsm.billed),'border:1px solid #FED7AA;font-size:11px;color:#64748B;');
+    h2+=ntd(nsmGap>0?nsmGap:0,'border:1px solid #FED7AA;font-size:11px;');
+    h2+=ntd(cr3(nsm.currAsst),'border:1px solid #FED7AA;font-size:11px;');
+    h2+=ntd(cr3(nsm.todayRev),'border:1px solid #FED7AA;font-size:11px;color:#DC2626;font-weight:700;');
+    h2+=ntd(nsm.todayPaid,'border:1px solid #FED7AA;font-size:11px;color:#DC2626;');
+    h2+=ntd(cr3(nsm.uptoRev),'border:1px solid #FED7AA;font-size:11px;color:#1D4ED8;');
+    h2+=ntd(nsm.uptoPaid,'border:1px solid #FED7AA;font-size:11px;color:#1D4ED8;');
+    h2+=ntd(pc2(nsm.uptoRev,nsm.currAsst),'border:1px solid #FED7AA;font-size:11px;color:#059669;');
+    h2+=ntd(pc2(nsm.uptoPaid,nsm.billed),'border:1px solid #FED7AA;font-size:11px;color:#64748B;');
+    h2+='</tr>';
+  });
+
+  // Grand Total
+  var gg=grand.billed-grand.muCnt, gsg=gSM.billed-gSM.muCnt, gng=gNSM.billed-gNSM.muCnt;
+  h2+='<tr style="background:#1E3A5F;color:#fff;font-weight:700;">';
+  h2+='<td colspan="2" style="padding:7px 14px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+grand.billable.toLocaleString('en-IN')+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+grand.billed.toLocaleString('en-IN')+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+pc2(grand.billed,grand.billable)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+pc2(grand.billed-grand.provCnt,grand.billable)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+grand.muCnt.toLocaleString('en-IN')+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+pc2(grand.muCnt,grand.billed)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+(gg>0?gg:0)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+cr3(grand.currAsst)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;color:#FCA5A5;">'+cr3(grand.todayRev)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;color:#FCA5A5;">'+grand.todayPaid+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;color:#93C5FD;">'+cr3(grand.uptoRev)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;color:#93C5FD;">'+grand.uptoPaid+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+pc2(grand.uptoRev,grand.currAsst)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #374151;text-align:right;">'+pc2(grand.uptoPaid,grand.billed)+'</td>';
+  h2+='</tr>';
+
+  // Grand SM
+  h2+='<tr style="background:#166534;color:#fff;font-weight:700;">';
+  h2+='<td style="padding:6px 7px;border:1px solid #166534;"></td>';
+  h2+='<td style="padding:6px 14px;border:1px solid #166534;font-size:11px;">&#8627; &#9889; Total SM</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+gSM.billable.toLocaleString('en-IN')+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+gSM.billed.toLocaleString('en-IN')+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+pc2(gSM.billed,gSM.billable)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+pc2(gSM.billed-gSM.provCnt,gSM.billable)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+gSM.muCnt.toLocaleString('en-IN')+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+pc2(gSM.muCnt,gSM.billed)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+(gsg>0?gsg:0)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+cr3(gSM.currAsst)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+cr3(gSM.todayRev)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+gSM.todayPaid+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+cr3(gSM.uptoRev)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+gSM.uptoPaid+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+pc2(gSM.uptoRev,gSM.currAsst)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #166534;text-align:right;font-size:11px;">'+pc2(gSM.uptoPaid,gSM.billed)+'</td>';
+  h2+='</tr>';
+
+  // Grand NSM
+  h2+='<tr style="background:#92400E;color:#fff;font-weight:700;">';
+  h2+='<td style="padding:6px 7px;border:1px solid #92400E;"></td>';
+  h2+='<td style="padding:6px 14px;border:1px solid #92400E;font-size:11px;">&#8627; &#128202; Total Non-SM</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+gNSM.billable.toLocaleString('en-IN')+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+gNSM.billed.toLocaleString('en-IN')+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+pc2(gNSM.billed,gNSM.billable)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+pc2(gNSM.billed-gNSM.provCnt,gNSM.billable)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+gNSM.muCnt.toLocaleString('en-IN')+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+pc2(gNSM.muCnt,gNSM.billed)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+(gng>0?gng:0)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+cr3(gNSM.currAsst)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+cr3(gNSM.todayRev)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+gNSM.todayPaid+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+cr3(gNSM.uptoRev)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+gNSM.uptoPaid+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+pc2(gNSM.uptoRev,gNSM.currAsst)+'</td>';
+  h2+='<td style="padding:5px 7px;border:1px solid #92400E;text-align:right;font-size:11px;">'+pc2(gNSM.uptoPaid,gNSM.billed)+'</td>';
+  h2+='</tr>';
+
+  h2+='</tbody></table></div></div>';
+
+  el.innerHTML += h2;
+}
+
+function toggleSMRow(si){
+  var rows = document.querySelectorAll('.smr-sub-'+si);
+  var btn  = document.getElementById('smr-btn-'+si);
+  var open = rows.length && rows[0].style.display !== 'none';
+  rows.forEach(function(r){ r.style.display = open ? 'none' : ''; });
+  if(btn) btn.innerHTML = open ? '&#10133;' : '&#10134;';
+}
 
 function togglePrSM(si){
   var rows = document.querySelectorAll('.pr-sm-row-'+si);
