@@ -1408,24 +1408,21 @@ function buildSMReport(){
   var today = new Date();
   var dataDate = today;
   try{
-    var ss2 = window._manifestData||{};
-    var bd = (ss2.sync_status||{});
-    var dstr = Object.values(bd).map(function(v){return v.billed_date||'';}).filter(Boolean)[0];
-    if(dstr){
-      var p=dstr.split('-'); if(p.length===3){
-        var months={JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
-        var d=parseInt(p[0]),m=months[p[1].toUpperCase()],y=parseInt(p[2]);
-        if(!isNaN(d)&&m!==undefined&&!isNaN(y)) dataDate=new Date(y,m,d);
-      }
+    var ss2 = window._manifest_cache && window._manifest_cache.sync_status;
+    var bd2 = (ss2&&(ss2['233511']||ss2['233512']))?(ss2['233511']||ss2['233512']).billed_date:'';
+    if(bd2 && bd2.length===8){
+      var dd2=parseInt(bd2.slice(0,2)),mm2=parseInt(bd2.slice(2,4))-1,yy2=parseInt(bd2.slice(4,8));
+      var fileDate2 = new Date(yy2,mm2,dd2);
+      dataDate = new Date(fileDate2.getTime() - 86400000);
     }
   }catch(e){}
+  var smDateStr = dataDate.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 
   // Build ssMap with SM/NSM split
   var smMap = {};
   D.forEach(function(r){
-    var ss = String(r.SUBSTATION||'').replace(/_[0-9]+$/, '').trim() || 'Unknown';
-    var ssRaw = r.SUBSTATION||'';
-    var div2 = (SUB_DIVISION_MAP&&SUB_DIVISION_MAP[ssRaw])==='eudd2'?'233512':(ssRaw.indexOf('20201')>=0||ssRaw.indexOf('20202')>=0?'233512':'233511');
+    var ss = String(r.SUBSTATION||'').trim() || 'Unknown';
+    var div2 = (SUB_DIVISION_MAP&&SUB_DIVISION_MAP[ss])==='eudd2'?'233512':'233511';
     // Skip invalid SS
     if(!ss||ss==='Unknown'||ss==='N'||ss==='NA'||/^[0-9]+$/.test(ss)||ss.match(/^[0-9]{6,}/)) return;
     if(!smMap[ss]) smMap[ss]={div:div2,
@@ -1489,7 +1486,7 @@ function buildSMReport(){
   h2+='<div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;margin-top:16px;">';
   h2+='<div style="background:#0F4C81;color:#fff;padding:11px 16px;display:flex;justify-content:space-between;align-items:center;">';
   h2+='<div style="font-family:var(--fh);font-weight:700;font-size:13px;">⚡ SM / Non-SM WISE BILLING & COLLECTION SUMMARY &nbsp;<span style="color:#93C5FD;font-size:11px;">(Amt in Lacs)</span></div>';
-  h2+='<span style="font-size:11px;opacity:0.8;">upto <b style="background:#3B82F6;padding:2px 8px;border-radius:4px;">'+dataDate.getDate().toString().padStart(2,'0')+' '+ ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dataDate.getMonth()]+' '+dataDate.getFullYear()+'</b></span>';
+  h2+='<span style="font-size:11px;opacity:0.8;">upto <b style="background:#3B82F6;padding:2px 8px;border-radius:4px;">'+smDateStr+'</b></span>';
   h2+='</div>';
   h2+='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
 
