@@ -1127,7 +1127,7 @@ function buildProgressReport(){
   D.forEach(function(r){
     var ss = r.SUBSTATION||'Unknown';
     var fd = r.FEEDER||'Unknown';
-    if(!ssMap[ss]) ssMap[ss]={feeders:{}, tots:{billable:0,billed:0,unbilled:0,meterBillable:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0}};
+    if(!ssMap[ss]) ssMap[ss]={feeders:{}, tots:{billable:0,billed:0,unbilled:0,meterBillable:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0,smBillable:0,smBilled:0,smMuCnt:0,smCurrAsst:0,smTodayRev:0,smUptoRev:0,smTodayPaid:0,smUptoPaid:0,nsmBillable:0,nsmBilled:0,nsmMuCnt:0,nsmCurrAsst:0,nsmTodayRev:0,nsmUptoRev:0,nsmTodayPaid:0,nsmUptoPaid:0}};
     if(!ssMap[ss].feeders[fd]) ssMap[ss].feeders[fd]={billable:0,billed:0,unbilled:0,meterBillable:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
     var f = ssMap[ss].feeders[fd];
     var t = ssMap[ss].tots;
@@ -1142,6 +1142,11 @@ function buildProgressReport(){
     var isMU   = basis==='MU';
     var isProv = basis==='PROV';
     var isLMV3 = tariff==='LMV3';
+    // SM detection
+    var serial = String(r.METER_SERIAL_NBR||r.SERIAL_NBR||r.MTR_SRL_NO||'').trim().toUpperCase().replace(/^'/,'');
+    var mrSrc2 = '';
+    if(window._smLookup) mrSrc2=(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
+    var isSM = serial.startsWith('GE') || mrSrc2==='SM';
 
     // Check if paid in current month
     var pdObj = parseDate(lpDate);
@@ -1159,10 +1164,18 @@ function buildProgressReport(){
     if(isBilled && isProv){ f.provCnt++; t.provCnt++; }
     // CURR. ASST. = CA of billed consumers (in Rs)
     if(isBilled){ f.currAsst += ca; t.currAsst += ca; }
+    // SM / Non-SM accumulation in tots
+    if(isSM){ t.smBillable++; if(isBilled){t.smBilled++;} if(isBilled&&isMU)t.smMuCnt++; }
+    else     { t.nsmBillable++; if(isBilled){t.nsmBilled++;} if(isBilled&&isMU)t.nsmMuCnt++; }
+    // SM Revenue accumulation
+    if(isSM){ t.smCurrAsst += isBilled?ca:0; }
+    else     { t.nsmCurrAsst += isBilled?ca:0; }
     // Upto REVENUE = total payment received in current month (billed + unbilled)
     if(paidCurMonth && lp > 0){
       f.uptoRev  += lp; t.uptoRev  += lp;
       f.uptoPaid++;     t.uptoPaid++;
+      if(isSM){ t.smUptoRev+=lp; t.smUptoPaid++; }
+      else     { t.nsmUptoRev+=lp; t.nsmUptoPaid++; }
     }
     // TODAY Revenue & Paid
     if(isToday && lp > 0){
@@ -1184,13 +1197,19 @@ function buildProgressReport(){
   // ─── Build HTML ─────────────────────────────────────────────────────────
   // Top 16 SS by billable consumers
   var ssList = Object.keys(ssMap).sort(function(a,b){return ssMap[b].tots.billable-ssMap[a].tots.billable;}).slice(0,16);
-  var grand = {billable:0,billed:0,unbilled:0,meterBillable:0,muCnt:0,provCnt:0,currAsst:0,uptoRev:0,todayRev:0,todayPaid:0,uptoPaid:0};
+  var grand = {billable:0,billed:0,unbilled:0,meterBillable:0,muCnt:0,provCnt:0,currAsst:0,uptoRev:0,todayRev:0,todayPaid:0,uptoPaid:0,smBillable:0,smBilled:0,smMuCnt:0,smCurrAsst:0,smTodayRev:0,smUptoRev:0,smTodayPaid:0,smUptoPaid:0,nsmBillable:0,nsmBilled:0,nsmMuCnt:0,nsmCurrAsst:0,nsmTodayRev:0,nsmUptoRev:0,nsmTodayPaid:0,nsmUptoPaid:0};
   ssList.forEach(function(ss){
     var t=ssMap[ss].tots;
     grand.billable+=t.billable; grand.billed+=t.billed; grand.unbilled+=t.unbilled; grand.meterBillable+=t.meterBillable;
     grand.muCnt+=t.muCnt; grand.provCnt+=t.provCnt;
     grand.currAsst+=t.currAsst; grand.uptoRev+=t.uptoRev;
     grand.todayRev+=t.todayRev; grand.todayPaid+=t.todayPaid; grand.uptoPaid+=t.uptoPaid;
+    grand.smBillable+=t.smBillable; grand.smBilled+=t.smBilled; grand.smMuCnt+=t.smMuCnt;
+    grand.smCurrAsst+=t.smCurrAsst; grand.smUptoRev+=t.smUptoRev; grand.smTodayRev+=t.smTodayRev;
+    grand.smTodayPaid+=t.smTodayPaid; grand.smUptoPaid+=t.smUptoPaid;
+    grand.nsmBillable+=t.nsmBillable; grand.nsmBilled+=t.nsmBilled; grand.nsmMuCnt+=t.nsmMuCnt;
+    grand.nsmCurrAsst+=t.nsmCurrAsst; grand.nsmUptoRev+=t.nsmUptoRev; grand.nsmTodayRev+=t.nsmTodayRev;
+    grand.nsmTodayPaid+=t.nsmTodayPaid; grand.nsmUptoPaid+=t.nsmUptoPaid;
   });
 
   var h = '';
@@ -1231,6 +1250,7 @@ function buildProgressReport(){
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:center;color:#374151;">'+div+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;font-weight:700;color:#1E3A5F;">';
     h += '<span style="cursor:pointer;color:#1D4ED8;font-weight:700;margin-right:4px;" onclick="toggleFeeder('+si+')" id="ss-btn-'+si+'">➕</span>'+ss;
+    h += ' <span style="cursor:pointer;font-size:10px;padding:1px 5px;border-radius:4px;background:#E0F2FE;color:#0369A1;font-weight:700;margin-left:4px;" onclick="togglePrSM('+si+')" id="pr-sm-btn-'+si+'">SM/NSM</span>';
     h += '</td>';
     var gap = t.billed - t.muCnt;  // GAP = Billed - MU (metering gap: non-metered billed consumers)
     var pctBilledExProv = pct(t.billed-t.provCnt, t.billable);
@@ -1281,6 +1301,59 @@ function buildProgressReport(){
 
 
     });
+
+    // SM sub-row (hidden by default)
+    var smPctBilled = pct(t.smBilled, t.smBillable);
+    var smPctMU     = pct(t.smMuCnt, t.smBilled);
+    var smPctColl   = pct(t.smUptoRev, t.smCurrAsst);
+    var smTurnUp    = pct(t.smUptoPaid, t.smBilled);
+    var smGap       = t.smBilled - t.smMuCnt;
+    h += '<tr class="pr-sm-row-'+si+'" style="display:none;background:#EFF6FF;">';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:center;"></td>';
+    h += '<td style="padding:4px 6px 4px 22px;border:1px solid #BFDBFE;font-size:11px;font-weight:700;color:#1D4ED8;">⚡ SM (Smart Meter)</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+t.smBillable+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+t.smBillable+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+t.smBilled+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+smPctBilled+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+smPctBilled+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+t.smMuCnt+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+smPctMU+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+(smGap>0?smGap:0)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+cr2(t.smCurrAsst)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#DC2626;">'+cr2(t.smTodayRev)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+cr2(t.smUptoRev)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#DC2626;">'+t.smTodayPaid+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+t.smUptoPaid+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+smPctColl+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+smTurnUp+'</td>';
+    h += '</tr>';
+
+    // NSM sub-row (hidden by default)
+    var nsmPctBilled = pct(t.nsmBilled, t.nsmBillable);
+    var nsmPctMU     = pct(t.nsmMuCnt, t.nsmBilled);
+    var nsmPctColl   = pct(t.nsmUptoRev, t.nsmCurrAsst);
+    var nsmTurnUp    = pct(t.nsmUptoPaid, t.nsmBilled);
+    var nsmGap       = t.nsmBilled - t.nsmMuCnt;
+    h += '<tr class="pr-sm-row-'+si+'" style="display:none;background:#FFF7ED;">';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:center;"></td>';
+    h += '<td style="padding:4px 6px 4px 22px;border:1px solid #FED7AA;font-size:11px;font-weight:700;color:#C2410C;">📊 Non-SM</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+t.nsmBillable+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+t.nsmBillable+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+t.nsmBilled+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+nsmPctBilled+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+nsmPctBilled+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+t.nsmMuCnt+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+nsmPctMU+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+(nsmGap>0?nsmGap:0)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+cr2(t.nsmCurrAsst)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#DC2626;">'+cr2(t.nsmTodayRev)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+cr2(t.nsmUptoRev)+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#DC2626;">'+t.nsmTodayPaid+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+t.nsmUptoPaid+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+nsmPctColl+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+nsmTurnUp+'</td>';
+    h += '</tr>';
+
   });
 
   // Grand Total row
@@ -1321,6 +1394,16 @@ function buildProgressReport(){
   el.innerHTML = h;
   // Auto-load YoY if prev year data already cached
   if(PY_LOADED) setTimeout(buildYoYReport, 100);
+}
+
+
+function togglePrSM(si){
+  var rows = document.querySelectorAll('.pr-sm-row-'+si);
+  var btn  = document.getElementById('pr-sm-btn-'+si);
+  var open = rows.length && rows[0].style.display !== 'none';
+  rows.forEach(function(r){ r.style.display = open ? 'none' : ''; });
+  if(btn) btn.textContent = open ? 'SM/NSM' : 'SM/NSM ▲';
+  if(btn) btn.style.background = open ? '#E0F2FE' : '#BAE6FD';
 }
 
 function toggleFeeder(si){
