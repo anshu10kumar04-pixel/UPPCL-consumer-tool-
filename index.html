@@ -5581,7 +5581,8 @@ function runDefaulterFilter(){
     if(selSm.length){
       var mrSrc = String(r.MR_SOURCE_CD||'').trim().toUpperCase();
       if(!mrSrc && window._smLookup) mrSrc = String(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
-      var isSm = mrSrc === 'SM';
+      var serial = String(r.METER_SERIAL_NBR||r.SERIAL_NBR||r.MTR_SRL_NO||'').trim().toUpperCase().replace(/^'/,'');
+      var isSm = mrSrc === 'SM' || serial.startsWith('GE');
       var wantSm  = selSm.indexOf('sm')>=0;
       var wantNon = selSm.indexOf('nonsm')>=0;
       if(wantSm  && !wantNon && !isSm) return false;
