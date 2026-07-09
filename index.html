@@ -495,7 +495,7 @@ select option{background:#fff;color:#1E1B4B;}
           <option value="">All Months</option>
           <option value="cur">Current Month</option>
           <option value="prev">Previous Month</option>
-          <option value="prev2">Before Previous</option>
+          <option value="prev2">Other (Not Jun/Jul)</option>
         </select></div>
       </div>
 
@@ -5553,11 +5553,15 @@ function runDefaulterFilter(){
     // LP Month filter
     if(lpMonthF){
       var lpD = parseDate ? parseDate(r.LAST_PAY_DATE||r.PAY_DATE||'') : null;
-      if(!lpD) return false;
-      var lpM = lpD.getMonth(), lpY = lpD.getFullYear();
-      if(lpMonthF==='cur'   && !(lpM===curM   && lpY===curY))   return false;
-      if(lpMonthF==='prev'  && !(lpM===prevM  && lpY===prevY))  return false;
-      if(lpMonthF==='prev2' && !(lpM===prev2M && lpY===prev2Y)) return false;
+      var lpM = lpD ? lpD.getMonth() : -1;
+      var lpY = lpD ? lpD.getFullYear() : -1;
+      if(lpMonthF==='cur'  && !(lpM===curM  && lpY===curY))  return false;
+      if(lpMonthF==='prev' && !(lpM===prevM && lpY===prevY)) return false;
+      if(lpMonthF==='prev2'){
+        // Other = not paid in current or previous month (or never paid)
+        var isPrevOrCur = (lpM===curM&&lpY===curY)||(lpM===prevM&&lpY===prevY);
+        if(isPrevOrCur) return false;
+      }
     }
     if(feed.length   && feed.indexOf(r.FEEDER)<0)        return false;
     if(supply.length){
