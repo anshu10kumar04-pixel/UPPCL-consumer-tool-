@@ -532,27 +532,27 @@ select option{background:#fff;color:#1E1B4B;}
         style="flex:1;background:#fff;border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 16px;font-family:var(--fh);font-size:13px;font-weight:600;letter-spacing:0.5px;outline:none;color:#1E1B4B;"/>
       <button onclick="clearDefSearch()" style="background:#EEF2FF;border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 16px;font-family:var(--fh);font-size:12px;font-weight:700;color:#4F46E5;cursor:pointer;white-space:nowrap;">✕ CLEAR</button>
     </div>
-    <div class="tw" style="overflow-x:auto;"><table style="table-layout:fixed;min-width:1100px;">
+    <div class="tw" style="overflow-x:auto;"><table style="table-layout:fixed;min-width:1600px;">
       <thead><tr>
         <th style="width:40px" class="mob-hide">RANK</th>
-        <th style="width:100px;cursor:pointer" onclick="defSort(&#39;ACCT_ID&#39;)">ACCT ID <span id="dsrt-ACCT_ID">⇅</span></th>
-        <th style="width:120px;cursor:pointer" onclick="defSort(&#39;NAME&#39;)">NAME <span id="dsrt-NAME">⇅</span></th>
-        <th style="width:100px">MOBILE</th>
-        <th style="width:85px">METER NO</th>
-        <th style="width:80px;cursor:pointer" onclick="defSort('LOAD')">LOAD <span id="dsrt-LOAD">⇅</span></th>
-        <th style="width:75px;cursor:pointer" onclick="defSort('SUPPLY_TYPE')">SUPPLY <span id="dsrt-SUPPLY_TYPE">⇅</span></th>
-        <th style="width:75px;cursor:pointer" onclick="defSort('SOURCE')">STATUS <span id="dsrt-SOURCE">⇅</span></th>
-        <th style="min-width:150px;cursor:pointer" onclick="defSort(&#39;ADDRESS&#39;)">ADDRESS <span id="dsrt-ADDRESS">⇅</span></th>
-        <th style="width:110px;cursor:pointer" onclick="defSort(&#39;OUTSTANDING&#39;)">OUTSTANDING <span id="dsrt-OUTSTANDING">⇅</span></th>
-        <th style="width:85px;cursor:pointer" onclick="defSort(&#39;PAY_DATE&#39;)">LP DATE <span id="dsrt-PAY_DATE">⇅</span></th>
-        <th style="width:85px;cursor:pointer" onclick="defSort('PAY_AMT')">LP AMT <span id="dsrt-PAY_AMT">⇅</span></th>
-        <th style="width:75px;cursor:pointer" onclick="defSort('COLL_PROB')">AI % <span id="dsrt-COLL_PROB">⇅</span></th>
-        <th style="width:70px;cursor:pointer" onclick="defSort(&#39;ATR_STATUS&#39;)" class="mob-hide">ATR <span id="dsrt-ATR_STATUS">⇅</span></th>
-        <th style="width:80px;">Jun Paid</th>
-        <th style="width:130px;">ATR Comment</th>
-        <th style="width:90px;cursor:pointer" onclick="defSort(&#39;SUBSTATION&#39;)">SUBSTATION <span id="dsrt-SUBSTATION">⇅</span></th>
+        <th style="width:95px;cursor:pointer" onclick="defSort(&#39;ACCT_ID&#39;)">ACCT ID <span id="dsrt-ACCT_ID">⇅</span></th>
+        <th style="width:110px;cursor:pointer" onclick="defSort(&#39;NAME&#39;)">NAME <span id="dsrt-NAME">⇅</span></th>
+        <th style="width:95px">MOBILE</th>
+        <th style="width:80px">METER NO</th>
+        <th style="width:60px;cursor:pointer" onclick="defSort('LOAD')">LOAD <span id="dsrt-LOAD">⇅</span></th>
+        <th style="width:65px;cursor:pointer" onclick="defSort('SUPPLY_TYPE')">SUPPLY <span id="dsrt-SUPPLY_TYPE">⇅</span></th>
+        <th style="width:65px;cursor:pointer" onclick="defSort('SOURCE')">STATUS <span id="dsrt-SOURCE">⇅</span></th>
+        <th style="width:180px;cursor:pointer" onclick="defSort(&#39;ADDRESS&#39;)">ADDRESS <span id="dsrt-ADDRESS">⇅</span></th>
+        <th style="width:100px;cursor:pointer" onclick="defSort(&#39;OUTSTANDING&#39;)">OUTSTANDING <span id="dsrt-OUTSTANDING">⇅</span></th>
+        <th style="width:80px;cursor:pointer" onclick="defSort(&#39;PAY_DATE&#39;)">LP DATE <span id="dsrt-PAY_DATE">⇅</span></th>
+        <th style="width:80px;cursor:pointer" onclick="defSort('PAY_AMT')">LP AMT <span id="dsrt-PAY_AMT">⇅</span></th>
+        <th style="width:55px;cursor:pointer" onclick="defSort('COLL_PROB')">AI % <span id="dsrt-COLL_PROB">⇅</span></th>
+        <th style="width:65px;cursor:pointer" onclick="defSort(&#39;ATR_STATUS&#39;)" class="mob-hide">ATR <span id="dsrt-ATR_STATUS">⇅</span></th>
+        <th style="width:75px;">Jun Paid</th>
+        <th style="width:100px;">ATR Comment</th>
+        <th style="width:85px;cursor:pointer" onclick="defSort(&#39;SUBSTATION&#39;)">SUBSTATION <span id="dsrt-SUBSTATION">⇅</span></th>
         <th style="display:none">FEEDER</th>
-        <th style="width:45px">MAP</th>
+        <th style="width:40px">MAP</th>
       </tr></thead>
       <tbody id="def-tbody"></tbody>
     </table></div>
@@ -5750,7 +5750,7 @@ function renderDefaulters(page){
       (function(){
         var c=r.ATR_COMMENT||'';
         if(!c){try{var da=JSON.parse(localStorage.getItem('def_atr_data')||'{}');c=(da[String(r.ACCT_ID)]||{}).comment||'';}catch(e){}}
-        return c?'<td style="font-size:10px;color:#374151;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+c+'">'+c+'</td>':'<td style="color:#9CA3AF;font-size:10px;">—</td>';
+        return c?'<td style="font-size:10px;color:#374151;max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+c+'">'+c+'</td>':'<td style="color:#9CA3AF;font-size:10px;">—</td>';
       })()+
       '<td>'+(function(){var sc=collectionProbability(r),lb=collectionLabel(sc);return '<span style="font-size:11px;font-weight:800;padding:2px 7px;border-radius:5px;background:'+lb.bg+';color:'+lb.color+';">'+sc+'%</span>';})()+'</td>'+
       '<td class="mob-hide"><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:'+(atrBgs[atr]||'#F9FAFB')+';color:'+(atrColors[atr]||'#9CA3AF')+';">'+atr+'</span></td>'+
