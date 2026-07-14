@@ -1503,6 +1503,10 @@ function buildSMReport(){
   h2+='<div style="background:#0F4C81;color:#fff;padding:11px 16px;display:flex;justify-content:space-between;align-items:center;">';
   h2+='<div style="font-family:var(--fh);font-weight:700;font-size:13px;">⚡ SM / Non-SM WISE BILLING & COLLECTION SUMMARY &nbsp;<span style="color:#93C5FD;font-size:11px;">(Amt in Lacs)</span></div>';
   h2+='<span style="font-size:11px;opacity:0.8;">upto <b style="background:#3B82F6;padding:2px 8px;border-radius:4px;">'+smDateStr+'</b></span>';
+  h2+='<div style="display:flex;gap:6px;">';
+  h2+='<button onclick="smExportXLSX()" style="background:#059669;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">⬇ XLSX</button>';
+  h2+='<button onclick="smExportPDF()" style="background:#DC2626;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">⬇ PDF</button>';
+  h2+='</div>';
   h2+='</div>';
   h2+='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
 
@@ -1655,6 +1659,108 @@ function buildSMReport(){
   h2+='</tbody></table></div></div>';
 
   el.innerHTML += h2;
+}
+
+function smExportXLSX(){
+  var smMap = window._prSSMap || {};
+  var ssList = window._prSsList || Object.keys(smMap);
+  var dataDate = window._prDataDate || new Date();
+  var dateStr = dataDate.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+
+  function cr(n){ n=n||0; var a=Math.abs(n); if(a>=10000000)return (n/10000000).toFixed(2)+' Cr'; if(a>=100000)return (n/100000).toFixed(2)+' L'; return '\u20B9'+Math.round(n).toLocaleString(); }
+  function pc(a,b){ return b>0?(a/b*100).toFixed(1)+'%':'—'; }
+
+  // Build CSV data
+  var cols = ['DIV','SUBSTATION','BILLABLE CONS','METER BILLABLE','BILLED','% Billed','% Billed (Excpt Prov)','MU CNT','% MU','GAP (Billed & MU)','CURR. ASST.','TODAY REVENUE','TODAY Paid Cnt','Upto REVENUE','Upto Paid Cnt','% Coll. effic.','Turn Up%'];
+  var rows = [cols];
+
+  // Grand totals
+  var grand={billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0,
+              smBillable:0,smBilled:0,smMuCnt:0,smCurrAsst:0,smTodayRev:0,smUptoRev:0,smTodayPaid:0,smUptoPaid:0,
+              nsmBillable:0,nsmBilled:0,nsmMuCnt:0,nsmCurrAsst:0,nsmTodayRev:0,nsmUptoRev:0,nsmTodayPaid:0,nsmUptoPaid:0};
+
+  ssList.forEach(function(ss){
+    var o=smMap[ss]; if(!o) return;
+    var t=o.tots;
+    var div=(SUB_DIVISION_MAP&&SUB_DIVISION_MAP[ss])==='eudd2'?'233512':'233511';
+    var gap=t.billed-t.muCnt;
+    rows.push([
+      div, ss,
+      t.billable, t.meterBillable, t.billed,
+      pc(t.billed,t.meterBillable), pc(t.billed-t.provCnt,t.meterBillable),
+      t.muCnt, pc(t.muCnt,t.billed), gap>0?gap:0,
+      cr(t.currAsst), cr(t.todayRev), t.todayPaid,
+      cr(t.uptoRev), t.uptoPaid,
+      pc(t.uptoRev,t.currAsst), pc(t.uptoPaid,t.billed)
+    ]);
+    ['billable','meterBillable','billed','muCnt','provCnt','currAsst','todayRev','uptoRev','todayPaid','uptoPaid',
+     'smBillable','smBilled','smMuCnt','smCurrAsst','smTodayRev','smUptoRev','smTodayPaid','smUptoPaid',
+     'nsmBillable','nsmBilled','nsmMuCnt','nsmCurrAsst','nsmTodayRev','nsmUptoRev','nsmTodayPaid','nsmUptoPaid'].forEach(function(k){
+      grand[k]+=(t[k]||0);
+    });
+  });
+
+  // Grand total row
+  var gg=grand.billed-grand.muCnt;
+  rows.push(['GRAND TOTAL','',grand.billable,grand.meterBillable,grand.billed,
+    pc(grand.billed,grand.meterBillable),pc(grand.billed-grand.provCnt,grand.meterBillable),
+    grand.muCnt,pc(grand.muCnt,grand.billed),gg>0?gg:0,
+    cr(grand.currAsst),cr(grand.todayRev),grand.todayPaid,
+    cr(grand.uptoRev),grand.uptoPaid,
+    pc(grand.uptoRev,grand.currAsst),pc(grand.uptoPaid,grand.billed)]);
+
+  // Total SM row
+  rows.push(['Total SM','',grand.smBillable,grand.smBillable,grand.smBilled,
+    pc(grand.smBilled,grand.smBillable),pc(grand.smBilled,grand.smBillable),
+    grand.smMuCnt,pc(grand.smMuCnt,grand.smBilled),(grand.smBilled-grand.smMuCnt)>0?(grand.smBilled-grand.smMuCnt):0,
+    cr(grand.smCurrAsst),cr(grand.smTodayRev),grand.smTodayPaid,
+    cr(grand.smUptoRev),grand.smUptoPaid,
+    pc(grand.smUptoRev,grand.smCurrAsst),pc(grand.smUptoPaid,grand.smBilled)]);
+
+  // Total NSM row
+  rows.push(['Total Non-SM','',grand.nsmBillable,grand.nsmBillable,grand.nsmBilled,
+    pc(grand.nsmBilled,grand.nsmBillable),pc(grand.nsmBilled,grand.nsmBillable),
+    grand.nsmMuCnt,pc(grand.nsmMuCnt,grand.nsmBilled),(grand.nsmBilled-grand.nsmMuCnt)>0?(grand.nsmBilled-grand.nsmMuCnt):0,
+    cr(grand.nsmCurrAsst),cr(grand.nsmTodayRev),grand.nsmTodayPaid,
+    cr(grand.nsmUptoRev),grand.nsmUptoPaid,
+    pc(grand.nsmUptoRev,grand.nsmCurrAsst),pc(grand.nsmUptoPaid,grand.nsmBilled)]);
+
+  // Convert to CSV and download
+  var csv = rows.map(function(r){ return r.map(function(v){ return '"'+(String(v||'').replace(/"/g,'""'))+'"'; }).join(','); }).join('\n');
+  var bom = '\uFEFF';
+  var blob = new Blob([bom+csv], {type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'SM_NonSM_Summary_'+dateStr.replace(/ /g,'_')+'.csv';
+  a.click();
+}
+
+function smExportPDF(){
+  var smDiv = document.querySelector('#panel-progress > div:last-child');
+  if(!smDiv){ alert('SM report not loaded'); return; }
+
+  // Use print window
+  var dataDate = window._prDataDate || new Date();
+  var dateStr = dataDate.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+
+  var win = window.open('','_blank');
+  win.document.write('<html><head><title>SM NonSM Summary</title><style>');
+  win.document.write('body{font-family:Arial,sans-serif;font-size:10px;margin:10px;}');
+  win.document.write('table{border-collapse:collapse;width:100%;}');
+  win.document.write('th{background:#0F4C81;color:#fff;padding:5px 4px;font-size:9px;text-align:center;border:1px solid #374151;}');
+  win.document.write('td{padding:4px;border:1px solid #E5E7EB;text-align:right;font-size:9px;}');
+  win.document.write('td:nth-child(2){text-align:left;}');
+  win.document.write('tr:nth-child(even) td{background:#F8FAFC;}');
+  win.document.write('.grand{background:#1E3A5F!important;color:#fff;font-weight:bold;}');
+  win.document.write('.sm-row{background:#166534!important;color:#fff;font-weight:bold;}');
+  win.document.write('.nsm-row{background:#92400E!important;color:#fff;font-weight:bold;}');
+  win.document.write('@media print{@page{size:A3 landscape;margin:8mm;}}');
+  win.document.write('</style></head><body>');
+  win.document.write('<h3 style="margin:0 0 6px 0;color:#0F4C81;">⚡ SM / Non-SM WISE BILLING & COLLECTION SUMMARY (Amt in Lacs) &nbsp; upto '+dateStr+'</h3>');
+  win.document.write(smDiv.querySelector('table').outerHTML);
+  win.document.write('<script>window.onload=function(){window.print();}<\/script>');
+  win.document.write('</body></html>');
+  win.document.close();
 }
 
 function toggleSMRow(si){
