@@ -5843,6 +5843,7 @@ function renderDefaulters(page){
       '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';font-size:13px;">₹'+out.toLocaleString()+'</td>'+
       '<td style="font-size:11px;color:var(--muted);">'+r.PAY_DATE+'</td>'+
       '<td style="font-family:var(--fh);color:#059669;font-weight:700;">'+(paid>0?'₹'+paid.toLocaleString():'-')+'</td>'+
+      '<td>'+(function(){var sc=collectionProbability(r),lb=collectionLabel(sc);return '<span style="font-size:11px;font-weight:800;padding:2px 7px;border-radius:5px;background:'+lb.bg+';color:'+lb.color+';">'+sc+'%</span>';})()+'</td>'+
       (function(){
         var pm = DISCOM_PAY_MAP && DISCOM_PAY_MAP[String(r.ACCT_ID).padStart(10,'0')];
         if(pm && (pm.jun_amt>0||pm.jul_amt>0)){
@@ -5858,7 +5859,6 @@ function renderDefaulters(page){
         if(!c){try{var da=JSON.parse(localStorage.getItem('def_atr_data')||'{}');c=(da[String(r.ACCT_ID)]||{}).comment||'';}catch(e){}}
         return c?'<td style="font-size:10px;color:#374151;max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+c+'">'+c+'</td>':'<td style="color:#9CA3AF;font-size:10px;">—</td>';
       })()+
-      '<td>'+(function(){var sc=collectionProbability(r),lb=collectionLabel(sc);return '<span style="font-size:11px;font-weight:800;padding:2px 7px;border-radius:5px;background:'+lb.bg+';color:'+lb.color+';">'+sc+'%</span>';})()+'</td>'+
       '<td class="mob-hide"><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:'+(atrBgs[atr]||'#F9FAFB')+';color:'+(atrColors[atr]||'#9CA3AF')+';">'+atr+'</span></td>'+
       '<td>'+r.SUBSTATION+'</td>'+
       '<td style="display:none">'+r.FEEDER+'</td>'+
