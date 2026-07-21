@@ -254,7 +254,7 @@ select option{background:#fff;color:#1E1B4B;}
   .hdr-btn{padding:6px 8px;font-size:10px;}
 }
 </style>
-</head>
+<style>@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}th,td{border:1px solid #999!important;}}</style></head>
 <body>
 
 <!-- LOGIN SCREEN -->
@@ -1754,7 +1754,7 @@ function smExportPDF(){
   win.document.write('.grand{background:#1E3A5F!important;color:#fff;font-weight:bold;}');
   win.document.write('.sm-row{background:#166534!important;color:#fff;font-weight:bold;}');
   win.document.write('.nsm-row{background:#92400E!important;color:#fff;font-weight:bold;}');
-  win.document.write('@media print{@page{size:A3 landscape;margin:8mm;}}');
+  win.document.write('@media print{@page{size:A3 landscape;margin:8mm;}body{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}th,td,.grand,.sm-row,.nsm-row{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}');
   win.document.write('</style></head><body>');
   win.document.write('<h3 style="margin:0 0 6px 0;color:#0F4C81;">⚡ SM / Non-SM WISE BILLING & COLLECTION SUMMARY (Amt in Lacs) &nbsp; upto '+dateStr+'</h3>');
   win.document.write(smDiv.querySelector('table').outerHTML);
@@ -1826,7 +1826,7 @@ function progressExportPDF(){
   w.document.write('h2{font-size:12px;color:#1E3A5F;margin:8px 0 4px;text-align:center;}');
   w.document.write('table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ccc;padding:3px 5px;text-align:center;}');
   w.document.write('th{background:#1E3A5F;color:#fff;font-size:8px;}tr:nth-child(even) td{background:#f9f9f9;}');
-  w.document.write('@page{size:A3 landscape;margin:8mm;}@media print{body{margin:0;}}');
+  w.document.write('@page{size:A3 landscape;margin:8mm;}@media print{body{margin:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}}');
   w.document.write('</style></head><body>');
   w.document.write('<h2>Sub Station Wise Billing & Collection Summary (Amt in Lacs) &nbsp; upto '+d+'</h2>');
   w.document.write(cleanHtml);
@@ -3304,7 +3304,7 @@ function filtSecPDF(tblId, title){
   w.document.write('table{border-collapse:collapse;width:100%;font-size:9px;}thead{display:table-header-group;}');
   w.document.write('th{background:#1E3A5F;color:#fff;padding:4px 6px;text-align:left;border:1px solid #1E3A5F;font-size:8px;}');
   w.document.write('td{border:1px solid #ccc;padding:3px 6px;}tr:nth-child(even) td{background:#f5f5f5;}tr{page-break-inside:avoid;}');
-  w.document.write('@page{size:A4 landscape;margin:10mm;}@media print{body{margin:0;}}');
+  w.document.write('@page{size:A4 landscape;margin:10mm;}@media print{body{margin:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}}');
   w.document.write('</style></head><body>');
   w.document.write('<h2>'+title+'</h2>');
   w.document.write('<div class="sub">DVVNL JHANSI | Generated: '+new Date().toLocaleString('en-IN')+'</div>');
