@@ -1110,56 +1110,8 @@ function dashToggle(id){
 // ─── DAILY PROGRESS REPORT ───────────────────────────────────────────────────
 
 function prColSort(key){
-  // Toggle asc/desc if same column
   if(window._prSortCol===key) window._prSortAsc=!window._prSortAsc;
   else{ window._prSortCol=key; window._prSortAsc=(key==='name'||key==='div'); }
-
-  var ssMap = window._prSSMap || {};
-  var ssList = Object.keys(ssMap);
-
-  ssList.sort(function(a,b){
-    var at=ssMap[a].tots, bt=ssMap[b].tots;
-    var av,bv;
-    switch(key){
-      case 'div':
-        av=(window.SUB_DIVISION_MAP&&window.SUB_DIVISION_MAP[a])||''; 
-        bv=(window.SUB_DIVISION_MAP&&window.SUB_DIVISION_MAP[b])||'';
-        break;
-      case 'name':         av=a; bv=b; break;
-      case 'billable':     av=at.billable||0;      bv=bt.billable||0;      break;
-      case 'meterBillable':av=at.meterBillable||0; bv=bt.meterBillable||0; break;
-      case 'billed':       av=at.billed||0;        bv=bt.billed||0;        break;
-      case 'pctBilled':
-        av=at.meterBillable>0?(at.billed/at.meterBillable):0;
-        bv=bt.meterBillable>0?(bt.billed/bt.meterBillable):0; break;
-      case 'pctBilledExProv':
-        av=at.meterBillable>0?((at.billed-(at.provCnt||0))/at.meterBillable):0;
-        bv=bt.meterBillable>0?((bt.billed-(bt.provCnt||0))/bt.meterBillable):0; break;
-      case 'muCnt':        av=at.muCnt||0;         bv=bt.muCnt||0;         break;
-      case 'pctMU':
-        av=at.billed>0?(at.muCnt/at.billed):0;
-        bv=bt.billed>0?(bt.muCnt/bt.billed):0; break;
-      case 'gap':
-        av=Math.max(0,(at.billed||0)-(at.muCnt||0));
-        bv=Math.max(0,(bt.billed||0)-(bt.muCnt||0)); break;
-      case 'currAsst':     av=at.currAsst||0;      bv=bt.currAsst||0;      break;
-      case 'todayRev':     av=at.todayRev||0;      bv=bt.todayRev||0;      break;
-      case 'uptoRev':      av=at.uptoRev||0;       bv=bt.uptoRev||0;       break;
-      case 'todayPaid':    av=at.todayPaid||0;     bv=bt.todayPaid||0;     break;
-      case 'uptoPaid':     av=at.uptoPaid||0;      bv=bt.uptoPaid||0;      break;
-      case 'collEff':
-        av=at.currAsst>0?(at.uptoRev/at.currAsst):0;
-        bv=bt.currAsst>0?(bt.uptoRev/bt.currAsst):0; break;
-      case 'turnUp':
-        av=at.billable>0?(at.todayPaid/at.billable):0;
-        bv=bt.billable>0?(bt.todayPaid/bt.billable):0; break;
-      default: av=at.billable||0; bv=bt.billable||0;
-    }
-    if(typeof av==='string') return window._prSortAsc?av.localeCompare(bv):bv.localeCompare(av);
-    return window._prSortAsc?(av-bv):(bv-av);
-  });
-
-  window._prSsList = ssList.slice(0,16);
   buildProgressReport();
 }
 
@@ -1311,13 +1263,50 @@ function buildProgressReport(){
   // ─── Build HTML ─────────────────────────────────────────────────────────
   // Top 16 SS by billable consumers
   window._prSSMap = ssMap; window._prDataDate = dataDate; window._prSortCol=window._prSortCol||'billable'; // Share with SM report
-  // Use pre-sorted list if available (set by prColSort), else default sort by billable
-  var ssList;
-  if(window._prSsList && window._prSsList.length){
-    ssList = window._prSsList;
-  } else {
-    ssList = Object.keys(ssMap).sort(function(a,b){return ssMap[b].tots.billable-ssMap[a].tots.billable;}).slice(0,16);
-    window._prSsList = ssList;
+  var ssList = Object.keys(ssMap).sort(function(a,b){return ssMap[b].tots.billable-ssMap[a].tots.billable;}).slice(0,16);
+  window._prSsList = ssList; // Share with SM report
+  // Apply sort if set
+  if(window._prSortCol && window._prSortCol!=='billable'){
+    ssList = ssList.slice().sort(function(a,b){
+      var at=ssMap[a].tots, bt=ssMap[b].tots;
+      var av,bv,asc=window._prSortAsc||false;
+      switch(window._prSortCol){
+        case 'div':
+          av=(window.SUB_DIVISION_MAP&&window.SUB_DIVISION_MAP[a])||'';
+          bv=(window.SUB_DIVISION_MAP&&window.SUB_DIVISION_MAP[b])||'';
+          return asc?av.localeCompare(bv):bv.localeCompare(av);
+        case 'name': return asc?a.localeCompare(b):b.localeCompare(a);
+        case 'billable':     av=at.billable||0;      bv=bt.billable||0;      break;
+        case 'meterBillable':av=at.meterBillable||0; bv=bt.meterBillable||0; break;
+        case 'billed':       av=at.billed||0;        bv=bt.billed||0;        break;
+        case 'pctBilled':
+          av=at.meterBillable>0?(at.billed/at.meterBillable):0;
+          bv=bt.meterBillable>0?(bt.billed/bt.meterBillable):0; break;
+        case 'pctBilledExProv':
+          av=at.meterBillable>0?((at.billed-(at.provCnt||0))/at.meterBillable):0;
+          bv=bt.meterBillable>0?((bt.billed-(bt.provCnt||0))/bt.meterBillable):0; break;
+        case 'muCnt':   av=at.muCnt||0;    bv=bt.muCnt||0;    break;
+        case 'pctMU':
+          av=at.billed>0?(at.muCnt/at.billed):0;
+          bv=bt.billed>0?(bt.muCnt/bt.billed):0; break;
+        case 'gap':
+          av=Math.max(0,(at.billed||0)-(at.muCnt||0));
+          bv=Math.max(0,(bt.billed||0)-(bt.muCnt||0)); break;
+        case 'currAsst':  av=at.currAsst||0;  bv=bt.currAsst||0;  break;
+        case 'todayRev':  av=at.todayRev||0;  bv=bt.todayRev||0;  break;
+        case 'uptoRev':   av=at.uptoRev||0;   bv=bt.uptoRev||0;   break;
+        case 'todayPaid': av=at.todayPaid||0; bv=bt.todayPaid||0; break;
+        case 'uptoPaid':  av=at.uptoPaid||0;  bv=bt.uptoPaid||0;  break;
+        case 'collEff':
+          av=at.currAsst>0?(at.uptoRev/at.currAsst):0;
+          bv=bt.currAsst>0?(bt.uptoRev/bt.currAsst):0; break;
+        case 'turnUp':
+          av=at.billable>0?(at.todayPaid/at.billable):0;
+          bv=bt.billable>0?(bt.todayPaid/bt.billable):0; break;
+        default: av=at.billable||0; bv=bt.billable||0;
+      }
+      return asc?(av-bv):(bv-av);
+    });
   }
   var grand = {billable:0,billed:0,unbilled:0,meterBillable:0,muCnt:0,provCnt:0,currAsst:0,uptoRev:0,todayRev:0,todayPaid:0,uptoPaid:0,smBillable:0,smBilled:0,smMuCnt:0,smCurrAsst:0,smTodayRev:0,smUptoRev:0,smTodayPaid:0,smUptoPaid:0,nsmBillable:0,nsmBilled:0,nsmMuCnt:0,nsmCurrAsst:0,nsmTodayRev:0,nsmUptoRev:0,nsmTodayPaid:0,nsmUptoPaid:0};
   ssList.forEach(function(ss){
