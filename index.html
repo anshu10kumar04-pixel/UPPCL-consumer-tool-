@@ -1159,7 +1159,7 @@ function prColSort(key){
     return window._prSortAsc?(av-bv):(bv-av);
   });
 
-  window._prSsList = ssList;
+  window._prSsList = ssList.slice(0,16);
   buildProgressReport();
 }
 
@@ -1189,7 +1189,7 @@ function prSortChange(val){
       default: return bt.billable-at.billable;
     }
   });
-  window._prSsList = ssList;
+  window._prSsList = ssList.slice(0,16);
   buildProgressReport();
   // Restore sort selection after rebuild
   setTimeout(function(){
@@ -1310,9 +1310,15 @@ function buildProgressReport(){
 
   // ─── Build HTML ─────────────────────────────────────────────────────────
   // Top 16 SS by billable consumers
-  window._prSSMap = ssMap; window._prDataDate = dataDate; // Share with SM report
-  var ssList = Object.keys(ssMap).sort(function(a,b){return ssMap[b].tots.billable-ssMap[a].tots.billable;}).slice(0,16);
-  window._prSsList = ssList; // Share with SM report
+  window._prSSMap = ssMap; window._prDataDate = dataDate; window._prSortCol=window._prSortCol||'billable'; // Share with SM report
+  // Use pre-sorted list if available (set by prColSort), else default sort by billable
+  var ssList;
+  if(window._prSsList && window._prSsList.length){
+    ssList = window._prSsList;
+  } else {
+    ssList = Object.keys(ssMap).sort(function(a,b){return ssMap[b].tots.billable-ssMap[a].tots.billable;}).slice(0,16);
+    window._prSsList = ssList;
+  }
   var grand = {billable:0,billed:0,unbilled:0,meterBillable:0,muCnt:0,provCnt:0,currAsst:0,uptoRev:0,todayRev:0,todayPaid:0,uptoPaid:0,smBillable:0,smBilled:0,smMuCnt:0,smCurrAsst:0,smTodayRev:0,smUptoRev:0,smTodayPaid:0,smUptoPaid:0,nsmBillable:0,nsmBilled:0,nsmMuCnt:0,nsmCurrAsst:0,nsmTodayRev:0,nsmUptoRev:0,nsmTodayPaid:0,nsmUptoPaid:0};
   ssList.forEach(function(ss){
     var t=ssMap[ss].tots;
