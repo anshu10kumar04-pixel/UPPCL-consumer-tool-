@@ -1108,6 +1108,41 @@ function dashToggle(id){
 // Dashboard PDF export using print
 // Dashboard Excel export
 // ─── DAILY PROGRESS REPORT ───────────────────────────────────────────────────
+
+function prSortChange(val){
+  var ssMap = window._prSSMap || {};
+  var ssList = Object.keys(ssMap);
+  ssList.sort(function(a,b){
+    var at=ssMap[a].tots, bt=ssMap[b].tots;
+    switch(val){
+      case 'billable':  return bt.billable - at.billable;
+      case 'todayRev':  return bt.todayRev - at.todayRev;
+      case 'uptoRev':   return (bt.uptoRev||0) - (at.uptoRev||0);
+      case 'currAsst':  return (bt.currAsst||0) - (at.currAsst||0);
+      case 'collEff':
+        var ac=at.currAsst>0?(at.uptoRev/at.currAsst):0;
+        var bc=bt.currAsst>0?(bt.uptoRev/bt.currAsst):0;
+        return bc-ac;
+      case 'turnUp':
+        var atp=at.billable>0?(at.todayPaid/at.billable):0;
+        var btp=bt.billable>0?(bt.todayPaid/bt.billable):0;
+        return btp-atp;
+      case 'pctBilled':
+        var apb=at.meterBillable>0?(at.billed/at.meterBillable):0;
+        var bpb=bt.meterBillable>0?(bt.billed/bt.meterBillable):0;
+        return bpb-apb;
+      case 'name': return a.localeCompare(b);
+      default: return bt.billable-at.billable;
+    }
+  });
+  window._prSsList = ssList;
+  buildProgressReport();
+  // Restore sort selection after rebuild
+  setTimeout(function(){
+    var sel=document.getElementById('pr-sort-select');
+    if(sel) sel.value=val;
+  },50);
+}
 function buildProgressReport(){
   var el = gel('panel-progress');
   if(!el) return;
@@ -1249,6 +1284,16 @@ function buildProgressReport(){
   h += '<button onclick="buildProgressReport()" style="background:#374151;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">🔄</button>';
   h += '<button onclick="progressExportXLSX()" style="background:#059669;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">⬇ XLSX</button>';
   h += '<button onclick="progressExportPDF()" style="background:#DC2626;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">🖨 PDF</button>';
+  h += '<select id="pr-sort-select" onchange="prSortChange(this.value)" style="background:#1E3A5F;color:#fff;border:1px solid #3B82F6;padding:3px 8px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">';
+  h += '<option value="billable">Sort: Consumers</option>';
+  h += '<option value="todayRev">Sort: Today Rev</option>';
+  h += '<option value="uptoRev">Sort: Upto Rev</option>';
+  h += '<option value="currAsst">Sort: Curr Asst</option>';
+  h += '<option value="collEff">Sort: Coll Eff%</option>';
+  h += '<option value="turnUp">Sort: Turn Up%</option>';
+  h += '<option value="pctBilled">Sort: % Billed</option>';
+  h += '<option value="name">Sort: SS Name</option>';
+  h += '</select>';
   h += '</div></div>';
 
   // Table header
