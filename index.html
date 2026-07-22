@@ -532,7 +532,7 @@ select option{background:#fff;color:#1E1B4B;}
         style="flex:1;background:#fff;border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 16px;font-family:var(--fh);font-size:13px;font-weight:600;letter-spacing:0.5px;outline:none;color:#1E1B4B;"/>
       <button onclick="clearDefSearch()" style="background:#EEF2FF;border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 16px;font-family:var(--fh);font-size:12px;font-weight:700;color:#4F46E5;cursor:pointer;white-space:nowrap;">✕ CLEAR</button>
     </div>
-    <div class="tw" style="overflow-x:auto;"><table style="table-layout:fixed;min-width:1600px;">
+    <div class="tw" style="overflow-x:auto;"><table style="table-layout:fixed;min-width:1800px;">
       <thead><tr>
         <th style="width:40px" class="mob-hide">RANK</th>
         <th style="width:95px;cursor:pointer" onclick="defSort(&#39;ACCT_ID&#39;)">ACCT ID <span id="dsrt-ACCT_ID">⇅</span></th>
@@ -543,7 +543,7 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:65px;cursor:pointer" onclick="defSort('SUPPLY_TYPE')">SUPPLY <span id="dsrt-SUPPLY_TYPE">⇅</span></th>
         <th style="width:65px;cursor:pointer" onclick="defSort('SOURCE')">STATUS <span id="dsrt-SOURCE">⇅</span></th>
         <th style="width:180px;cursor:pointer" onclick="defSort(&#39;ADDRESS&#39;)">ADDRESS <span id="dsrt-ADDRESS">⇅</span></th>
-        <th style="width:100px;cursor:pointer" <th style="width:85px;cursor:pointer" class="mob-hide" onclick="defSort('CA')">CURR ASST. <span id="dsrt-CA">⇅</span></th>
+        <th style="width:100px;cursor:pointer" <th style="width:110px;cursor:pointer" class="mob-hide" onclick="defSort('CA')">CURR ASST. <span id="dsrt-CA">⇅</span></th>
         <th style="width:100px;cursor:pointer" onclick="defSort(&#39;OUTSTANDING&#39;)">OUTSTANDING <span id="dsrt-OUTSTANDING">⇅</span></th>
         <th style="width:80px;cursor:pointer" onclick="defSort(&#39;PAY_DATE&#39;)">LP DATE <span id="dsrt-PAY_DATE">⇅</span></th>
         <th style="width:80px;cursor:pointer" onclick="defSort('PAY_AMT')">LP AMT <span id="dsrt-PAY_AMT">⇅</span></th>
@@ -5784,7 +5784,7 @@ function defSort(col){
   if(_defSortCol===col)_defSortAsc=!_defSortAsc; else{_defSortCol=col;_defSortAsc=col!=='OUTSTANDING';}
   document.querySelectorAll('[id^="dsrt-"]').forEach(function(el){el.textContent='⇅';});
   var ic=gel('dsrt-'+col); if(ic)ic.textContent=_defSortAsc?'↑':'↓';
-  var numCols=['OUTSTANDING','PAY_AMT'];
+  var numCols=['OUTSTANDING','PAY_AMT','CA'];
   DEF_DATA.sort(function(a,b){
     if(col==='COLL_PROB'){
       var av=collectionProbability(a), bv=collectionProbability(b);
