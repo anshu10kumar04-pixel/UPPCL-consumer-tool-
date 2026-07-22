@@ -1109,6 +1109,60 @@ function dashToggle(id){
 // Dashboard Excel export
 // ─── DAILY PROGRESS REPORT ───────────────────────────────────────────────────
 
+function prColSort(key){
+  // Toggle asc/desc if same column
+  if(window._prSortCol===key) window._prSortAsc=!window._prSortAsc;
+  else{ window._prSortCol=key; window._prSortAsc=(key==='name'||key==='div'); }
+
+  var ssMap = window._prSSMap || {};
+  var ssList = Object.keys(ssMap);
+
+  ssList.sort(function(a,b){
+    var at=ssMap[a].tots, bt=ssMap[b].tots;
+    var av,bv;
+    switch(key){
+      case 'div':
+        av=(window.SUB_DIVISION_MAP&&window.SUB_DIVISION_MAP[a])||''; 
+        bv=(window.SUB_DIVISION_MAP&&window.SUB_DIVISION_MAP[b])||'';
+        break;
+      case 'name':         av=a; bv=b; break;
+      case 'billable':     av=at.billable||0;      bv=bt.billable||0;      break;
+      case 'meterBillable':av=at.meterBillable||0; bv=bt.meterBillable||0; break;
+      case 'billed':       av=at.billed||0;        bv=bt.billed||0;        break;
+      case 'pctBilled':
+        av=at.meterBillable>0?(at.billed/at.meterBillable):0;
+        bv=bt.meterBillable>0?(bt.billed/bt.meterBillable):0; break;
+      case 'pctBilledExProv':
+        av=at.meterBillable>0?((at.billed-(at.provCnt||0))/at.meterBillable):0;
+        bv=bt.meterBillable>0?((bt.billed-(bt.provCnt||0))/bt.meterBillable):0; break;
+      case 'muCnt':        av=at.muCnt||0;         bv=bt.muCnt||0;         break;
+      case 'pctMU':
+        av=at.billed>0?(at.muCnt/at.billed):0;
+        bv=bt.billed>0?(bt.muCnt/bt.billed):0; break;
+      case 'gap':
+        av=Math.max(0,(at.billed||0)-(at.muCnt||0));
+        bv=Math.max(0,(bt.billed||0)-(bt.muCnt||0)); break;
+      case 'currAsst':     av=at.currAsst||0;      bv=bt.currAsst||0;      break;
+      case 'todayRev':     av=at.todayRev||0;      bv=bt.todayRev||0;      break;
+      case 'uptoRev':      av=at.uptoRev||0;       bv=bt.uptoRev||0;       break;
+      case 'todayPaid':    av=at.todayPaid||0;     bv=bt.todayPaid||0;     break;
+      case 'uptoPaid':     av=at.uptoPaid||0;      bv=bt.uptoPaid||0;      break;
+      case 'collEff':
+        av=at.currAsst>0?(at.uptoRev/at.currAsst):0;
+        bv=bt.currAsst>0?(bt.uptoRev/bt.currAsst):0; break;
+      case 'turnUp':
+        av=at.billable>0?(at.todayPaid/at.billable):0;
+        bv=bt.billable>0?(bt.todayPaid/bt.billable):0; break;
+      default: av=at.billable||0; bv=bt.billable||0;
+    }
+    if(typeof av==='string') return window._prSortAsc?av.localeCompare(bv):bv.localeCompare(av);
+    return window._prSortAsc?(av-bv):(bv-av);
+  });
+
+  window._prSsList = ssList;
+  buildProgressReport();
+}
+
 function prSortChange(val){
   var ssMap = window._prSSMap || {};
   var ssList = Object.keys(ssMap);
@@ -1302,9 +1356,24 @@ function buildProgressReport(){
   h += '<tr style="background:#DBEAFE;">';
   var cols = ['DIV','SUBSTATION','BILLABLE CONS','METER BILLABLE','BILLED','% Billed','% Billed (Excpt Prov)','MU CNT','% MU','GAP (Billed & MU)','CURR. ASST.','TODAY REVENUE','Upto REVENUE','TODAY Paid Cnt','Upto Paid Cnt','% Coll. effic.','Turn Up%'];
   var colWidths = ['40px','140px','60px','60px','60px','55px','70px','60px','55px','70px','80px','90px','90px','80px','80px','65px','65px'];
+  var colSortKeys = {
+    'DIV':'div','SUBSTATION':'name','BILLABLE CONS':'billable','METER BILLABLE':'meterBillable',
+    'BILLED':'billed','% Billed':'pctBilled','% Billed (Excpt Prov)':'pctBilledExProv',
+    'MU CNT':'muCnt','% MU':'pctMU','GAP (Billed & MU)':'gap',
+    'CURR. ASST.':'currAsst','TODAY REVENUE':'todayRev','Upto REVENUE':'uptoRev',
+    'TODAY Paid Cnt':'todayPaid','Upto Paid Cnt':'uptoPaid',
+    '% Coll. effic.':'collEff','Turn Up%':'turnUp'
+  };
+  var _prSortCol = window._prSortCol||'billable', _prSortAsc = window._prSortAsc||false;
   cols.forEach(function(c,i){
     var isRed = (c==='TODAY REVENUE'||c==='TODAY Paid Cnt');
-    h += '<th style="padding:5px 6px;border:1px solid #BFDBFE;font-family:var(--fh);font-size:9px;font-weight:700;text-align:center;width:'+colWidths[i]+';'+(isRed?'color:#DC2626;':'color:#1E3A5F;')+'">'+c+'</th>';
+    var sk = colSortKeys[c];
+    var isActive = (sk && sk===_prSortCol);
+    var arrow = isActive ? (_prSortAsc?'↑':'↓') : '⇅';
+    var cursor = sk ? 'cursor:pointer;' : '';
+    var bg = isActive ? 'background:#BFDBFE;' : '';
+    var onclick = sk ? 'onclick="prColSort(\''+sk+'\')"' : '';
+    h += '<th '+onclick+' style="padding:5px 6px;border:1px solid #BFDBFE;font-family:var(--fh);font-size:9px;font-weight:700;text-align:center;width:'+colWidths[i]+';'+cursor+bg+(isRed?'color:#DC2626;':'color:#1E3A5F;')+'">'+c+' <span style="font-size:8px;opacity:0.7;">'+arrow+'</span></th>';
   });
   h += '</tr></thead><tbody>';
 
