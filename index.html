@@ -1849,25 +1849,36 @@ function smExportPDF(){
   var smDiv = document.querySelector('#panel-progress > div:last-child');
   if(!smDiv){ alert('SM report not loaded'); return; }
 
-  // Use print window
   var dataDate = window._prDataDate || new Date();
   var dateStr = dataDate.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 
+  // Clone with computed inline styles
+  var srcTbl = smDiv.querySelector('table');
+  var clone = srcTbl.cloneNode(true);
+  var srcCells = srcTbl.querySelectorAll('th,td');
+  var clnCells = clone.querySelectorAll('th,td');
+  srcCells.forEach(function(src,i){
+    var cs = window.getComputedStyle(src);
+    clnCells[i].style.background = cs.backgroundColor;
+    clnCells[i].style.color      = cs.color;
+    clnCells[i].style.fontWeight = cs.fontWeight;
+    clnCells[i].style.fontSize   = '8px';
+    clnCells[i].style.padding    = '4px 5px';
+    clnCells[i].style.border     = '1px solid #374151';
+    clnCells[i].style.textAlign  = cs.textAlign;
+  });
+
   var win = window.open('','_blank');
   win.document.write('<html><head><title>SM NonSM Summary</title><style>');
-  win.document.write('body{font-family:Arial,sans-serif;font-size:10px;margin:10px;}');
+  win.document.write('*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-sizing:border-box;}');
+  win.document.write('body{font-family:Arial,sans-serif;font-size:8px;margin:8px;}');
   win.document.write('table{border-collapse:collapse;width:100%;}');
-  win.document.write('th{background:#0F4C81;color:#fff;padding:5px 4px;font-size:9px;text-align:center;border:1px solid #374151;}');
-  win.document.write('td{padding:4px;border:1px solid #E5E7EB;text-align:right;font-size:9px;}');
-  win.document.write('td:nth-child(2){text-align:left;}');
-  win.document.write('tr:nth-child(even) td{background:#F8FAFC;}');
-  win.document.write('.grand{background:#1E3A5F!important;color:#fff;font-weight:bold;}');
-  win.document.write('.sm-row{background:#166534!important;color:#fff;font-weight:bold;}');
-  win.document.write('.nsm-row{background:#92400E!important;color:#fff;font-weight:bold;}');
-  win.document.write('@media print{@page{size:A3 landscape;margin:8mm;}body{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}th,td,.grand,.sm-row,.nsm-row{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}');
+  win.document.write('th,td{border:1px solid #374151;padding:4px 5px;}');
+  win.document.write('@page{size:A3 landscape;margin:8mm;}');
+  win.document.write('@media print{body{margin:0;}thead{display:table-header-group;}}');
   win.document.write('</style></head><body>');
-  win.document.write('<h3 style="margin:0 0 6px 0;color:#0F4C81;">⚡ SM / Non-SM WISE BILLING & COLLECTION SUMMARY (Amt in Lacs) &nbsp; upto '+dateStr+'</h3>');
-  win.document.write(smDiv.querySelector('table').outerHTML);
+  win.document.write('<h3 style="margin:0 0 6px 0;color:#0F4C81;font-family:Arial;font-size:11px;">⚡ SM / Non-SM WISE BILLING & COLLECTION SUMMARY (Amt in Lacs) &nbsp; upto '+dateStr+'</h3>');
+  win.document.write(clone.outerHTML);
   win.document.write('<script>window.onload=function(){window.print();}<\/script>');
   win.document.write('</body></html>');
   win.document.close();
@@ -1914,32 +1925,43 @@ function progressExportXLSX(){
 function progressExportPDF(){
   var tbl = gel('progress-table');
   if(!tbl){ alert('Report not loaded.'); return; }
-  // Show all rows
+  // Show all feeder rows
   var hidden = document.querySelectorAll('[class^="feeder-row-"]');
   hidden.forEach(function(r){ r._wasHidden = r.style.display==='none'; r.style.display=''; });
-  var cleanHtml = '<table>';
-  tbl.querySelectorAll('tr').forEach(function(row){
-    cleanHtml += '<tr>';
-    row.querySelectorAll('th,td').forEach(function(cell){
-      var tag = cell.tagName.toLowerCase();
-      var cs = cell.getAttribute('colspan')?(' colspan="'+cell.getAttribute('colspan')+'"'):'';
-      cleanHtml += '<'+tag+cs+'>'+cell.textContent.trim()+'</'+tag+'>';
-    });
-    cleanHtml += '</tr>';
+
+  // Clone table with full inline styles
+  var clone = tbl.cloneNode(true);
+  // Apply inline styles to all th/td from computed styles
+  var srcCells = tbl.querySelectorAll('th,td');
+  var clnCells = clone.querySelectorAll('th,td');
+  srcCells.forEach(function(src,i){
+    var cs = window.getComputedStyle(src);
+    clnCells[i].style.background    = cs.backgroundColor;
+    clnCells[i].style.color         = cs.color;
+    clnCells[i].style.fontWeight    = cs.fontWeight;
+    clnCells[i].style.fontSize      = '8px';
+    clnCells[i].style.padding       = '3px 5px';
+    clnCells[i].style.border        = '1px solid #94A3B8';
+    clnCells[i].style.textAlign     = cs.textAlign;
   });
-  cleanHtml += '</table>';
+
+  var tblHtml = clone.outerHTML;
   hidden.forEach(function(r){ if(r._wasHidden) r.style.display='none'; });
+
   var d = new Date().toLocaleDateString('en-IN');
-  var w = window.open('','_blank','width=1200,height=750');
+  var w = window.open('','_blank','width=1400,height=800');
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>SS Progress Report</title>');
-  w.document.write('<style>*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:9px;margin:0;}');
-  w.document.write('h2{font-size:12px;color:#1E3A5F;margin:8px 0 4px;text-align:center;}');
-  w.document.write('table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ccc;padding:3px 5px;text-align:center;}');
-  w.document.write('th{background:#1E3A5F;color:#fff;font-size:8px;}tr:nth-child(even) td{background:#f9f9f9;}');
-  w.document.write('@page{size:A3 landscape;margin:8mm;}@media print{body{margin:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}}');
+  w.document.write('<style>');
+  w.document.write('*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-sizing:border-box;}');
+  w.document.write('body{font-family:Arial,sans-serif;font-size:8px;margin:6px;}');
+  w.document.write('h2{font-size:11px;color:#1E3A5F;margin:6px 0 4px;text-align:center;font-weight:bold;}');
+  w.document.write('table{border-collapse:collapse;width:100%;table-layout:fixed;}');
+  w.document.write('th,td{border:1px solid #94A3B8;padding:3px 4px;text-align:center;word-break:break-word;}');
+  w.document.write('@page{size:A3 landscape;margin:6mm;}');
+  w.document.write('@media print{body{margin:0;}thead{display:table-header-group;}}');
   w.document.write('</style></head><body>');
   w.document.write('<h2>Sub Station Wise Billing & Collection Summary (Amt in Lacs) &nbsp; upto '+d+'</h2>');
-  w.document.write(cleanHtml);
+  w.document.write(tblHtml);
   w.document.write('<scr'+'ipt>window.onload=function(){window.print();};<'+'/scr'+'ipt>');
   w.document.write('</body></html>');
   w.document.close();
