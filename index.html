@@ -1264,7 +1264,24 @@ function buildProgressReport(){
   // ─── Build HTML ─────────────────────────────────────────────────────────
   // Top 16 SS by billable consumers
   window._prSSMap = ssMap; window._prDataDate = dataDate; window._prSortCol=window._prSortCol||'billable'; // Share with SM report
-  var ssList = Object.keys(ssMap).sort(function(a,b){return ssMap[b].tots.billable-ssMap[a].tots.billable;}).slice(0,16);
+  var allSSList = Object.keys(ssMap).sort(function(a,b){return ssMap[b].tots.billable-ssMap[a].tots.billable;});
+  var top16 = allSSList.slice(0,16);
+  var remaining = allSSList.slice(16).filter(function(ss){ return ss && ss!=='Unknown' && ss!=='N' && ss!=='NA'; });
+  // Merge remaining SS into "OTHER SS" virtual entry
+  if(remaining.length > 0){
+    var otherKey = 'OTHER SS ('+remaining.length+')';
+    var ot = {billable:0,meterBillable:0,billed:0,unbilled:0,muCnt:0,provCnt:0,
+      currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0,
+      smBillable:0,smBilled:0,smMuCnt:0,smCurrAsst:0,smTodayRev:0,smUptoRev:0,smTodayPaid:0,smUptoPaid:0,
+      nsmBillable:0,nsmBilled:0,nsmMuCnt:0,nsmCurrAsst:0,nsmTodayRev:0,nsmUptoRev:0,nsmTodayPaid:0,nsmUptoPaid:0};
+    remaining.forEach(function(ss){
+      var t=ssMap[ss].tots;
+      Object.keys(ot).forEach(function(k){ if(typeof t[k]==='number') ot[k]+=(t[k]||0); });
+    });
+    ssMap[otherKey]={feeders:{},tots:ot};
+    top16.push(otherKey);
+  }
+  var ssList = top16;
   window._prSsList = ssList; // Share with SM report
   // Apply sort if set
   if(window._prSortCol && window._prSortCol!=='billable'){
