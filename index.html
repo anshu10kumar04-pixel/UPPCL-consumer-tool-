@@ -1270,14 +1270,17 @@ function buildProgressReport(){
   // Merge remaining SS into "OTHER SS" virtual entry
   if(remaining.length > 0){
     var otherKey = 'OTHER SS ('+remaining.length+')';
-    var ot = {billable:0,meterBillable:0,billed:0,unbilled:0,muCnt:0,provCnt:0,
-      currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0,
-      smBillable:0,smBilled:0,smMuCnt:0,smCurrAsst:0,smTodayRev:0,smUptoRev:0,smTodayPaid:0,smUptoPaid:0,
-      nsmBillable:0,nsmBilled:0,nsmMuCnt:0,nsmCurrAsst:0,nsmTodayRev:0,nsmUptoRev:0,nsmTodayPaid:0,nsmUptoPaid:0};
+    // Init with same structure as other SS tots
+    var firstSS = remaining.find(function(s){ return ssMap[s] && ssMap[s].tots; });
+    if(!firstSS){ top16.push = top16.push; } // skip if no valid SS
+    else {
+    var ot = {};
+    Object.keys(ssMap[firstSS].tots).forEach(function(k){ ot[k]=0; });
     remaining.forEach(function(ss){
+      if(!ssMap[ss] || !ssMap[ss].tots) return;
       var t=ssMap[ss].tots;
-      Object.keys(ot).forEach(function(k){ if(typeof t[k]==='number') ot[k]+=(t[k]||0); });
-    });
+      Object.keys(ot).forEach(function(k){ ot[k]+=(t[k]||0); });
+    });}
     ssMap[otherKey]={feeders:{},tots:ot};
     top16.push(otherKey);
   }
@@ -2125,10 +2128,22 @@ function buildYoYReport(){
       });
     });
 
-    // Top 16 SS by current year revenue (matching progress report)
-    var allSS = [...new Set([...Object.keys(cy),...Object.keys(py)])]
-      .sort(function(a,b){ return (cy[b]?cy[b].total_rev:0)-(cy[a]?cy[a].total_rev:0); })
-      .slice(0,16);
+    // Top 16 SS by current year revenue + OTHER SS (matching progress report)
+    var allSSRaw = [...new Set([...Object.keys(cy),...Object.keys(py)])]
+      .sort(function(a,b){ return (cy[b]?cy[b].total_rev:0)-(cy[a]?cy[a].total_rev:0); });
+    var allSS = allSSRaw.slice(0,16);
+    // Merge remaining into OTHER SS
+    var remSS = allSSRaw.slice(16).filter(function(s){ return s && s!=='Unknown'&&s!=='N'&&s!=='NA'&&s!==''; });
+    if(remSS.length>0){
+      var otKey='OTHER SS ('+remSS.length+')';
+      cy[otKey]={total_rev:0,total_cnt:0,tariffs:{}};
+      py[otKey]={total_rev:0,total_cnt:0,tariffs:{}};
+      remSS.forEach(function(s){
+        if(cy[s]){cy[otKey].total_rev+=(cy[s].total_rev||0);cy[otKey].total_cnt+=(cy[s].total_cnt||0);}
+        if(py[s]){py[otKey].total_rev+=(py[s].total_rev||0);py[otKey].total_cnt+=(py[s].total_cnt||0);}
+      });
+      allSS.push(otKey);
+    }
 
     function fL(n){ if(!n) return '0'; n=Math.abs(n); return n>=10000000?(n/10000000).toFixed(2)+' Cr':n>=100000?(n/100000).toFixed(2)+' L':'₹'+Math.round(n).toLocaleString(); }
     function dEl(cy,py){ var d=cy-py; var pct=py>0?((d/py)*100).toFixed(1):'—'; var c=d>=0?'#059669':'#DC2626'; return '<span style="color:'+c+';font-size:10px;font-weight:700;">'+(d>=0?'▲':'▼')+fL(d)+'<br>('+pct+'%)</span>'; }
@@ -2355,7 +2370,19 @@ function yoyExportXLSX(){
   });
 
   var allSS=Object.keys(cy).concat(Object.keys(py)).filter(function(v,i,a){return a.indexOf(v)===i;})
-    .sort(function(a,b){return (cy[b]?cy[b].total_rev:0)-(cy[a]?cy[a].total_rev:0);}).slice(0,16);
+    .sort(function(a,b){return (cy[b]?cy[b].total_rev:0)-(cy[a]?cy[a].total_rev:0);});
+  var allSSTop = allSSUnsorted.slice(0,16);
+  var remSS2 = allSSUnsorted.slice(16).filter(function(s){ return s && s!=='Unknown'&&s!=='N'&&s!=='NA'&&s!==''; });
+  if(remSS2.length>0){
+    var otKey2='OTHER SS ('+remSS2.length+')';
+    cy[otKey2]={total_rev:0,total_cnt:0,tariffs:{}}; py[otKey2]={total_rev:0,total_cnt:0,tariffs:{}};
+    remSS2.forEach(function(s){
+      if(cy[s]){cy[otKey2].total_rev+=(cy[s].total_rev||0);}
+      if(py[s]){py[otKey2].total_rev+=(py[s].total_rev||0);}
+    });
+    allSSTop.push(otKey2);
+  }
+  var allSS = allSSTop;
 
   allSS.forEach(function(ss){
     var c=cy[ss]||{total_rev:0,total_cnt:0,tariff:{}};
