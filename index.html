@@ -2033,8 +2033,9 @@ function buildCYAgg(dataDate){
     var isSM = serial.startsWith('GE') || mrSrc==='SM';
     var tariff=String(r.CATEGORY||r.TARIFF_TYPE||'').trim();
     if(!tariff||!/^(LMV|HV|EHV)/i.test(tariff)) tariff=stToTariff(r.SUPPLY_TYPE)||'OTHER';
-    if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,tariff:{},sm_tariff:{},nsm_tariff:{}};
+    if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,currAsst:0,tariff:{},sm_tariff:{},nsm_tariff:{}};
     cy[ss].total_rev+=lpAmt; cy[ss].total_cnt++;
+    cy[ss].currAsst+=(parseFloat(r.CA||r.CURR_ASSESSMENT||r.CURRENT_ASSESSMENT||0));
     if(isSM){
       cy[ss].sm_rev+=lpAmt; cy[ss].sm_cnt++;
       if(!cy[ss].sm_tariff[tariff]) cy[ss].sm_tariff[tariff]={rev:0,cnt:0};
@@ -2160,6 +2161,7 @@ function buildYoYReport(){
     h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1E40AF;color:#fff;">JUL 2025 FULL MONTH</th>';
     h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1D4ED8;color:#fff;">JUL 2025 '+uptoLabel+'</th>';
     h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#059669;color:#fff;">JUL 2026 '+uptoLabel+'</th>';
+    h += '<th rowspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#D97706;color:#fff;">CURR ASST.</th>';
     h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#7C3AED;color:#fff;">GROWTH (YoY)</th>';
     h += '</tr>';
     // Header row 2
@@ -2177,7 +2179,7 @@ function buildYoYReport(){
       var pd=pyD[ss]||{total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}};
       grandPY.rev+=p.total_rev; grandPY.cnt+=p.total_cnt;
       grandPYD.rev+=pd.total_rev; grandPYD.cnt+=pd.total_cnt;
-      grandCY.rev+=c.total_rev; grandCY.cnt+=c.total_cnt;
+      grandCY.rev+=c.total_rev; grandCY.cnt+=c.total_cnt; grandCY.currAsst=(grandCY.currAsst||0)+(c.currAsst||0);
       var rowBg=si%2?'#fff':'#F9FAFB';
 
       // SS row
@@ -2191,6 +2193,7 @@ function buildYoYReport(){
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#1D4ED8;">'+pd.total_cnt+'</td>';
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#059669;font-weight:600;">'+fL(c.total_rev)+'</td>';
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#059669;">'+c.total_cnt+'</td>';
+      h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;font-weight:700;color:#D97706;">'+fL(c.currAsst||0)+'</td>';
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+dEl(c.total_rev,pd.total_rev)+'</td>';
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;">'+dEl(c.total_cnt,pd.total_cnt)+'</td>';
       h += '</tr>';
@@ -2284,6 +2287,7 @@ function buildYoYReport(){
     h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#60A5FA;">'+grandPYD.cnt+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+fL(grandCY.rev)+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;color:#6EE7B7;">'+grandCY.cnt+'</td>';
+      h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-weight:700;color:#FCD34D;">'+fL(grandCY.currAsst||0)+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+dEl(grandCY.rev,grandPYD.rev)+'</td>';
     h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+dEl(grandCY.cnt,grandPYD.cnt)+'</td>';
     h += '</tr>';
