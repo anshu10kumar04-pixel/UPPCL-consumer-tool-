@@ -1270,19 +1270,18 @@ function buildProgressReport(){
   // Merge remaining SS into "OTHER SS" virtual entry
   if(remaining.length > 0){
     var otherKey = 'OTHER SS ('+remaining.length+')';
-    // Init with same structure as other SS tots
     var firstSS = remaining.find(function(s){ return ssMap[s] && ssMap[s].tots; });
-    if(!firstSS){ top16.push = top16.push; } // skip if no valid SS
-    else {
-    var ot = {};
-    Object.keys(ssMap[firstSS].tots).forEach(function(k){ ot[k]=0; });
-    remaining.forEach(function(ss){
-      if(!ssMap[ss] || !ssMap[ss].tots) return;
-      var t=ssMap[ss].tots;
-      Object.keys(ot).forEach(function(k){ ot[k]+=(t[k]||0); });
-    });}
-    ssMap[otherKey]={feeders:{},tots:ot};
-    top16.push(otherKey);
+    if(firstSS){
+      var ot = {};
+      Object.keys(ssMap[firstSS].tots).forEach(function(k){ ot[k]=0; });
+      remaining.forEach(function(ss){
+        if(!ssMap[ss] || !ssMap[ss].tots) return;
+        var t=ssMap[ss].tots;
+        Object.keys(ot).forEach(function(k){ ot[k]+=(t[k]||0); });
+      });
+      ssMap[otherKey]={feeders:{},tots:ot};
+      top16.push(otherKey);
+    }
   }
   var ssList = top16;
   window._prSsList = ssList; // Share with SM report
@@ -2035,7 +2034,6 @@ function buildCYAgg(dataDate){
     if(!tariff||!/^(LMV|HV|EHV)/i.test(tariff)) tariff=stToTariff(r.SUPPLY_TYPE)||'OTHER';
     if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,currAsst:0,tariff:{},sm_tariff:{},nsm_tariff:{}};
     cy[ss].total_rev+=lpAmt; cy[ss].total_cnt++;
-    cy[ss].currAsst+=(parseFloat(r.CA||r.CURR_ASSESSMENT||r.CURRENT_ASSESSMENT||0));
     if(isSM){
       cy[ss].sm_rev+=lpAmt; cy[ss].sm_cnt++;
       if(!cy[ss].sm_tariff[tariff]) cy[ss].sm_tariff[tariff]={rev:0,cnt:0};
@@ -2047,6 +2045,14 @@ function buildCYAgg(dataDate){
     }
     if(!cy[ss].tariff[tariff]) cy[ss].tariff[tariff]={rev:0,cnt:0};
     cy[ss].tariff[tariff].rev+=lpAmt; cy[ss].tariff[tariff].cnt++;
+  });
+  // Separate pass: accumulate CURR ASST for ALL billed consumers (not just payers)
+  D.forEach(function(r){
+    var ca=parseFloat(r.CA||r.CURR_ASSESSMENT||0);
+    if(!ca) return;
+    var ss=r.SUBSTATION||''; if(!ss) return;
+    if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,currAsst:0,tariff:{},sm_tariff:{},nsm_tariff:{}};
+    cy[ss].currAsst=(cy[ss].currAsst||0)+ca;
   });
   window._cyAgg=cy; window._cyAggDate=ddDay;
   return cy;
