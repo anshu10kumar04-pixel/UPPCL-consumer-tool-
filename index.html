@@ -1188,7 +1188,7 @@ function buildProgressReport(){
     var f = ssMap[ss].feeders[fd];
     var t = ssMap[ss].tots;
     var out = Math.max(0, parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
-    var ca  = Math.max(0, parseFloat(r.CA||0)||0);
+    var ca  = parseFloat(r.CA||0)||0;
     var lp  = Math.max(0, parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);
     var lpDate = r.LAST_PAY_DATE||r.PAY_DATE||'';
     var tariff = String(r.CATEGORY||r.SUPPLY_TYPE||r.TARIFF_TYPE||'').toUpperCase();
