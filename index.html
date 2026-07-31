@@ -1182,6 +1182,8 @@ function buildProgressReport(){
 
   D.forEach(function(r){
     var ss = r.SUBSTATION||'Unknown';
+    // 132 KV HASARI consumers - ensure correct SS grouping
+    if(ss && ss.indexOf('132 KV HASARI')>=0) ss='132 KV HASARI';
     var fd = r.FEEDER||'Unknown';
     if(!ssMap[ss]) ssMap[ss]={feeders:{}, tots:{billable:0,billed:0,unbilled:0,meterBillable:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0,smBillable:0,smBilled:0,smMuCnt:0,smCurrAsst:0,smTodayRev:0,smUptoRev:0,smTodayPaid:0,smUptoPaid:0,nsmBillable:0,nsmBilled:0,nsmMuCnt:0,nsmCurrAsst:0,nsmTodayRev:0,nsmUptoRev:0,nsmTodayPaid:0,nsmUptoPaid:0}};
     if(!ssMap[ss].feeders[fd]) ssMap[ss].feeders[fd]={billable:0,billed:0,unbilled:0,meterBillable:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
