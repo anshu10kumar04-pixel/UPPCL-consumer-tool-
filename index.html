@@ -1541,7 +1541,12 @@ function buildProgressReport(){
   // YoY Comparison Section
   h += '<div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;margin-top:20px;">';
   h += '<div style="background:#1E3A5F;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">';
-  h += '<div style="font-family:var(--fh);font-weight:700;font-size:13px;">📊 SS-WISE REVENUE COMPARISON — JUL 2025 vs JUL 2026</div>';
+    (function(){
+    var mn=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    var d=new Date();
+    var cm=mn[d.getMonth()]; var cy=d.getFullYear(); var py=cy-1;
+    h += '<div style="font-family:var(--fh);font-weight:700;font-size:13px;">📊 SS-WISE REVENUE COMPARISON — '+cm+' '+py+' vs '+cm+' '+cy+'</div>';
+  })();
   h += '<div style="display:flex;gap:8px;align-items:center;">';
   h += '<span style="font-size:10px;opacity:0.7;">SM/Non-SM + Tariff-wise. Click ➕ to expand.</span>';
   h += '<button onclick="yoyExportXLSX()" style="background:#059669;color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-family:var(--fh);font-weight:700;cursor:pointer;">⬇ XLSX</button>';
@@ -1995,9 +2000,12 @@ function progressExportPDF(){
 // ─── JULY YoY COMPARISON ──────────────────────────────────────────────────────
 var PY_DATA = {};  // {ACCT_ID: {ss, supply_type, mr_source_cd, pay_amt, pay_date}}
 var PY_LOADED = false;
+var _PY_LOADED_MONTH = -1;  // track which month PY was loaded for
 
 function loadPrevYearData(callback){
-  if(PY_LOADED){ if(callback) callback(); return; }
+  var _curMon = new Date().getMonth();
+  if(PY_LOADED && _PY_LOADED_MONTH===_curMon){ if(callback) callback(); return; }
+  if(_PY_LOADED_MONTH !== _curMon){ PY_LOADED=false; window.PY_AGG=null; }
   var RAW = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/UPPCL-consumer-tool-/main/';
   // Use pre-aggregated SS-wise JSON (213KB) instead of row-level CSVs (5MB)
   // Detect current month to load correct PY agg file
@@ -2013,7 +2021,7 @@ function loadPrevYearData(callback){
         // Store as PY_AGG — SS-wise pre-aggregated data
         window.PY_AGG = agg;  // {eudd1:{SS:{full:{...},upto:{day:{...}}}}, eudd2:{...}}
       }
-      PY_LOADED=true;
+      PY_LOADED=true; _PY_LOADED_MONTH=new Date().getMonth();
       if(callback) callback();
     })
     .catch(function(){ PY_LOADED=true; if(callback) callback(); });
