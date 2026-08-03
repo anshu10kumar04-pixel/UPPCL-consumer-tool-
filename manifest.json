@@ -23,24 +23,24 @@
     "master/eudd1u.csv"
   ],
   "billed_eudd1": [
-    "billed/billed_eudd1a.csv",
-    "billed/billed_eudd1b.csv",
-    "billed/billed_eudd1c.csv",
-    "billed/billed_eudd1d.csv",
-    "billed/billed_eudd1e.csv",
-    "billed/billed_eudd1f.csv",
-    "billed/billed_eudd1g.csv",
-    "billed/billed_eudd1h.csv",
-    "billed/billed_eudd1i.csv",
-    "billed/billed_eudd1j.csv",
-    "billed/billed_eudd1k.csv",
-    "billed/billed_eudd1l.csv",
-    "billed/billed_eudd1m.csv",
-    "billed/billed_eudd1n.csv",
-    "billed/billed_eudd1o.csv"
+    "billed/billed_eudd1a.csv"
   ],
   "unbilled_eudd1": [
-    "unbilled/unbilled_eudd1a.csv"
+    "unbilled/unbilled_eudd1a.csv",
+    "unbilled/unbilled_eudd1b.csv",
+    "unbilled/unbilled_eudd1c.csv",
+    "unbilled/unbilled_eudd1d.csv",
+    "unbilled/unbilled_eudd1e.csv",
+    "unbilled/unbilled_eudd1f.csv",
+    "unbilled/unbilled_eudd1g.csv",
+    "unbilled/unbilled_eudd1h.csv",
+    "unbilled/unbilled_eudd1i.csv",
+    "unbilled/unbilled_eudd1j.csv",
+    "unbilled/unbilled_eudd1k.csv",
+    "unbilled/unbilled_eudd1l.csv",
+    "unbilled/unbilled_eudd1m.csv",
+    "unbilled/unbilled_eudd1n.csv",
+    "unbilled/unbilled_eudd1o.csv"
   ],
   "eudd2": [
     "master/eudd2a.csv",
@@ -66,39 +66,39 @@
     "master/eudd2u.csv"
   ],
   "billed_eudd2": [
-    "billed/billed_eudd2a.csv",
-    "billed/billed_eudd2b.csv",
-    "billed/billed_eudd2c.csv",
-    "billed/billed_eudd2d.csv",
-    "billed/billed_eudd2e.csv",
-    "billed/billed_eudd2f.csv",
-    "billed/billed_eudd2g.csv",
-    "billed/billed_eudd2h.csv",
-    "billed/billed_eudd2i.csv",
-    "billed/billed_eudd2j.csv",
-    "billed/billed_eudd2k.csv",
-    "billed/billed_eudd2l.csv",
-    "billed/billed_eudd2m.csv",
-    "billed/billed_eudd2n.csv",
-    "billed/billed_eudd2o.csv",
-    "billed/billed_eudd2p.csv"
+    "billed/billed_eudd2a.csv"
   ],
   "unbilled_eudd2": [
-    "unbilled/unbilled_eudd2a.csv"
+    "unbilled/unbilled_eudd2a.csv",
+    "unbilled/unbilled_eudd2b.csv",
+    "unbilled/unbilled_eudd2c.csv",
+    "unbilled/unbilled_eudd2d.csv",
+    "unbilled/unbilled_eudd2e.csv",
+    "unbilled/unbilled_eudd2f.csv",
+    "unbilled/unbilled_eudd2g.csv",
+    "unbilled/unbilled_eudd2h.csv",
+    "unbilled/unbilled_eudd2i.csv",
+    "unbilled/unbilled_eudd2j.csv",
+    "unbilled/unbilled_eudd2k.csv",
+    "unbilled/unbilled_eudd2l.csv",
+    "unbilled/unbilled_eudd2m.csv",
+    "unbilled/unbilled_eudd2n.csv",
+    "unbilled/unbilled_eudd2o.csv",
+    "unbilled/unbilled_eudd2p.csv"
   ],
   "sync_status": {
     "233511": {
-      "master_period": "JUN_2026",
-      "billed_date": "31072026",
-      "unbilled_date": "31072026"
+      "master_period": "JUL_2026",
+      "billed_date": "03082026",
+      "unbilled_date": "03082026"
     },
     "233512": {
-      "master_period": "JUN_2026",
-      "billed_date": "31072026",
-      "unbilled_date": "31072026"
+      "master_period": "JUL_2026",
+      "billed_date": "03082026",
+      "unbilled_date": "03082026"
     }
   },
-  "updated": "2026-08-01T10:28:33.825375Z",
+  "updated": "2026-08-03T05:14:42.561183Z",
   "defaulters_eudd1": [
     "defaulters/def_eudd1a.csv",
     "defaulters/def_eudd1b.csv",
