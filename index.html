@@ -2014,7 +2014,7 @@ function loadPrevYearData(callback){
   var _pyMonth = _months[_now.getMonth()];
   var _pyYear = _now.getFullYear()-1;
   var _pyAggFile = 'prev_year/'+_pyMonth+_pyYear+'_agg.json';
-  fetch(RAW+_pyAggFile)
+  fetch(RAW+_pyAggFile+'?v='+_pyMonth+_pyYear)
     .then(function(r){ return r.ok?r.json():null; })
     .then(function(agg){
       if(agg){
@@ -2181,10 +2181,11 @@ function buildYoYReport(){
     h += '<th rowspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;width:32px;"></th>';
     h += '<th rowspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:left;min-width:160px;color:#fff;">SUBSTATION</th>';
     var ddStr = dataDate.getDate()+'-'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dataDate.getMonth()]+'-'+dataDate.getFullYear();
-    var uptoLabel = 'Upto '+dataDate.getDate()+' Jul';
-    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1E40AF;color:#fff;">JUL 2025 FULL MONTH</th>';
-    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1D4ED8;color:#fff;">JUL 2025 '+uptoLabel+'</th>';
-    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#059669;color:#fff;">JUL 2026 '+uptoLabel+'</th>';
+    var _smn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; var uptoLabel = 'Upto '+dataDate.getDate()+' '+_smn[dataDate.getMonth()];
+    var _umn=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']; var _cm=new Date().getMonth(); var pyMonLabel=_umn[_cm]; var cyMonLabel=_umn[_cm];
+    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1E40AF;color:#fff;">'+pyMonLabel+' 2025 FULL MONTH</th>';
+    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1D4ED8;color:#fff;">'+pyMonLabel+' 2025 '+uptoLabel+'</th>';
+    h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#059669;color:#fff;">'+cyMonLabel+' 2026 '+uptoLabel+'</th>';
     h += '<th rowspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#D97706;color:#fff;">CURR ASST.</th>';
     h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#7C3AED;color:#fff;">GROWTH (YoY)</th>';
     h += '</tr>';
@@ -2374,7 +2375,7 @@ function yoyExportXLSX(){
   var uptoLabel = 'Upto '+dayN+' Jul';
 
   // Build rows
-  var rows = [['SUBSTATION','JUL 2025 FULL REV','JUL 2025 FULL CNT','JUL 2025 '+uptoLabel+' REV','JUL 2025 '+uptoLabel+' CNT','JUL 2026 '+uptoLabel+' REV','JUL 2026 '+uptoLabel+' CNT','GROWTH REV','GROWTH CNT']];
+  var rows = [['SUBSTATION',''+pyMonLabel+' 2025 FULL REV',''+pyMonLabel+' 2025 FULL CNT',''+pyMonLabel+' 2025 '+uptoLabel+' REV',''+pyMonLabel+' 2025 '+uptoLabel+' CNT',''+cyMonLabel+' 2026 '+uptoLabel+' REV',''+cyMonLabel+' 2026 '+uptoLabel+' CNT','GROWTH REV','GROWTH CNT']];
 
   var py={}, pyD={};
   ['eudd1','eudd2'].forEach(function(div){
@@ -2457,7 +2458,7 @@ function yoyExportPDF(){
     win.document.write('<html><head><title>YoY Revenue Comparison</title>');
     win.document.write('<style>body{font-family:Arial,sans-serif;font-size:11px;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ccc;padding:4px 6px;}th{background:#1E3A5F;color:#fff;}tr:nth-child(even){background:#f9f9f9;}</style>');
     win.document.write('</head><body>');
-    win.document.write('<h3>SS-WISE REVENUE COMPARISON — JUL 2025 vs JUL 2026</h3>');
+    win.document.write('<h3>SS-WISE REVENUE COMPARISON — '+pyMonLabel+' 2025 vs '+cyMonLabel+' 2026</h3>');
     win.document.write(table.outerHTML);
     win.document.write('</body></html>');
     win.document.close();
