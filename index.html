@@ -2004,8 +2004,11 @@ var _PY_LOADED_MONTH = -1;  // track which month PY was loaded for
 
 function loadPrevYearData(callback){
   var _curMon = new Date().getMonth();
-  if(PY_LOADED && _PY_LOADED_MONTH===_curMon){ if(callback) callback(); return; }
-  if(_PY_LOADED_MONTH !== _curMon){ PY_LOADED=false; window.PY_AGG=null; }
+  var _curYr = new Date().getFullYear();
+  var _pyKey = _curMon+'-'+_curYr;
+  if(PY_LOADED && _PY_LOADED_MONTH===_pyKey){ if(callback) callback(); return; }
+  // Month changed - force reload
+  PY_LOADED=false; window.PY_AGG=null;
   var RAW = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/UPPCL-consumer-tool-/main/';
   // Use pre-aggregated SS-wise JSON (213KB) instead of row-level CSVs (5MB)
   // Detect current month to load correct PY agg file
@@ -2014,14 +2017,15 @@ function loadPrevYearData(callback){
   var _pyMonth = _months[_now.getMonth()];
   var _pyYear = _now.getFullYear()-1;
   var _pyAggFile = 'prev_year/'+_pyMonth+_pyYear+'_agg.json';
-  fetch(RAW+_pyAggFile+'?v='+_pyMonth+_pyYear)
+  fetch(RAW+_pyAggFile+'?v='+Date.now())
     .then(function(r){ return r.ok?r.json():null; })
     .then(function(agg){
-      if(agg){
-        // Store as PY_AGG — SS-wise pre-aggregated data
-        window.PY_AGG = agg;  // {eudd1:{SS:{full:{...},upto:{day:{...}}}}, eudd2:{...}}
+      if(agg && agg.eudd1){
+        window.PY_AGG = agg;
+      } else {
+        window.PY_AGG = {eudd1:{}, eudd2:{}}; // empty - don't show wrong month data
       }
-      PY_LOADED=true; _PY_LOADED_MONTH=new Date().getMonth();
+      PY_LOADED=true; _PY_LOADED_MONTH=new Date().getMonth()+'-'+new Date().getFullYear();
       if(callback) callback();
     })
     .catch(function(){ PY_LOADED=true; if(callback) callback(); });
