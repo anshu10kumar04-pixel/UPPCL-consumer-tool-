@@ -2000,7 +2000,13 @@ function loadPrevYearData(callback){
   if(PY_LOADED){ if(callback) callback(); return; }
   var RAW = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/UPPCL-consumer-tool-/main/';
   // Use pre-aggregated SS-wise JSON (213KB) instead of row-level CSVs (5MB)
-  fetch(RAW+'prev_year/jul2025_agg.json')
+  // Detect current month to load correct PY agg file
+  var _now = new Date();
+  var _months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  var _pyMonth = _months[_now.getMonth()];
+  var _pyYear = _now.getFullYear()-1;
+  var _pyAggFile = 'prev_year/'+_pyMonth+_pyYear+'_agg.json';
+  fetch(RAW+_pyAggFile)
     .then(function(r){ return r.ok?r.json():null; })
     .then(function(agg){
       if(agg){
