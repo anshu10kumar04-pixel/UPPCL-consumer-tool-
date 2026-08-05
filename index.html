@@ -4673,10 +4673,12 @@ function parseFileInto(text, type){
         // If consumer paid AFTER master snapshot date, subtract that payment from outstanding
         var curLpDate = parseDate(rawDate);
         var masterLpDate = parseDate(master.LP_DATE);
-        // Use unbilled LP if it's more recent than master LP
-        if(curLpDate && masterLpDate && curLpDate > masterLpDate && pf(rawAmt) > 0){
+        // Only subtract if payment is in CURRENT month (not old payments)
+        var _now = new Date(); var _cm = _now.getMonth(); var _cy = _now.getFullYear();
+        var _isPaidCurMonth = curLpDate && curLpDate.getMonth()===_cm && curLpDate.getFullYear()===_cy;
+        if(_isPaidCurMonth && curLpDate && masterLpDate && curLpDate > masterLpDate && pf(rawAmt) > 0){
           mOut = Math.max(0, mOut - pf(rawAmt));
-        } else if(curLpDate && MASTER_CUTOFF && curLpDate > MASTER_CUTOFF && pf(rawAmt) > 0){
+        } else if(_isPaidCurMonth && curLpDate && MASTER_CUTOFF && curLpDate > MASTER_CUTOFF && pf(rawAmt) > 0){
           mOut = Math.max(0, mOut - pf(rawAmt));
         }
         outValue = mOut.toString();
