@@ -24,7 +24,11 @@
   ],
   "billed_eudd1": [
     "billed/billed_eudd1a.csv",
-    "billed/billed_eudd1b.csv"
+    "billed/billed_eudd1b.csv",
+    "billed/billed_eudd1c.csv",
+    "billed/billed_eudd1d.csv",
+    "billed/billed_eudd1e.csv",
+    "billed/billed_eudd1f.csv"
   ],
   "unbilled_eudd1": [
     "unbilled/unbilled_eudd1a.csv",
@@ -36,10 +40,7 @@
     "unbilled/unbilled_eudd1g.csv",
     "unbilled/unbilled_eudd1h.csv",
     "unbilled/unbilled_eudd1i.csv",
-    "unbilled/unbilled_eudd1j.csv",
-    "unbilled/unbilled_eudd1k.csv",
-    "unbilled/unbilled_eudd1l.csv",
-    "unbilled/unbilled_eudd1m.csv"
+    "unbilled/unbilled_eudd1j.csv"
   ],
   "eudd2": [
     "master/eudd2a.csv",
@@ -66,7 +67,11 @@
   ],
   "billed_eudd2": [
     "billed/billed_eudd2a.csv",
-    "billed/billed_eudd2b.csv"
+    "billed/billed_eudd2b.csv",
+    "billed/billed_eudd2c.csv",
+    "billed/billed_eudd2d.csv",
+    "billed/billed_eudd2e.csv",
+    "billed/billed_eudd2f.csv"
   ],
   "unbilled_eudd2": [
     "unbilled/unbilled_eudd2a.csv",
@@ -79,33 +84,32 @@
     "unbilled/unbilled_eudd2h.csv",
     "unbilled/unbilled_eudd2i.csv",
     "unbilled/unbilled_eudd2j.csv",
-    "unbilled/unbilled_eudd2k.csv",
-    "unbilled/unbilled_eudd2l.csv",
-    "unbilled/unbilled_eudd2m.csv",
-    "unbilled/unbilled_eudd2n.csv"
+    "unbilled/unbilled_eudd2k.csv"
   ],
   "sync_status": {
     "233511": {
       "master_period": "JUL_2026",
-      "billed_date": "07082026",
-      "unbilled_date": "07082026"
+      "billed_date": "08082026",
+      "unbilled_date": "08082026"
     },
     "233512": {
       "master_period": "JUL_2026",
-      "billed_date": "07082026",
-      "unbilled_date": "07082026"
+      "billed_date": "08082026",
+      "unbilled_date": "08082026"
     }
   },
-  "updated": "2026-08-07T04:30:05.472982Z",
+  "updated": "2026-08-08T03:43:50.372693Z",
   "defaulters_eudd1": [
     "defaulters/def_eudd1a.csv",
     "defaulters/def_eudd1b.csv",
-    "defaulters/def_eudd1c.csv"
+    "defaulters/def_eudd1c.csv",
+    "defaulters/def_eudd1d.csv"
   ],
   "defaulters_eudd2": [
     "defaulters/def_eudd2a.csv",
     "defaulters/def_eudd2b.csv",
     "defaulters/def_eudd2c.csv",
-    "defaulters/def_eudd2d.csv"
+    "defaulters/def_eudd2d.csv",
+    "defaulters/def_eudd2e.csv"
   ]
 }
