@@ -2073,8 +2073,15 @@ function buildCYAgg(dataDate){
     var ca=parseFloat(r.CA||r.CURR_ASSESSMENT||0);
     if(!ca) return;
     var ss=r.SUBSTATION||''; if(!ss) return;
-    if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,currAsst:0,tariff:{},sm_tariff:{},nsm_tariff:{}};
+    if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,currAsst:0,sm_currAsst:0,nsm_currAsst:0,tariff:{},sm_tariff:{},nsm_tariff:{}};
     cy[ss].currAsst=(cy[ss].currAsst||0)+ca;
+    // GE meter serial = SM (Smart Meter), same detection used for revenue above
+    var serial=String(r.SERIAL_NBR||r.METER_SERIAL_NBR||'').replace(/^'/,'').toUpperCase();
+    var mrSrc=String(r.MR_SOURCE_CD||'').toUpperCase();
+    if(!mrSrc && window._smLookup) mrSrc=(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
+    var isSM = serial.startsWith('GE') || mrSrc==='SM';
+    if(isSM) cy[ss].sm_currAsst=(cy[ss].sm_currAsst||0)+ca;
+    else cy[ss].nsm_currAsst=(cy[ss].nsm_currAsst||0)+ca;
   });
   window._cyAgg=cy; window._cyAggDate=ddDay;
   return cy;
@@ -2237,6 +2244,8 @@ function buildYoYReport(){
       grandPYD.nsm_rev+=parseFloat(pd.nsm_rev||0); grandPYD.nsm_cnt+=parseInt(pd.nsm_cnt||0);
       grandCY.sm_rev+=parseFloat(c.sm_rev||0); grandCY.sm_cnt+=parseInt(c.sm_cnt||0);
       grandCY.nsm_rev+=parseFloat(c.nsm_rev||0); grandCY.nsm_cnt+=parseInt(c.nsm_cnt||0);
+      grandCY.sm_currAsst=(grandCY.sm_currAsst||0)+parseFloat(c.sm_currAsst||0);
+      grandCY.nsm_currAsst=(grandCY.nsm_currAsst||0)+parseFloat(c.nsm_currAsst||0);
 
       // SM row
       h += '<tr class="yoy-sub-'+si+'" id="yoy-sm-row-'+si+'" style="display:none;background:#EFF6FF;">';
@@ -2248,6 +2257,7 @@ function buildYoYReport(){
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;color:#1D4ED8;">'+pd.sm_cnt+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;color:#059669;">'+fL(c.sm_rev)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;color:#059669;">'+c.sm_cnt+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;font-weight:700;color:#D97706;">'+fL(c.sm_currAsst||0)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+dEl(c.sm_rev,pd.sm_rev)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+dEl(c.sm_cnt,pd.sm_cnt)+'</td>';
       h += '</tr>';
@@ -2262,6 +2272,7 @@ function buildYoYReport(){
       h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;color:#1D4ED8;">'+pd.nsm_cnt+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;color:#059669;">'+fL(c.nsm_rev)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;color:#059669;">'+c.nsm_cnt+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;font-weight:700;color:#D97706;">'+fL(c.nsm_currAsst||0)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;">'+dEl(c.nsm_rev,pd.nsm_rev)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:10px;">'+dEl(c.nsm_cnt,pd.nsm_cnt)+'</td>';
       h += '</tr>';
@@ -2281,6 +2292,7 @@ function buildYoYReport(){
         h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;color:#1D4ED8;">'+pdt.cnt+'</td>';
         h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;color:#059669;">'+fL(ct.rev)+'</td>';
         h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;color:#059669;">'+ct.cnt+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;"></td>';
         h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;">'+dEl(ct.rev,pdt.rev)+'</td>';
         h += '<td style="padding:3px 6px;border:1px solid #BAE6FD;text-align:right;font-size:10px;">'+dEl(ct.cnt,pdt.cnt)+'</td>';
         h += '</tr>';
@@ -2300,6 +2312,7 @@ function buildYoYReport(){
         h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;color:#1D4ED8;">'+pdt.cnt+'</td>';
         h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;color:#059669;">'+fL(ct.rev)+'</td>';
         h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;color:#059669;">'+ct.cnt+'</td>';
+        h += '<td style="padding:3px 6px;border:1px solid #FDE68A;"></td>';
         h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;">'+dEl(ct.rev,pdt.rev)+'</td>';
         h += '<td style="padding:3px 6px;border:1px solid #FDE68A;text-align:right;font-size:10px;">'+dEl(ct.cnt,pdt.cnt)+'</td>';
         h += '</tr>';
@@ -2330,6 +2343,7 @@ function buildYoYReport(){
     h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#1D4ED8;">'+grandPYD.sm_cnt+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#059669;">'+fL(grandCY.sm_rev)+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;color:#059669;">'+grandCY.sm_cnt+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;font-weight:700;color:#D97706;">'+fL(grandCY.sm_currAsst||0)+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+dEl(grandCY.sm_rev,grandPYD.sm_rev)+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+dEl(grandCY.sm_cnt,grandPYD.sm_cnt)+'</td>';
     h += '</tr>';
@@ -2343,6 +2357,7 @@ function buildYoYReport(){
     h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#C2410C;">'+grandPYD.nsm_cnt+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#D97706;">'+fL(grandCY.nsm_rev)+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;color:#D97706;">'+grandCY.nsm_cnt+'</td>';
+    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;font-weight:700;color:#D97706;">'+fL(grandCY.nsm_currAsst||0)+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+dEl(grandCY.nsm_rev,grandPYD.nsm_rev)+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+dEl(grandCY.nsm_cnt,grandPYD.nsm_cnt)+'</td>';
     h += '</tr>';
