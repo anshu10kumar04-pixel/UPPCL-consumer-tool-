@@ -1273,8 +1273,10 @@ function buildProgressReport(){
   // Top 16 SS by billable consumers
   window._prSSMap = ssMap; window._prDataDate = dataDate; window._prSortCol=window._prSortCol||'billable'; // Share with SM report
   var allSSList = Object.keys(ssMap).sort(function(a,b){return ssMap[b].tots.billable-ssMap[a].tots.billable;});
-  var top16 = allSSList.slice(0,16);
-  var remaining = allSSList.slice(16).filter(function(ss){ return ss && ss!=='Unknown' && ss!=='N' && ss!=='NA'; });
+  var nonPinnedList = allSSList.filter(function(s){ return PINNED_SS.indexOf(s)===-1; });
+  var top16 = nonPinnedList.slice(0,16);
+  PINNED_SS.forEach(function(s){ if(ssMap[s] && top16.indexOf(s)===-1) top16.push(s); });
+  var remaining = nonPinnedList.slice(16).filter(function(ss){ return ss && ss!=='Unknown' && ss!=='N' && ss!=='NA'; });
   // Merge remaining SS into "OTHER SS" virtual entry
   if(remaining.length > 0){
     var otherKey = 'OTHER SS ('+remaining.length+')';
@@ -1616,7 +1618,13 @@ function buildSMReport(){
              todayRev:t.nsmTodayRev||0, uptoRev:t.nsmUptoRev||0, todayPaid:t.nsmTodayPaid||0, uptoPaid:t.nsmUptoPaid||0}
     };
   });
-    var ssList2 = window._prSsList || Object.keys(smMap).sort(function(a,b){return (smMap[b]&&smMap[b].tot?smMap[b].tot.billable:0)-(smMap[a]&&smMap[a].tot?smMap[a].tot.billable:0);}).slice(0,16);
+    var ssList2 = window._prSsList || (function(){
+      var _sorted = Object.keys(smMap).filter(function(s){return PINNED_SS.indexOf(s)===-1;})
+        .sort(function(a,b){return (smMap[b]&&smMap[b].tot?smMap[b].tot.billable:0)-(smMap[a]&&smMap[a].tot?smMap[a].tot.billable:0);});
+      var _top = _sorted.slice(0,16);
+      PINNED_SS.forEach(function(s){ if(smMap[s] && _top.indexOf(s)===-1) _top.push(s); });
+      return _top;
+    })();
   var grand={billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
   var gSM={billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
   var gNSM={billable:0,meterBillable:0,billed:0,muCnt:0,provCnt:0,currAsst:0,todayRev:0,uptoRev:0,todayPaid:0,uptoPaid:0};
@@ -2026,6 +2034,43 @@ function loadPrevYearData(callback){
     .then(function(agg){
       if(agg && agg.eudd1){
         window.PY_AGG = agg;
+        // Normalize 132 KV HASARI raw codes into a single key, matching the CY-side
+        // normalization (see PINNED_SS) — otherwise PY data for the pinned row is empty.
+        var _pySSRen = {'132 KV HASARI_26295':'132 KV HASARI','132 KV HASARI_26400':'132 KV HASARI'};
+        ['eudd1','eudd2'].forEach(function(eu){
+          var bucket = window.PY_AGG[eu]; if(!bucket) return;
+          Object.keys(_pySSRen).forEach(function(rawKey){
+            if(!bucket[rawKey]) return;
+            var canon = _pySSRen[rawKey];
+            if(!bucket[canon]){
+              bucket[canon] = bucket[rawKey];
+            } else {
+              ['full'].forEach(function(part){
+                var dst = bucket[canon][part] || (bucket[canon][part]={total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{},sm_tariff:{},nsm_tariff:{}});
+                var src = bucket[rawKey][part] || {};
+                dst.total_rev=(dst.total_rev||0)+(src.total_rev||0);
+                dst.total_cnt=(dst.total_cnt||0)+(src.total_cnt||0);
+                dst.sm_rev=(dst.sm_rev||0)+(src.sm_rev||0);
+                dst.sm_cnt=(dst.sm_cnt||0)+(src.sm_cnt||0);
+                dst.nsm_rev=(dst.nsm_rev||0)+(src.nsm_rev||0);
+                dst.nsm_cnt=(dst.nsm_cnt||0)+(src.nsm_cnt||0);
+              });
+              if(bucket[canon].upto && bucket[rawKey].upto){
+                Object.keys(bucket[rawKey].upto).forEach(function(day){
+                  var dst = bucket[canon].upto[day] || (bucket[canon].upto[day]={total_rev:0,total_cnt:0,sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,tariff:{}});
+                  var src = bucket[rawKey].upto[day] || {};
+                  dst.total_rev=(dst.total_rev||0)+(src.total_rev||0);
+                  dst.total_cnt=(dst.total_cnt||0)+(src.total_cnt||0);
+                  dst.sm_rev=(dst.sm_rev||0)+(src.sm_rev||0);
+                  dst.sm_cnt=(dst.sm_cnt||0)+(src.sm_cnt||0);
+                  dst.nsm_rev=(dst.nsm_rev||0)+(src.nsm_rev||0);
+                  dst.nsm_cnt=(dst.nsm_cnt||0)+(src.nsm_cnt||0);
+                });
+              }
+            }
+            delete bucket[rawKey];
+          });
+        });
       } else {
         window.PY_AGG = {eudd1:{}, eudd2:{}}; // empty - don't show wrong month data
       }
