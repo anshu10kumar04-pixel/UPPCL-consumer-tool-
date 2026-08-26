@@ -2217,13 +2217,23 @@ function buildYoYReport(){
     // 132 KV HASARI is pinned as its own row regardless of revenue rank, since its
     // revenue is dominated by a few large industrial payments and swings in/out of
     // a pure top-16 cutoff, causing it to inconsistently show standalone vs under OTHER SS.
+    //
+    // Use the SAME top-16 SS list as Progress Report (window._prSsList) so that
+    // "OTHER SS" contains the identical set of substations — and therefore the same
+    // consumer count — across Progress Report, SM report, and this YoY report.
+    // Falls back to a local revenue-based ranking only if Progress Report hasn't run yet.
     var allSSRaw = [...new Set([...Object.keys(cy),...Object.keys(py)])]
       .sort(function(a,b){ return (cy[b]?cy[b].total_rev:0)-(cy[a]?cy[a].total_rev:0); });
     var nonPinnedRaw = allSSRaw.filter(function(s){ return PINNED_SS.indexOf(s)===-1; });
-    var allSS = nonPinnedRaw.slice(0,16);
-    PINNED_SS.forEach(function(s){ if((cy[s]||py[s]) && allSS.indexOf(s)===-1) allSS.push(s); });
+    var allSS;
+    if(window._prSsList && window._prSsList.length){
+      allSS = window._prSsList.filter(function(s){ return !/^OTHER SS \(/.test(s); });
+    } else {
+      allSS = nonPinnedRaw.slice(0,16);
+      PINNED_SS.forEach(function(s){ if((cy[s]||py[s]) && allSS.indexOf(s)===-1) allSS.push(s); });
+    }
     // Merge remaining into OTHER SS
-    var remSS = nonPinnedRaw.slice(16).filter(function(s){ return s && s!=='Unknown'&&s!=='N'&&s!=='NA'&&s!==''; });
+    var remSS = allSSRaw.filter(function(s){ return allSS.indexOf(s)===-1 && s && s!=='Unknown'&&s!=='N'&&s!=='NA'&&s!==''; });
     if(remSS.length>0){
       var otKey='OTHER SS ('+remSS.length+')';
       cy[otKey]={total_rev:0,total_cnt:0,tariffs:{}};
@@ -2471,14 +2481,18 @@ function yoyExportXLSX(){
     });
   });
 
-  var allSS=Object.keys(cy).concat(Object.keys(py)).filter(function(v,i,a){return a.indexOf(v)===i;})
+  var allSSFull=Object.keys(cy).concat(Object.keys(py)).filter(function(v,i,a){return a.indexOf(v)===i;})
     .sort(function(a,b){return (cy[b]?cy[b].total_rev:0)-(cy[a]?cy[a].total_rev:0);});
-  // Fix: allSSUnsorted was referenced below but never defined (would throw ReferenceError).
-  // Also pin 132 KV HASARI as its own row regardless of revenue rank (see note above).
-  var nonPinnedSS2 = allSS.filter(function(s){ return PINNED_SS.indexOf(s)===-1; });
-  var allSSTop = nonPinnedSS2.slice(0,16);
-  PINNED_SS.forEach(function(s){ if((cy[s]||py[s]) && allSSTop.indexOf(s)===-1) allSSTop.push(s); });
-  var remSS2 = nonPinnedSS2.slice(16).filter(function(s){ return s && s!=='Unknown'&&s!=='N'&&s!=='NA'&&s!==''; });
+  // Reuse the same top-16 list as Progress Report / main YoY table for consistent OTHER SS grouping.
+  var allSSTop;
+  if(window._prSsList && window._prSsList.length){
+    allSSTop = window._prSsList.filter(function(s){ return !/^OTHER SS \(/.test(s); });
+  } else {
+    var nonPinnedSS2 = allSSFull.filter(function(s){ return PINNED_SS.indexOf(s)===-1; });
+    allSSTop = nonPinnedSS2.slice(0,16);
+    PINNED_SS.forEach(function(s){ if((cy[s]||py[s]) && allSSTop.indexOf(s)===-1) allSSTop.push(s); });
+  }
+  var remSS2 = allSSFull.filter(function(s){ return allSSTop.indexOf(s)===-1 && s && s!=='Unknown'&&s!=='N'&&s!=='NA'&&s!==''; });
   if(remSS2.length>0){
     var otKey2='OTHER SS ('+remSS2.length+')';
     cy[otKey2]={total_rev:0,total_cnt:0,tariffs:{}}; py[otKey2]={total_rev:0,total_cnt:0,tariffs:{}};
