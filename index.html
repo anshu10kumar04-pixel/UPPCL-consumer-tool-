@@ -798,6 +798,27 @@ function pf(v){
   return parseFloat(String(v).replace(/,/g,'')) || 0;
 }
 
+// Reporting "current date" = billed_date (from manifest) minus 1 day, since the
+// FTP file dated DDMMYYYY actually contains the PREVIOUS day's data. Progress
+// Report, SM report, and YoY Comparison all use this — not the browser's literal
+// "today" — so that month-selection (which PY file to load, "AUG 2026" labels
+// etc.) stays consistent with the month the displayed data actually belongs to.
+// Without this, the 1st of a new month would prematurely switch YoY comparison
+// to the new month/its PY file before there's any real data for it yet.
+function getEffectiveDataDate(){
+  var dataDate = new Date();
+  try{
+    var ss = window._manifest_cache && window._manifest_cache.sync_status;
+    var bd = (ss&&(ss['233511']||ss['233512']))?(ss['233511']||ss['233512']).billed_date:'';
+    if(bd && bd.length===8){
+      var dd=parseInt(bd.slice(0,2)),mm=parseInt(bd.slice(2,4))-1,yy=parseInt(bd.slice(4,8));
+      var fileDate = new Date(yy,mm,dd);
+      dataDate = new Date(fileDate.getTime() - 86400000);
+    }
+  }catch(e){}
+  return dataDate;
+}
+
 // AI Collection Probability Score (0-100)
 // Rule-based: recency of last payment, outstanding-to-CA ratio,
 // absolute outstanding amount, payment history, meter type.
@@ -1164,20 +1185,7 @@ function buildProgressReport(){
   }
 
   // FTP file date = today, but data inside = previous day
-  // Use billed_date from manifest minus 1 day as "data date"
-  var today = new Date();
-  var dataDate = today;
-  try{
-    var ss = window._manifest_cache && window._manifest_cache.sync_status;
-    var bd = (ss&&(ss['233511']||ss['233512']))?(ss['233511']||ss['233512']).billed_date:'';
-    if(bd && bd.length===8){
-      // DDMMYYYY format
-      var dd=parseInt(bd.slice(0,2)),mm=parseInt(bd.slice(2,4))-1,yy=parseInt(bd.slice(4,8));
-      var fileDate = new Date(yy,mm,dd);
-      // Data inside file = fileDate - 1 day
-      dataDate = new Date(fileDate.getTime() - 86400000);
-    }
-  }catch(e){}
+  var dataDate = getEffectiveDataDate();
   var dateStr = dataDate.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 
   // ── Build SS → Feeder aggregation ───────────────────────────────────────
@@ -1576,17 +1584,7 @@ function buildSMReport(){
   if(!el || !D.length) return;
 
   // Get dataDate same as buildProgressReport
-  var today = new Date();
-  var dataDate = today;
-  try{
-    var ss2 = window._manifest_cache && window._manifest_cache.sync_status;
-    var bd2 = (ss2&&(ss2['233511']||ss2['233512']))?(ss2['233511']||ss2['233512']).billed_date:'';
-    if(bd2 && bd2.length===8){
-      var dd2=parseInt(bd2.slice(0,2)),mm2=parseInt(bd2.slice(2,4))-1,yy2=parseInt(bd2.slice(4,8));
-      var fileDate2 = new Date(yy2,mm2,dd2);
-      dataDate = new Date(fileDate2.getTime() - 86400000);
-    }
-  }catch(e){}
+  var dataDate = getEffectiveDataDate();
   var smDateStr = dataDate.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 
   // Use ssMap from buildProgressReport (same data, no recalculation)
@@ -2015,19 +2013,19 @@ var PY_LOADED = false;
 var _PY_LOADED_MONTH = -1;  // track which month PY was loaded for
 
 function loadPrevYearData(callback){
-  var _curMon = new Date().getMonth();
-  var _curYr = new Date().getFullYear();
+  var _effDate = getEffectiveDataDate();
+  var _curMon = _effDate.getMonth();
+  var _curYr = _effDate.getFullYear();
   var _pyKey = _curMon+'-'+_curYr;
   if(PY_LOADED && _PY_LOADED_MONTH===_pyKey){ if(callback) callback(); return; }
   // Month changed - force reload
   PY_LOADED=false; window.PY_AGG=null;
   var RAW = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/UPPCL-consumer-tool-/main/';
   // Use pre-aggregated SS-wise JSON (213KB) instead of row-level CSVs (5MB)
-  // Detect current month to load correct PY agg file
-  var _now = new Date();
+  // Detect current month (from dataDate, not literal "today") to load correct PY agg file
   var _months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-  var _pyMonth = _months[_now.getMonth()];
-  var _pyYear = _now.getFullYear()-1;
+  var _pyMonth = _months[_curMon];
+  var _pyYear = _curYr-1;
   var _pyAggFile = 'prev_year/'+_pyMonth+_pyYear+'_agg.json';
   fetch(RAW+_pyAggFile+'?v='+Date.now())
     .then(function(r){ return r.ok?r.json():null; })
@@ -2074,7 +2072,7 @@ function loadPrevYearData(callback){
       } else {
         window.PY_AGG = {eudd1:{}, eudd2:{}}; // empty - don't show wrong month data
       }
-      PY_LOADED=true; _PY_LOADED_MONTH=new Date().getMonth()+'-'+new Date().getFullYear();
+      PY_LOADED=true; _PY_LOADED_MONTH=_pyKey;
       if(callback) callback();
     })
     .catch(function(){ PY_LOADED=true; if(callback) callback(); });
@@ -2257,7 +2255,7 @@ function buildYoYReport(){
     h += '<th rowspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:left;min-width:160px;color:#fff;">SUBSTATION</th>';
     var ddStr = dataDate.getDate()+'-'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dataDate.getMonth()]+'-'+dataDate.getFullYear();
     var _smn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; var uptoLabel = 'Upto '+dataDate.getDate()+' '+_smn[dataDate.getMonth()];
-    var _umn=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']; var _cm=new Date().getMonth(); var pyMonLabel=_umn[_cm]; var cyMonLabel=_umn[_cm];
+    var _umn=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']; var _cm=dataDate.getMonth(); var pyMonLabel=_umn[_cm]; var cyMonLabel=_umn[_cm];
     h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1E40AF;color:#fff;">'+pyMonLabel+' 2025 FULL MONTH</th>';
     h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#1D4ED8;color:#fff;">'+pyMonLabel+' 2025 '+uptoLabel+'</th>';
     h += '<th colspan="2" style="padding:6px 8px;border:1px solid #374151;font-family:var(--fh);font-size:10px;text-align:center;background:#059669;color:#fff;">'+cyMonLabel+' 2026 '+uptoLabel+'</th>';
@@ -4774,6 +4772,20 @@ function parseFileInto(text, type){
         outValue = '0';
       }
       // CRITICAL: update row.AMOUNT_PAYABLE with calculated outstanding
+      row.AMOUNT_PAYABLE = outValue;
+      row.OUTSTANDING    = outValue;
+    } else if(type==='billed'){
+      // If the last payment was made IN THE CURRENT MONTH but BEFORE the current bill
+      // was generated, that payment isn't reflected in this bill's AMOUNT_PAYABLE yet —
+      // add it back so outstanding reflects the true unpaid amount. Applies to all
+      // billed consumers (SM and Non-SM alike).
+      var _billDate = parseDate(row.BILL_DATE);
+      var _lpDate   = parseDate(row.LAST_PAY_DATE);
+      var _now2 = new Date();
+      var _isPaidCurMonth2 = _lpDate && _lpDate.getMonth()===_now2.getMonth() && _lpDate.getFullYear()===_now2.getFullYear();
+      if(_isPaidCurMonth2 && _billDate && _lpDate < _billDate && pf(row.LAST_PAYMENT_AMOUNT) > 0){
+        outValue = (pf(outValue) + pf(row.LAST_PAYMENT_AMOUNT)).toString();
+      }
       row.AMOUNT_PAYABLE = outValue;
       row.OUTSTANDING    = outValue;
     }
