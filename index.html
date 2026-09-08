@@ -401,16 +401,6 @@ select option{background:#fff;color:#1E1B4B;}
     </div>
     <div class="fg" style="margin-bottom:12px;flex-wrap:wrap;">
 
-      <!-- MIN OUTSTANDING -->
-      <div><div class="lbl">MIN OUTSTANDING</div><div class="sw"><select id="def-min" onchange="runDefaulterFilter()">
-        <option value="2000">₹2,000+</option>
-        <option value="5000" selected>₹5,000+</option>
-        <option value="10000">₹10,000+</option>
-        <option value="25000">₹25,000+</option>
-        <option value="50000">₹50,000+</option>
-        <option value="100000">₹1,00,000+</option>
-      </select></div></div>
-
       <!-- SUBSTATION -->
       <div><div class="lbl">SUBSTATION</div>
         <div class="ms-wrap" id="def-sub-wrap">
@@ -495,8 +485,24 @@ select option{background:#fff;color:#1E1B4B;}
           <option value="">All Months</option>
           <option value="cur">Current Month</option>
           <option value="prev">Previous Month</option>
-          <option value="prev2">Other (Not Jun/Jul)</option>
+          <option value="prev2" id="def-lp-other-opt">Other (Older/Never Paid)</option>
         </select></div>
+      </div>
+
+      <!-- MIN OUTSTANDING -->
+      <div class="ms-wrap" id="def-outstanding-wrap">
+        <div class="lbl">OUTSTANDING RANGE</div>
+        <button class="ms-btn" id="def-outstanding-btn" onclick="toggleMs('def-outstanding-dd')">ALL AMOUNTS</button>
+        <div class="ms-dropdown" id="def-outstanding-dd">
+          <label class="ms-option"><input type="checkbox" value="2000-5000" onchange="runDefaulterFilter()"> &#8377;2,000 - &#8377;5,000</label>
+          <label class="ms-option"><input type="checkbox" value="5000-10000" onchange="runDefaulterFilter()"> &#8377;5,000 - &#8377;10,000</label>
+          <label class="ms-option"><input type="checkbox" value="10000-25000" onchange="runDefaulterFilter()"> &#8377;10,000 - &#8377;25,000</label>
+          <label class="ms-option"><input type="checkbox" value="25000-50000" onchange="runDefaulterFilter()"> &#8377;25,000 - &#8377;50,000</label>
+          <label class="ms-option"><input type="checkbox" value="50000-100000" onchange="runDefaulterFilter()"> &#8377;50,000 - &#8377;1,00,000</label>
+          <label class="ms-option"><input type="checkbox" value="100000-500000" onchange="runDefaulterFilter()"> &#8377;1,00,000 - &#8377;5,00,000</label>
+          <label class="ms-option"><input type="checkbox" value="500000-999999999" onchange="runDefaulterFilter()"> Above &#8377;5,00,000</label>
+          <div class="ms-clear" onclick="clearOutstandingFilter()">Clear All</div>
+        </div>
       </div>
 
       <!-- SORT -->
@@ -5565,6 +5571,22 @@ function clearLoadFilter(){
   gel('def-load-btn').textContent='ALL LOAD';
   runDefaulterFilter();
 }
+function getSelectedOutstandingRanges(){
+  var dd=gel('def-outstanding-dd'); if(!dd) return [];
+  return Array.from(dd.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
+}
+function updateOutstandingBtn(){
+  var dd=gel('def-outstanding-dd'); var btn=gel('def-outstanding-btn');
+  if(!dd || !btn) return;
+  var n = dd.querySelectorAll('input[type=checkbox]:checked').length;
+  btn.textContent = n===0 ? 'ALL AMOUNTS' : n===1 ? '1 RANGE SELECTED' : n+' RANGES SELECTED';
+}
+function clearOutstandingFilter(){
+  var dd=gel('def-outstanding-dd'); if(!dd) return;
+  dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){cb.checked=false;});
+  updateOutstandingBtn();
+  runDefaulterFilter();
+}
 function getSelectedSmTypes(){
   var dd=gel('def-sm-dd'); if(!dd) return [];
   return Array.from(dd.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
@@ -5942,7 +5964,6 @@ function runDefaulterFilter(){
     D.forEach(function(d){ _basisLookup[String(d.ACCT_ID)] = String(d.BILL_BASIS||'').trim().toUpperCase(); });
   }
 
-  var minOut = parseFloat(gel('def-min') ? gel('def-min').value : 5000) || 5000;
   var sub    = _defSelSubs;
   var feed   = _defSelFeeds;
   var supply = _defSelSupplies;
@@ -5950,6 +5971,7 @@ function runDefaulterFilter(){
   var q      = gel('def-search') ? gel('def-search').value.trim().toLowerCase() : '';
 
   var selLoads = getSelectedLoadRanges();
+  var selOutRanges = getSelectedOutstandingRanges();
   var selSm    = getSelectedSmTypes();
   var selBasis  = getSelectedBillBasis();
   var lpMonthF  = gel('def-lp-month') ? gel('def-lp-month').value : '';
@@ -5967,7 +5989,15 @@ function runDefaulterFilter(){
     var defOut = parseFloat(r.OUTSTANDING)||0;
     var liveOut = (dOut !== undefined && dOut > 0) ? dOut : defOut;
     r.OUTSTANDING = liveOut; // always sync display value
-    if(liveOut < minOut) return false;
+    if(liveOut < 2000) return false;   // baseline defaulter floor (matches backend MIN_DEFAULTER_OUTSTANDING)
+    if(selOutRanges.length){
+      var outMatched=selOutRanges.some(function(range){
+        var parts=range.split('-');
+        var lo=parseFloat(parts[0]),hi=parseFloat(parts[1]);
+        return liveOut>=lo && liveOut<=hi;
+      });
+      if(!outMatched) return false;
+    }
     if(sub.length    && sub.indexOf(r.SUBSTATION)<0)    return false;
     // LP Month filter
     if(lpMonthF){
@@ -6079,6 +6109,10 @@ function runDefaulterFilter(){
   if(gel('def-load-btn')){
     var lc=selLoads.length;
     gel('def-load-btn').textContent=lc?lc+' LOAD RANGE'+(lc>1?'S':''):'ALL LOAD';
+  }
+  if(gel('def-outstanding-btn')){
+    var oc=selOutRanges.length;
+    gel('def-outstanding-btn').textContent=oc?oc+' RANGE'+(oc>1?'S':'')+' SELECTED':'ALL AMOUNTS';
   }
   if(gel('def-sm-btn')){
     var sc=selSm.length;
