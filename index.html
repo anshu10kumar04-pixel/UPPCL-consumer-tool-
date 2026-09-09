@@ -4781,17 +4781,11 @@ function parseFileInto(text, type){
       row.AMOUNT_PAYABLE = outValue;
       row.OUTSTANDING    = outValue;
     } else if(type==='billed'){
-      // If the last payment was made IN THE CURRENT MONTH but BEFORE the current bill
-      // was generated, that payment isn't reflected in this bill's AMOUNT_PAYABLE yet —
-      // add it back so outstanding reflects the true unpaid amount. Applies to all
-      // billed consumers (SM and Non-SM alike).
-      var _billDate = parseDate(row.BILL_DATE);
-      var _lpDate   = parseDate(row.LAST_PAY_DATE);
-      var _now2 = new Date();
-      var _isPaidCurMonth2 = _lpDate && _lpDate.getMonth()===_now2.getMonth() && _lpDate.getFullYear()===_now2.getFullYear();
-      if(_isPaidCurMonth2 && _billDate && _lpDate < _billDate && pf(row.LAST_PAYMENT_AMOUNT) > 0){
-        outValue = (pf(outValue) + pf(row.LAST_PAYMENT_AMOUNT)).toString();
-      }
+      // AMOUNT_PAYABLE from the billed source is already correct/exact as-is —
+      // no adjustment needed. (Previously this added LAST_PAYMENT_AMOUNT back when
+      // paid this month before the bill date, but that produced incorrect inflated
+      // outstanding — e.g. acct 2469817895 has AMOUNT_PAYABLE=9983.52, correct as-is,
+      // but the old rule would add LAST_PAYMENT_AMOUNT=77573 on top of it.)
       row.AMOUNT_PAYABLE = outValue;
       row.OUTSTANDING    = outValue;
     }
