@@ -29,18 +29,17 @@
     "billed/billed_eudd1d.csv",
     "billed/billed_eudd1e.csv",
     "billed/billed_eudd1f.csv",
-    "billed/billed_eudd1g.csv"
+    "billed/billed_eudd1g.csv",
+    "billed/billed_eudd1h.csv",
+    "billed/billed_eudd1i.csv",
+    "billed/billed_eudd1j.csv",
+    "billed/billed_eudd1k.csv",
+    "billed/billed_eudd1l.csv"
   ],
   "unbilled_eudd1": [
     "unbilled/unbilled_eudd1a.csv",
     "unbilled/unbilled_eudd1b.csv",
-    "unbilled/unbilled_eudd1c.csv",
-    "unbilled/unbilled_eudd1d.csv",
-    "unbilled/unbilled_eudd1e.csv",
-    "unbilled/unbilled_eudd1f.csv",
-    "unbilled/unbilled_eudd1g.csv",
-    "unbilled/unbilled_eudd1h.csv",
-    "unbilled/unbilled_eudd1i.csv"
+    "unbilled/unbilled_eudd1c.csv"
   ],
   "eudd2": [
     "master/eudd2a.csv",
@@ -72,43 +71,45 @@
     "billed/billed_eudd2d.csv",
     "billed/billed_eudd2e.csv",
     "billed/billed_eudd2f.csv",
-    "billed/billed_eudd2g.csv"
+    "billed/billed_eudd2g.csv",
+    "billed/billed_eudd2h.csv",
+    "billed/billed_eudd2i.csv",
+    "billed/billed_eudd2j.csv",
+    "billed/billed_eudd2k.csv",
+    "billed/billed_eudd2l.csv",
+    "billed/billed_eudd2m.csv"
   ],
   "unbilled_eudd2": [
     "unbilled/unbilled_eudd2a.csv",
     "unbilled/unbilled_eudd2b.csv",
-    "unbilled/unbilled_eudd2c.csv",
-    "unbilled/unbilled_eudd2d.csv",
-    "unbilled/unbilled_eudd2e.csv",
-    "unbilled/unbilled_eudd2f.csv",
-    "unbilled/unbilled_eudd2g.csv",
-    "unbilled/unbilled_eudd2h.csv",
-    "unbilled/unbilled_eudd2i.csv",
-    "unbilled/unbilled_eudd2j.csv"
+    "unbilled/unbilled_eudd2c.csv"
   ],
   "sync_status": {
     "233511": {
       "master_period": "AUG_2026",
-      "billed_date": "09092026",
-      "unbilled_date": "09092026"
+      "billed_date": "10092026",
+      "unbilled_date": "10092026"
     },
     "233512": {
       "master_period": "AUG_2026",
-      "billed_date": "09092026",
-      "unbilled_date": "09092026"
+      "billed_date": "10092026",
+      "unbilled_date": "10092026"
     }
   },
-  "updated": "2026-09-09T05:07:44.202731Z",
+  "updated": "2026-09-10T03:04:24.791457Z",
   "defaulters_eudd1": [
     "defaulters/def_eudd1a.csv",
     "defaulters/def_eudd1b.csv",
     "defaulters/def_eudd1c.csv",
-    "defaulters/def_eudd1d.csv"
+    "defaulters/def_eudd1d.csv",
+    "defaulters/def_eudd1e.csv"
   ],
   "defaulters_eudd2": [
     "defaulters/def_eudd2a.csv",
     "defaulters/def_eudd2b.csv",
     "defaulters/def_eudd2c.csv",
-    "defaulters/def_eudd2d.csv"
+    "defaulters/def_eudd2d.csv",
+    "defaulters/def_eudd2e.csv",
+    "defaulters/def_eudd2f.csv"
   ]
 }
