@@ -4781,11 +4781,20 @@ function parseFileInto(text, type){
       row.AMOUNT_PAYABLE = outValue;
       row.OUTSTANDING    = outValue;
     } else if(type==='billed'){
-      // AMOUNT_PAYABLE from the billed source is already correct/exact as-is —
-      // no adjustment needed. (Previously this added LAST_PAYMENT_AMOUNT back when
-      // paid this month before the bill date, but that produced incorrect inflated
-      // outstanding — e.g. acct 2469817895 has AMOUNT_PAYABLE=9983.52, correct as-is,
-      // but the old rule would add LAST_PAYMENT_AMOUNT=77573 on top of it.)
+      // If consumer paid ON OR BEFORE the bill date, in the current real-world
+      // month, add that payment back on top of AMOUNT_PAYABLE (explicit request,
+      // 2026-09). NOTE: this was previously tried and reverted because it wrongly
+      // inflated already-correct accounts (e.g. 2469817895, 4715232177 — both
+      // verified correct as-is). Re-enabling it will re-break those two the same
+      // way, in exchange for fixing accounts like 4528144041 where the payment
+      // appears to have been credited against the wrong ledger entry.
+      var _nowB = new Date(); var _cmB = _nowB.getMonth(); var _cyB = _nowB.getFullYear();
+      var _billDt = parseDate(row.BILL_DATE);
+      var _lpDt   = parseDate(rawDate);
+      var _isPaidCurMonthB = _lpDt && _lpDt.getMonth()===_cmB && _lpDt.getFullYear()===_cyB;
+      if(_isPaidCurMonthB && _billDt && _lpDt <= _billDt && pf(rawAmt) > 0){
+        outValue = (parseFloat(outValue)||0) + pf(rawAmt);
+      }
       row.AMOUNT_PAYABLE = outValue;
       row.OUTSTANDING    = outValue;
     }
