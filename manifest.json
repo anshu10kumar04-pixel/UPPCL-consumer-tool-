@@ -83,28 +83,26 @@
     "billed/billed_eudd2o.csv"
   ],
   "unbilled_eudd2": [
-    "unbilled/unbilled_eudd2a.csv",
-    "unbilled/unbilled_eudd2b.csv"
+    "unbilled/unbilled_eudd2a.csv"
   ],
   "sync_status": {
     "233511": {
       "master_period": "AUG_2026",
-      "billed_date": "16092026",
-      "unbilled_date": "16092026"
+      "billed_date": "17092026",
+      "unbilled_date": "17092026"
     },
     "233512": {
       "master_period": "AUG_2026",
-      "billed_date": "16092026",
-      "unbilled_date": "16092026"
+      "billed_date": "17092026",
+      "unbilled_date": "17092026"
     }
   },
-  "updated": "2026-09-16T03:29:44.647360Z",
+  "updated": "2026-09-17T03:08:43.298382Z",
   "defaulters_eudd1": [
     "defaulters/def_eudd1a.csv",
     "defaulters/def_eudd1b.csv",
     "defaulters/def_eudd1c.csv",
-    "defaulters/def_eudd1d.csv",
-    "defaulters/def_eudd1e.csv"
+    "defaulters/def_eudd1d.csv"
   ],
   "defaulters_eudd2": [
     "defaulters/def_eudd2a.csv",
