@@ -6,6 +6,11 @@
 <title>UPPCL Consumer Data Tool</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
 <style>
 :root{
   --bg:#E0F2FE;
@@ -329,6 +334,7 @@ select option{background:#fff;color:#1E1B4B;}
   <div class="tabs">
     <div class="tab active" onclick="st('lookup')" ontouchstart="st('lookup')">🔍 SEARCH</div>
     <div class="tab" onclick="st('defaulter')" ontouchstart="st('defaulter')">⚠️ DEFAULTERS</div>
+    <div class="tab" onclick="st('map')" ontouchstart="st('map')">🗺️ MAP</div>
     <div class="tab mob-hide" id="tab-dashboard" onclick="st('dashboard')" ontouchstart="st('dashboard')">📊 DASHBOARD</div>
     <div class="tab" id="tab-progress" onclick="st('progress')" ontouchstart="st('progress')">📈 PROGRESS REPORT</div>
     <div class="tab" id="tab-settings" onclick="st('settings')" ontouchstart="st('settings')" style="display:none">⚙️ SETTINGS</div>
@@ -389,6 +395,27 @@ select option{background:#fff;color:#1E1B4B;}
       <tbody id="dfp-tbody"></tbody>
     </table></div>
     <div class="pg" id="dfp-pg"></div>
+  </div>
+
+  <!-- MAP PANEL -->
+  <div class="panel" id="panel-map">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#4F46E5;">🗺️ CONSUMER MAP</div>
+        <div style="font-size:12px;color:var(--muted);">Plot consumers on a map by location (from smart-meter GPS data)</div>
+      </div>
+    </div>
+    <div class="fg" style="margin-bottom:12px;">
+      <div><div class="lbl">DATA SET</div><div class="sw"><select id="map-src" onchange="runMapFilter()">
+        <option value="defaulter">DEFAULTERS</option>
+        <option value="dfp">DISCONNECTED FROM POLE</option>
+        <option value="all">ALL CONSUMERS</option>
+      </select></div></div>
+      <div><div class="lbl">SUBSTATION</div><div class="sw"><select id="map-sub" onchange="runMapFilter()"><option value="">ALL SUBSTATIONS</option></select></div></div>
+      <div><div class="lbl">MIN OUTSTANDING (₹)</div><div class="sw"><input type="number" id="map-min-out" placeholder="0" oninput="runMapFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
+    </div>
+    <div id="map-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;margin-bottom:10px;"></div>
+    <div id="map-container" style="width:100%;height:600px;border-radius:12px;border:1.5px solid #C7D2FE;overflow:hidden;"></div>
   </div>
 
   <!-- DEFAULTERS PANEL -->
@@ -4459,7 +4486,7 @@ function st(name){
   document.querySelectorAll('.tab').forEach(function(tab){
     tab.classList.toggle('active', tab.getAttribute('onclick')&&tab.getAttribute('onclick').indexOf("'"+name+"'")>-1);
   });
-  ['lookup','dc','dfp','defaulter','dashboard','settings','progress'].forEach(function(n){
+  ['lookup','dc','dfp','defaulter','dashboard','settings','progress','map'].forEach(function(n){
     var p=gel('panel-'+n); if(p)p.classList.toggle('active',n===name);
   });
   applyTabTheme(name);
@@ -4468,6 +4495,13 @@ function st(name){
     if(name==='dfp'&&!_dfpLoaded) loadDfp();
     if(name==='defaulter') loadDefaulters();
     if(name==='dashboard') buildDashboard();
+    if(name==='map'){
+      if(!DEF_ALL.length) loadDefaulters();
+      if(!_dfpLoaded) loadDfp();
+      initMapView();
+      runMapFilter();
+      setTimeout(function(){ if(MAP_INSTANCE) MAP_INSTANCE.invalidateSize(); },150);
+    }
     if(name==='progress'){
       buildProgressReport();
       // Always trigger YoY - loadPrevYearData returns immediately if already loaded
@@ -6517,6 +6551,9 @@ function expDefaultersX(){
   if(!DEF_DATA.length)return alert('No data.');
   var rows = DEF_DATA.map(function(r){
     var sc = collectionProbability(r), lb = collectionLabel(sc);
+    var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
+    if(lat>50){var t=lat;lat=lon;lon=t;}
+    var hasLoc=(lat>20&&lat<30&&lon>70&&lon<85);
     return {
       ACCT_ID:     r.ACCT_ID,
       NAME:        r.NAME,
@@ -6535,7 +6572,10 @@ function expDefaultersX(){
       AI_LABEL:    lb.label,
       ATR_STATUS:  r.ATR_STATUS||'PENDING',
       SUBSTATION:  r.SUBSTATION,
-      FEEDER:      r.FEEDER
+      FEEDER:      r.FEEDER,
+      LAT:         hasLoc?lat:'',
+      LONG:        hasLoc?lon:'',
+      MAP_LINK:    hasLoc?('https://www.google.com/maps?q='+lat+','+lon):''
     };
   });
   var ws=XLSX.utils.json_to_sheet(rows);
@@ -6730,6 +6770,89 @@ function openDfpMap(acctId){
 
 function resetDfp(){ gel('dfp-search').value=''; gel('dfp-sub').value=''; runDfpFilter(); }
 function expDfpX(){ if(!DFP_FD.length)return alert('No data.'); XLSX.writeFile(XLSX.utils.book_new().appendChild(XLSX.utils.json_to_sheet(DFP_FD),'Pole DC'),'Pole_DC_'+Date.now()+'.xlsx'); }
+
+// ─── CONSUMER MAP (multi-point) ─────────────────────────────────────────────
+var _mapInited=false, MAP_INSTANCE=null, MAP_CLUSTER=null, _mapSubPopulated=false;
+
+function initMapView(){
+  if(_mapInited) return;
+  if(typeof L==='undefined'){ setTimeout(initMapView,300); return; }
+  var cont=gel('map-container'); if(!cont) return;
+  _mapInited=true;
+  MAP_INSTANCE=L.map('map-container').setView([25.45,78.57],12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19, attribution:'&copy; OpenStreetMap contributors'
+  }).addTo(MAP_INSTANCE);
+  MAP_CLUSTER=L.markerClusterGroup({chunkedLoading:true,maxClusterRadius:60});
+  MAP_INSTANCE.addLayer(MAP_CLUSTER);
+}
+
+function populateMapSubDropdown(){
+  var sel=gel('map-sub'); if(!sel||_mapSubPopulated) return;
+  var subs=[...new Set((D||[]).map(function(r){return r.SUBSTATION;}).filter(Boolean))].sort();
+  if(!subs.length) return;
+  _mapSubPopulated=true;
+  subs.forEach(function(s){var o=document.createElement('option');o.value=o.textContent=s;sel.appendChild(o);});
+}
+
+function getMapPoints(){
+  var src=gel('map-src')?gel('map-src').value:'defaulter';
+  var sub=gel('map-sub')?gel('map-sub').value:'';
+  var minOut=parseFloat(gel('map-min-out')?gel('map-min-out').value:'')||0;
+  var pool=[];
+  if(src==='defaulter'){
+    pool=DEF_ALL.map(function(r){return {ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE,OUTSTANDING:r.OUTSTANDING,SUBSTATION:r.SUBSTATION,LAT:r.LAT,LON:r.LON};});
+  } else if(src==='dfp'){
+    pool=DFP_ALL.map(function(r){return {ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE_NO,OUTSTANDING:r.OUTSTANDING,SUBSTATION:r.SUBSTATION,LAT:r.LAT,LON:r.LON};});
+  } else {
+    pool=(D||[]).map(function(r){return {ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE_NO,OUTSTANDING:parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0,SUBSTATION:r.SUBSTATION,LAT:r.LAT,LON:r.LON};});
+  }
+  var out=[];
+  pool.forEach(function(p){
+    var lat=parseFloat(p.LAT),lon=parseFloat(p.LON);
+    if(lat>50){var t=lat;lat=lon;lon=t;}
+    if(!(lat>20&&lat<30&&lon>70&&lon<85)) return;
+    if(sub && p.SUBSTATION!==sub) return;
+    if(minOut && (parseFloat(p.OUTSTANDING)||0)<minOut) return;
+    p._lat=lat; p._lon=lon;
+    out.push(p);
+  });
+  return out;
+}
+
+function runMapFilter(){
+  if(!MAP_CLUSTER){ setTimeout(runMapFilter,300); return; }
+  populateMapSubDropdown();
+  MAP_CLUSTER.clearLayers();
+  var pts=getMapPoints();
+  var LIMIT=8000;
+  var shown=pts.length>LIMIT?pts.slice(0,LIMIT):pts;
+  shown.forEach(function(p){
+    var out=Math.round(parseFloat(p.OUTSTANDING)||0);
+    var mk=L.marker([p._lat,p._lon]);
+    mk.bindPopup(
+      '<b>'+(p.NAME||'-')+'</b><br>ACCT: '+p.ACCT_ID+'<br>'+
+      (p.MOBILE?'📱 '+p.MOBILE+'<br>':'')+
+      (out?'₹'+out.toLocaleString()+' outstanding<br>':'')+
+      (p.SUBSTATION?p.SUBSTATION+'<br>':'')+
+      '<a href="https://www.google.com/maps?q='+p._lat+','+p._lon+'" target="_blank">Open in Google Maps</a>'
+    );
+    MAP_CLUSTER.addLayer(mk);
+  });
+  var ci=gel('map-count-info');
+  if(ci) ci.textContent=(pts.length?('Showing '+shown.length.toLocaleString()+' of '+pts.length.toLocaleString()+' consumers with location data'):'No consumers with location data match this filter yet')+
+    (pts.length>LIMIT?' (capped at '+LIMIT.toLocaleString()+' — narrow filters to see all points)':'');
+  if(shown.length){
+    try{ MAP_INSTANCE.fitBounds(MAP_CLUSTER.getBounds(),{padding:[30,30]}); }catch(e){}
+  }
+  // Data (defaulters/DFP) loads asynchronously - retry once shortly after if nothing plotted yet
+  if(!pts.length && (gel('map-src')?gel('map-src').value:'defaulter')!=='all'){
+    if(!window._mapRetryCount) window._mapRetryCount=0;
+    if(window._mapRetryCount<6){ window._mapRetryCount++; setTimeout(runMapFilter,1000); }
+  } else {
+    window._mapRetryCount=0;
+  }
+}
 
 window.loadDefaulters=loadDefaulters;
 window.renderDefaulters=renderDefaulters;
