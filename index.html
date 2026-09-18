@@ -771,7 +771,7 @@ let FILES_EUDD1=['eudd1a.csv','eudd1b.csv'].map(f=>RAW_BASE+f);
 let FILES_EUDD2=['eudd2a.csv','eudd2b.csv'].map(f=>RAW_BASE+f);
 let FILES=[];
 let SUB_DIVISION_MAP={};
-const DC_FILE = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/uppcl-data/main/DISCONNECTED.xlsx';
+const DC_FILE = RAW_BASE+'disconnected.json'; // hosted in same repo as index.html/manifest.json (was: separate uppcl-data repo, unreliable)
 const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzd-Lq9Tx1dP8gn_dBb9ELyAm9B9PpKf0hPkcRL6EpQPIfc1ctPj3EhOmBzWIFqYjJzkg/exec';
 const DEFAULTER_FILE = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/uppcl-data/main/defaulter.csv';
 const DFP_FILE = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/uppcl-data/main/dfp.csv';
@@ -3916,6 +3916,15 @@ function buildSettingsPanel(){
         '<div id="latlong-log" style="margin-top:12px;font-size:11px;font-family:monospace;display:none;"></div>'+
       '</div>'+
 
+      /* NEW: DISCONNECTED (DC) DATA UPLOAD CARD */
+      '<div class="settings-card" style="background:#FEF2F2;border-color:#FECACA;">'+
+        '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:12px;color:#B91C1C;display:flex;align-items:center;gap:8px;">🔌 UPLOAD DISCONNECTED (DC) DATA</div>'+
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:15px;line-height:1.5;">Powers the SM UNRECHARGE tab and the auto-computed TD NOT PAID tab/map. Provide a file with columns: <b>ACCT_ID, DC DATE</b> (plus NAME/ADDRESS/MOBILE/SUBSTATION/FEEDER/LAT/LONG if available). Pushes straight to GitHub in one click \u2014 no manual repo upload needed.</div>'+
+        '<input type="file" id="dc-upload-file" accept=".xlsx,.xls,.csv" style="width:100%;margin-bottom:15px;padding:8px;border:1px solid #FECACA;border-radius:8px;font-size:12px;background:#fff;"/>'+
+        '<button class="btn" style="background:#DC2626;color:#fff;width:100%;" onclick="processDcUpload()">🔌 UPDATE DISCONNECTED DATA</button>'+
+        '<div id="dc-upload-log" style="margin-top:12px;font-size:11px;font-family:monospace;display:none;"></div>'+
+      '</div>'+
+
       /* FTP SYNC CARD - COMPACT */
       '<div class="settings-card" style="background:#FFF7ED;border-color:#FED7AA;">'+
         '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:12px;color:#9A3412;display:flex;align-items:center;gap:8px;">📡 FTP DATA SYNC</div>'+
@@ -4005,6 +4014,77 @@ function processLatLongUpload(){
         .catch(err => { logEl.innerHTML = '❌ Error: ' + err.message; });
         
     } catch(err){ logEl.innerHTML = '❌ Error: ' + err.message; }
+  };
+  reader.readAsArrayBuffer(fEl.files[0]);
+}
+
+function processDcUpload(){
+  var fEl = gel('dc-upload-file');
+  if(!fEl || !fEl.files[0]) return alert('Please choose a file first.');
+  if(!getGhPat()) return alert('Enter GitHub PAT in the card above.');
+
+  var logEl = gel('dc-upload-log'); logEl.style.display='block'; logEl.innerHTML='\u23f3 Reading\u2026';
+
+  var reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      var wb = XLSX.read(e.target.result, {type:'array'});
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      if(!rows.length) throw new Error('File is empty.');
+
+      var keys = Object.keys(rows[0]), hdrs = keys.map(k => String(k).trim().toUpperCase());
+      var iAcct = findCol(hdrs, ['ACCT_ID', 'ACCOUNT_ID']);
+      var iDcDate = findCol(hdrs, ['DC DATE', 'DATE OF DC', 'DATE_DC']);
+      if(iAcct < 0) throw new Error('Missing ACCT_ID column.');
+      if(iDcDate < 0) throw new Error('Missing DC DATE column.');
+      var iName = findCol(hdrs, ['NAME']);
+      var iAddr = findCol(hdrs, ['ADDRESS', 'ADDRES']);
+      var iMob = findCol(hdrs, ['MOBILE_NO', 'MOBILE NO', 'MOBILE']);
+      var iMeter = findCol(hdrs, ['METER_NO', 'METERNO', 'METER NO']);
+      var iLoad = findCol(hdrs, ['LOAD']);
+      var iLmv = findCol(hdrs, ['LMV', 'ST', 'TARIFF']);
+      var iOut = findCol(hdrs, ['TOTAL OUTSTANDING', 'OUTSTANDING', 'AMOUNT_PAYABLE']);
+      var iLpDate = findCol(hdrs, ['LP DATE', 'LP_DATE', 'LAST_PAY_DATE']);
+      var iLpAmt = findCol(hdrs, ['LP AMT', 'LP_AMT', 'LAST_PAYMENT_AMOUNT']);
+      var iSub = findCol(hdrs, ['SUBSTATION']);
+      var iFeed = findCol(hdrs, ['FEEDER']);
+      var iLat = findCol(hdrs, ['LAT', 'LATITUDE']);
+      var iLon = findCol(hdrs, ['LON', 'LONGITUDE', 'LONG']);
+
+      var out = [];
+      rows.forEach(r => {
+        var v = keys.map(k => r[k]);
+        var acct = String(v[iAcct]||'').trim();
+        var dcDate = v[iDcDate];
+        if(!acct || !dcDate) return; // must have both to be a valid DC record
+        out.push({
+          ACCT_ID: acct,
+          DATE_DC: dcDate,
+          NAME: iName>=0 ? v[iName] : '',
+          ADDRESS: iAddr>=0 ? v[iAddr] : '',
+          MOBILE_NO: iMob>=0 ? String(v[iMob]||'') : '',
+          METER_NO: iMeter>=0 ? v[iMeter] : '',
+          LOAD: iLoad>=0 ? v[iLoad] : '',
+          LMV: iLmv>=0 ? v[iLmv] : '',
+          OUTSTANDING: iOut>=0 ? (parseFloat(v[iOut])||0) : 0,
+          LP_DATE: iLpDate>=0 ? v[iLpDate] : '',
+          LP_AMT: iLpAmt>=0 ? (parseFloat(v[iLpAmt])||0) : 0,
+          SUBSTATION: iSub>=0 ? v[iSub] : '',
+          FEEDER: iFeed>=0 ? v[iFeed] : '',
+          LAT: iLat>=0 ? String(v[iLat]||'') : '',
+          LON: iLon>=0 ? String(v[iLon]||'') : ''
+        });
+      });
+      if(!out.length) throw new Error('No valid rows found (need ACCT_ID + DC DATE on each row).');
+
+      logEl.innerHTML = '\u2705 Parsed ' + out.length + ' DC records. Uploading to GitHub\u2026';
+      var content = JSON.stringify(out);
+      ghPutFile('disconnected.json', content, 'Update DC (disconnected) data')
+        .then(() => { logEl.innerHTML = '\ud83c\udf89 DONE! ' + out.length + ' records pushed. Reload the tool to apply \u2014 SM UNRECHARGE and TD NOT PAID tabs will pick it up automatically.'; })
+        .catch(err => { logEl.innerHTML = '\u274c Error: ' + err.message; });
+
+    } catch(err){ logEl.innerHTML = '\u274c Error: ' + err.message; }
   };
   reader.readAsArrayBuffer(fEl.files[0]);
 }
@@ -5111,19 +5191,19 @@ function loadDC(){
   _dcLoaded=true;
   var panel=gel('panel-dc');
   panel.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-family:var(--fh);">Loading SM Unrecharge data…</div>';
-  // Load DISCONNECTED.xlsx
-  fetch(DC_FILE)
-    .then(function(r){return r.ok?r.arrayBuffer():Promise.reject('DC file not found');})
-    .then(function(buf){
-      var wb=XLSX.read(buf,{type:'array'});
-      var ws=wb.Sheets[wb.SheetNames[0]];
-      var rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+  // Load disconnected.json - hosted in the SAME repo as index.html/manifest.json/geo_mapping.json,
+  // pushed via the in-tool "UPLOAD DISCONNECTED DATA" button (Settings tab), same PAT-based
+  // push flow already used for LAT/LONG. Cache-busted so a fresh page load always gets the latest.
+  fetch(DC_FILE+'?_='+Date.now())
+    .then(function(r){return r.ok?r.json():Promise.reject('DC file not found (upload it via SETTINGS \u2192 UPLOAD DISCONNECTED DATA)');})
+    .then(function(rows){
+      if(!Array.isArray(rows)) rows=[];
       // Load saved ATR from localStorage
       var _savedAtr = {};
       try{ _savedAtr = JSON.parse(localStorage.getItem('atr_data')||'{}'); }catch(e){}
 
       DC=rows.map(function(r){
-        var acct = String(r['account_id']||r['ACCT_ID']||'');
+        var acct = String(r.ACCT_ID||r['account_id']||'').trim();
         var savedEntry = _savedAtr[acct];
         var atrStatus = 'DISCONNECTED';
         if(savedEntry){
@@ -5132,14 +5212,14 @@ function loadDC(){
           atrStatus = typeof ATR_DATA[acct]==='object' ? ATR_DATA[acct].atr : ATR_DATA[acct];
         }
         return {
-          DATE_DC:r['Date of DC']||'',ACCT_ID:acct,
-          NAME:r['NAME']||'',ADDRESS:r['ADDRES']||r['ADDRESS']||'',MOBILE_NO:String(r['MOBILE NO']||r['MOBILE_NO']||''),
-          METER_NO:r['meterno']||r['METER_NO']||'',LOAD:r['load']||r['LOAD']||'',LMV:r['LMV']||'',
-          OUTSTANDING:parseFloat(r['TOTAL OUTSTANDING']||r['OUTSTANDING'])||0,
-          LP_DATE:(r['lp date']!==undefined?r['lp date']:(r['LP DATE']!==undefined?r['LP DATE']:r['LP_DATE']))||0,
-          LP_AMT:parseFloat(r['lp amt']!==undefined?r['lp amt']:(r['LP AMT']!==undefined?r['LP AMT']:r['LP_AMT']))||0,
-          SUBSTATION:r['SUBSTATION']||'',FEEDER:r['FEEDER']||'',
-          LAT:String(r['LAT']||''),LON:String(r['LONG']||r['LON']||''),
+          DATE_DC:r.DATE_DC||r['Date of DC']||'',ACCT_ID:acct,
+          NAME:r.NAME||'',ADDRESS:r.ADDRESS||r['ADDRES']||'',MOBILE_NO:String(r.MOBILE_NO||r['MOBILE NO']||''),
+          METER_NO:r.METER_NO||r['meterno']||'',LOAD:r.LOAD||r['load']||'',LMV:r.LMV||'',
+          OUTSTANDING:parseFloat(r.OUTSTANDING!==undefined?r.OUTSTANDING:r['TOTAL OUTSTANDING'])||0,
+          LP_DATE:(r.LP_DATE!==undefined?r.LP_DATE:(r['lp date']!==undefined?r['lp date']:r['LP DATE']))||0,
+          LP_AMT:parseFloat(r.LP_AMT!==undefined?r.LP_AMT:(r['lp amt']!==undefined?r['lp amt']:r['LP AMT']))||0,
+          SUBSTATION:r.SUBSTATION||'',FEEDER:r.FEEDER||'',
+          LAT:String(r.LAT||''),LON:String(r.LON||r['LONG']||''),
           ATR_STATUS:atrStatus,
           ATR_COMMENT: typeof savedEntry==='object' ? (savedEntry.comment||'') : ''
         };
@@ -5154,7 +5234,7 @@ function loadDC(){
       buildDCPanel();
     })
     .catch(function(e){
-      panel.innerHTML='<div style="padding:20px;text-align:center;color:#F43F5E;font-family:var(--fh);">⚠ Failed to load SM Unrecharge data: '+e+'</div>';
+      panel.innerHTML='<div style="padding:20px;text-align:center;color:#F43F5E;font-family:var(--fh);">\u26a0 Failed to load SM Unrecharge data: '+e+'<br><br>Go to \u2699\ufe0f SETTINGS \u2192 UPLOAD DISCONNECTED DATA to push this file (one click, no GitHub website needed).</div>';
     });
 }
 
