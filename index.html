@@ -467,7 +467,7 @@ select option{background:#fff;color:#1E1B4B;}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
       <div>
         <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#D97706;">📋 TD NOT PAID</div>
-        <div style="font-size:12px;color:var(--muted);">Auto-updates every time the tool loads — DC DATE se pehle ka last payment (ya kabhi paid nahi hua). Source: DISCONNECTED.xlsx + live payment data.</div>
+        <div style="font-size:12px;color:var(--muted);">Static list, uploaded via SETTINGS → UPLOAD TD NOT PAID DATA. No calculation happens here — shows exactly what was uploaded.</div>
       </div>
     </div>
     <div class="fg" style="margin-bottom:12px;">
@@ -3925,6 +3925,15 @@ function buildSettingsPanel(){
         '<div id="dc-upload-log" style="margin-top:12px;font-size:11px;font-family:monospace;display:none;"></div>'+
       '</div>'+
 
+      /* NEW: TD NOT PAID DATA UPLOAD CARD */
+      '<div class="settings-card" style="background:#FFF7ED;border-color:#FED7AA;">'+
+        '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:12px;color:#9A3412;display:flex;align-items:center;gap:8px;">\ud83d\udccb UPLOAD TD NOT PAID DATA</div>'+
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:15px;line-height:1.5;">Powers the TD NOT PAID tab and the Map\u2019s TD NOT PAID option. Upload the exact consumer list as-is \u2014 the tool does no filtering or calculation, it just displays what you upload. Columns: <b>ACCT_ID, NAME, MOBILE_NO, OUTSTANDING, DC_DATE, LAST_PAY_DATE, SUBSTATION, FEEDER</b> (LAT/LONG optional \u2014 auto-filled from saved coordinates if blank).</div>'+
+        '<input type="file" id="tdnp-upload-file" accept=".xlsx,.xls,.csv" style="width:100%;margin-bottom:15px;padding:8px;border:1px solid #FED7AA;border-radius:8px;font-size:12px;background:#fff;"/>'+
+        '<button class="btn" style="background:#EA580C;color:#fff;width:100%;" onclick="processTdnpUpload()">\ud83d\udccb UPDATE TD NOT PAID DATA</button>'+
+        '<div id="tdnp-upload-log" style="margin-top:12px;font-size:11px;font-family:monospace;display:none;"></div>'+
+      '</div>'+
+
       /* FTP SYNC CARD - COMPACT */
       '<div class="settings-card" style="background:#FFF7ED;border-color:#FED7AA;">'+
         '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:12px;color:#9A3412;display:flex;align-items:center;gap:8px;">📡 FTP DATA SYNC</div>'+
@@ -4082,6 +4091,75 @@ function processDcUpload(){
       var content = JSON.stringify(out);
       ghPutFile('disconnected.json', content, 'Update DC (disconnected) data')
         .then(() => { logEl.innerHTML = '\ud83c\udf89 DONE! ' + out.length + ' records pushed. Reload the tool to apply \u2014 SM UNRECHARGE and TD NOT PAID tabs will pick it up automatically.'; })
+        .catch(err => { logEl.innerHTML = '\u274c Error: ' + err.message; });
+
+    } catch(err){ logEl.innerHTML = '\u274c Error: ' + err.message; }
+  };
+  reader.readAsArrayBuffer(fEl.files[0]);
+}
+
+function processTdnpUpload(){
+  var fEl = gel('tdnp-upload-file');
+  if(!fEl || !fEl.files[0]) return alert('Please choose a file first.');
+  if(!getGhPat()) return alert('Enter GitHub PAT in the card above.');
+
+  var logEl = gel('tdnp-upload-log'); logEl.style.display='block'; logEl.innerHTML='\u23f3 Reading\u2026';
+
+  var reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      var wb = XLSX.read(e.target.result, {type:'array'});
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      if(!rows.length) throw new Error('File is empty.');
+
+      var keys = Object.keys(rows[0]), hdrs = keys.map(k => String(k).trim().toUpperCase());
+      var iAcct = findCol(hdrs, ['ACCT_ID', 'ACCOUNT_ID']);
+      if(iAcct < 0) throw new Error('Missing ACCT_ID column.');
+      var iName = findCol(hdrs, ['NAME']);
+      var iAddr = findCol(hdrs, ['ADDRESS', 'ADDRES']);
+      var iMob = findCol(hdrs, ['MOBILE_NO', 'MOBILE NO', 'MOBILE']);
+      var iMeter = findCol(hdrs, ['METER_NO', 'METERNO', 'METER NO']);
+      var iLoad = findCol(hdrs, ['LOAD']);
+      var iSt = findCol(hdrs, ['ST', 'LMV', 'TARIFF']);
+      var iOut = findCol(hdrs, ['OUTSTANDING', 'AMOUNT_PAYABLE', 'TOTAL OUTSTANDING']);
+      var iLpDate = findCol(hdrs, ['LAST_PAY_DATE', 'LP DATE', 'LP_DATE']);
+      var iLpAmt = findCol(hdrs, ['LAST_PAYMENT_AMOUNT', 'LP AMT', 'LP_AMT']);
+      var iDcDate = findCol(hdrs, ['DC_DATE', 'DC DATE', 'DATE OF DC', 'DATE_DC']);
+      var iSub = findCol(hdrs, ['SUBSTATION']);
+      var iFeed = findCol(hdrs, ['FEEDER']);
+      var iLat = findCol(hdrs, ['LAT', 'LATITUDE']);
+      var iLon = findCol(hdrs, ['LON', 'LONGITUDE', 'LONG']);
+
+      var out = [];
+      rows.forEach(r => {
+        var v = keys.map(k => r[k]);
+        var acct = String(v[iAcct]||'').trim();
+        if(!acct) return;
+        out.push({
+          ACCT_ID: acct,
+          NAME: iName>=0 ? v[iName] : '',
+          ADDRESS: iAddr>=0 ? v[iAddr] : '',
+          MOBILE_NO: iMob>=0 ? String(v[iMob]||'') : '',
+          METER_NO: iMeter>=0 ? v[iMeter] : '',
+          LOAD: iLoad>=0 ? v[iLoad] : '',
+          ST: iSt>=0 ? v[iSt] : '',
+          OUTSTANDING: iOut>=0 ? (parseFloat(v[iOut])||0) : 0,
+          LAST_PAY_DATE: iLpDate>=0 ? v[iLpDate] : '',
+          LAST_PAYMENT_AMOUNT: iLpAmt>=0 ? (parseFloat(v[iLpAmt])||0) : 0,
+          DC_DATE: iDcDate>=0 ? v[iDcDate] : '',
+          SUBSTATION: iSub>=0 ? v[iSub] : '',
+          FEEDER: iFeed>=0 ? v[iFeed] : '',
+          LAT: iLat>=0 ? String(v[iLat]||'') : '',
+          LON: iLon>=0 ? String(v[iLon]||'') : ''
+        });
+      });
+      if(!out.length) throw new Error('No valid rows found (need ACCT_ID on each row).');
+
+      logEl.innerHTML = '\u2705 Parsed ' + out.length + ' TD Not Paid records. Uploading to GitHub\u2026';
+      var content = JSON.stringify(out);
+      ghPutFile('tdnp_data.json', content, 'Update TD Not Paid list')
+        .then(() => { logEl.innerHTML = '\ud83c\udf89 DONE! ' + out.length + ' records pushed. Reload the tool to apply.'; })
         .catch(err => { logEl.innerHTML = '\u274c Error: ' + err.message; });
 
     } catch(err){ logEl.innerHTML = '\u274c Error: ' + err.message; }
@@ -6944,54 +7022,38 @@ var _mapSelSubs=[], _mapSelFeeds=[], _mapSelSupplies=[];
 // Rule (2026-09-18, explicit): DC DATE filled AND (never paid OR last payment
 // STRICTLY BEFORE the DC date). A payment made ON or after the DC date counts
 // as paid, so that consumer is excluded from this list.
-function computeTdnpAuto(){
-  if(!DC.length || !D.length) return null;
-  var out=[];
-  DC.forEach(function(r){
-    var acct=String(r.ACCT_ID); if(!acct) return;
-    var dcDate=parseDate(r.DATE_DC);
-    if(!dcDate) return; // no DC date on this record - not applicable
-    var pay=PAY_DATA[acct];
-    var lastPayDate = pay ? parseDate(pay.PAY_DATE) : null;
-    if(lastPayDate && lastPayDate >= dcDate) return; // paid on/after DC date - not TD NOT PAID
-    var dOut = window._dOutMap ? window._dOutMap[acct] : undefined;
-    var outstanding = (dOut!==undefined && dOut>0) ? dOut : (parseFloat(r.OUTSTANDING)||0);
-    var geo=(typeof GEO_MAP!=='undefined'&&GEO_MAP)?GEO_MAP[ac(acct)]:null;
-    var lat=parseFloat(r.LAT), lon=parseFloat(r.LON);
-    if((!lat||isNaN(lat))&&geo){ lat=geo[0]; lon=geo[1]; }
-    out.push({
-      ACCT_ID:acct, NAME:r.NAME||'', MOBILE:r.MOBILE_NO||'', ADDRESS:r.ADDRESS||'',
-      SUBSTATION:r.SUBSTATION||'', FEEDER:r.FEEDER||'', TARIFF:stToTariff(r.LMV),
-      LOAD:r.LOAD||'', METER_NO:r.METER_NO||'',
-      DC_DATE:r.DATE_DC||'', DUE_DATE:'',
-      LAST_PAY_DATE: pay?pay.PAY_DATE:'', LAST_PAYMENT_AMOUNT: pay?(parseFloat(pay.PAY_AMT)||0):0,
-      OUTSTANDING:outstanding, LAT:lat, LON:lon
-    });
-  });
-  return out;
-}
-
 function loadTdnpTab(){
   if(TDNP_ALL.length>0){ _tdnpLoaded=true; buildTdnpPanel(); return; }
   var tbody=gel('tdnp-tbody');
-  if(tbody) tbody.innerHTML='<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Computing TD Not Paid from live data…</td></tr>';
-  if(!DC.length) loadDC();
-  var attempts=0;
-  var poll=setInterval(function(){
-    attempts++;
-    var computed = (DC.length && D.length) ? computeTdnpAuto() : null;
-    if(computed){
-      clearInterval(poll);
-      TDNP_ALL=computed;
+  if(tbody) tbody.innerHTML='<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">\u231b Loading TD Not Paid list\u2026</td></tr>';
+  // Static, precomputed list pushed to the repo (SETTINGS \u2192 UPLOAD TD NOT PAID DATA).
+  // No live calculation happens in the browser - this just fetches and displays the list as-is.
+  fetch(RAW_BASE+'tdnp_data.json?_='+Date.now())
+    .then(function(r){return r.ok?r.json():Promise.reject('TD Not Paid file not found (upload it via SETTINGS \u2192 UPLOAD TD NOT PAID DATA)');})
+    .then(function(rows){
+      if(!Array.isArray(rows)) rows=[];
+      TDNP_ALL=rows.map(function(r){
+        var acct=String(r.ACCT_ID||'').trim();
+        var geo=(typeof GEO_MAP!=='undefined'&&GEO_MAP)?GEO_MAP[ac(acct)]:null;
+        var lat=parseFloat(r.LAT), lon=parseFloat(r.LON);
+        if((!lat||isNaN(lat))&&geo){ lat=geo[0]; lon=geo[1]; }
+        return {
+          ACCT_ID:acct, NAME:r.NAME||'', MOBILE:r.MOBILE_NO||r.MOBILE||'', ADDRESS:r.ADDRESS||'',
+          SUBSTATION:r.SUBSTATION||'', FEEDER:r.FEEDER||'', TARIFF:stToTariff(r.ST||r.LMV||''),
+          LOAD:r.LOAD||'', METER_NO:r.METER_NO||'',
+          DC_DATE:r.DC_DATE||r.DATE_DC||'', DUE_DATE:'',
+          LAST_PAY_DATE:r.LAST_PAY_DATE||'', LAST_PAYMENT_AMOUNT:parseFloat(r.LAST_PAYMENT_AMOUNT)||0,
+          OUTSTANDING:parseFloat(r.OUTSTANDING)||0, LAT:lat, LON:lon
+        };
+      }).filter(function(r){return r.ACCT_ID;});
       _tdnpLoaded=true;
       buildTdnpPanel();
       runMapFilter();
-    } else if(attempts>40){ // ~20s
-      clearInterval(poll);
+    })
+    .catch(function(e){
       _tdnpLoaded=true;
-      if(tbody) tbody.innerHTML='<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);">Could not auto-load DC/consumer data. Try reopening this tab, or upload a file from the MAP tab.</td></tr>';
-    }
-  },500);
+      if(tbody) tbody.innerHTML='<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);">'+e+'</td></tr>';
+    });
 }
 
 function buildTdnpPanel(){
