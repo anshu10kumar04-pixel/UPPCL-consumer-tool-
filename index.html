@@ -335,6 +335,7 @@ select option{background:#fff;color:#1E1B4B;}
     <div class="tab active" onclick="st('lookup')" ontouchstart="st('lookup')">🔍 SEARCH</div>
     <div class="tab" onclick="st('defaulter')" ontouchstart="st('defaulter')">⚠️ DEFAULTERS</div>
     <div class="tab" onclick="st('tdnp')" ontouchstart="st('tdnp')">📋 TD NOT PAID</div>
+    <div class="tab" onclick="st('fieldvisits')" ontouchstart="st('fieldvisits')">🔌 FIELD VISITS</div>
     <div class="tab" onclick="st('map')" ontouchstart="st('map')">🗺️ MAP</div>
     <div class="tab mob-hide" id="tab-dashboard" onclick="st('dashboard')" ontouchstart="st('dashboard')">📊 DASHBOARD</div>
     <div class="tab" id="tab-progress" onclick="st('progress')" ontouchstart="st('progress')">📈 PROGRESS REPORT</div>
@@ -495,6 +496,38 @@ select option{background:#fff;color:#1E1B4B;}
       <tbody id="tdnp-tbody"></tbody>
     </table></div>
     <div class="pg" id="tdnp-pg"></div>
+  </div>
+
+  <!-- FIELD VISITS PANEL (fed by AppSheet, via the same Apps Script URL as ATR sync) -->
+  <div class="panel" id="panel-fieldvisits">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#0369A1;">🔌 FIELD VISITS</div>
+        <div style="font-size:12px;color:var(--muted);">Read-only — shows what field staff submitted in the AppSheet mobile app (Disconnection form). Source: same Google Sheet as ATR sync (SETTINGS → ATR GOOGLE SHEET SYNC URL).</div>
+      </div>
+    </div>
+    <div class="fg" style="margin-bottom:12px;">
+      <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="fv-search" placeholder="Acct, Staff, Remarks…" oninput="runFvFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
+    </div>
+    <div class="btn-group" style="margin-bottom:14px;">
+      <div id="fv-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>
+      <button class="btn btn-acc" onclick="loadFieldVisits(true)">🔄 REFRESH</button>
+    </div>
+    <div class="tw" style="overflow-x:auto;"><table>
+      <thead><tr>
+        <th style="width:55px">S.NO</th>
+        <th style="width:110px">ACCT ID</th>
+        <th style="width:100px">STAFF</th>
+        <th style="width:95px">DATE</th>
+        <th style="width:90px">FOUND?</th>
+        <th style="min-width:130px">STATUS</th>
+        <th style="min-width:160px">REMARKS</th>
+        <th style="width:70px">PHOTOS</th>
+        <th style="width:60px">MAP</th>
+      </tr></thead>
+      <tbody id="fv-tbody"></tbody>
+    </table></div>
+    <div class="pg" id="fv-pg"></div>
   </div>
 
   <!-- DEFAULTERS PANEL -->
@@ -4723,7 +4756,7 @@ function st(name){
   document.querySelectorAll('.tab').forEach(function(tab){
     tab.classList.toggle('active', tab.getAttribute('onclick')&&tab.getAttribute('onclick').indexOf("'"+name+"'")>-1);
   });
-  ['lookup','dc','dfp','defaulter','dashboard','settings','progress','map','tdnp'].forEach(function(n){
+  ['lookup','dc','dfp','defaulter','dashboard','settings','progress','map','tdnp','fieldvisits'].forEach(function(n){
     var p=gel('panel-'+n); if(p)p.classList.toggle('active',n===name);
   });
   applyTabTheme(name);
@@ -4732,6 +4765,7 @@ function st(name){
     if(name==='dfp'&&!_dfpLoaded) loadDfp();
     if(name==='defaulter') loadDefaulters();
     if(name==='tdnp'&&!_tdnpLoaded) loadTdnpTab();
+    if(name==='fieldvisits'&&!_fvLoaded) loadFieldVisits();
     if(name==='dashboard') buildDashboard();
     if(name==='map'){
       if(!DEF_ALL.length) loadDefaulters();
@@ -7341,6 +7375,87 @@ function runMapFilter(){
   } else {
     window._mapRetryCount=0;
   }
+}
+
+// ─── FIELD VISITS (read-only, fed by AppSheet via the same Apps Script sheet) ───
+var FV_ALL=[], FV_FD=[], _fvLoaded=false, fvPage=1;
+
+function loadFieldVisits(force){
+  if(_fvLoaded && !force){ runFvFilter(); return; }
+  var url = getScriptUrl();
+  var tbody = gel('fv-tbody');
+  if(!url){
+    _fvLoaded = true;
+    if(tbody) tbody.innerHTML = '<tr><td colspan="9" style="padding:40px;text-align:center;color:var(--muted);">\u26a0 No Google Sheet URL configured. Go to SETTINGS \u2192 ATR GOOGLE SHEET SYNC and paste the Apps Script URL first.</td></tr>';
+    return;
+  }
+  if(tbody) tbody.innerHTML = '<tr><td colspan="9" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">\u231b Loading field visit data\u2026</td></tr>';
+  fetch(url + '?action=getFieldVisits', {mode:'cors'})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var disc = data.disconnection || [];
+      FV_ALL = disc.map(function(r){
+        return {
+          ACCT_ID: String(r.ACCT_ID||''),
+          STAFF: r.STAFF||'',
+          DATE: r.DATE||'',
+          CONNECTION_FOUND: r.CONNECTION_FOUND||'',
+          CONNECTION_STATUS: r.CONNECTION_STATUS||'',
+          METER_PHOTO: r.METER_PHOTO||'',
+          CONNECTION_PHOTO: r.CONNECTION_PHOTO||'',
+          LAT: parseFloat(r.LAT), LON: parseFloat(r.LON),
+          REMARKS: r.REMARKS||''
+        };
+      }).filter(function(r){ return r.ACCT_ID; });
+      _fvLoaded = true;
+      FV_FD = FV_ALL.slice();
+      runFvFilter();
+    })
+    .catch(function(e){
+      _fvLoaded = true;
+      if(tbody) tbody.innerHTML = '<tr><td colspan="9" style="padding:40px;text-align:center;color:#F43F5E;">\u26a0 Failed to load: '+e+'</td></tr>';
+    });
+}
+
+function runFvFilter(){
+  var q = (gel('fv-search')?gel('fv-search').value:'').toLowerCase();
+  FV_FD = FV_ALL.filter(function(r){
+    if(!q) return true;
+    return (r.ACCT_ID+' '+r.STAFF+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
+  });
+  var ci = gel('fv-count-info');
+  if(ci) ci.textContent = 'Showing '+FV_FD.length.toLocaleString()+' of '+FV_ALL.length.toLocaleString()+' field visit records';
+  renderFvTable(1);
+}
+
+function renderFvTable(page){
+  fvPage = page;
+  var tbody = gel('fv-tbody'); if(!tbody) return;
+  if(!FV_FD.length){
+    tbody.innerHTML = '<tr><td colspan="9" style="padding:40px;text-align:center;color:var(--muted);">No field visit records yet \u2014 they will appear here once field staff submit the Disconnection form in AppSheet.</td></tr>';
+    var pgEl = gel('fv-pg'); if(pgEl) pgEl.innerHTML='';
+    return;
+  }
+  var slice = FV_FD.slice((page-1)*PS, page*PS);
+  tbody.innerHTML = slice.map(function(r,i){
+    var rank = (page-1)*PS+i+1;
+    var hasLoc = (r.LAT>20 && r.LAT<30 && r.LON>70 && r.LON<85);
+    var photos = [];
+    if(r.METER_PHOTO) photos.push('METER');
+    if(r.CONNECTION_PHOTO) photos.push('CONN');
+    return '<tr>'+
+      '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
+      '<td>'+(r.STAFF||'-')+'</td>'+
+      '<td>'+(r.DATE||'-')+'</td>'+
+      '<td>'+(r.CONNECTION_FOUND||'-')+'</td>'+
+      '<td style="font-weight:600;">'+(r.CONNECTION_STATUS||'-')+'</td>'+
+      '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
+      '<td>'+(photos.length?photos.join(', '):'-')+'</td>'+
+      '<td>'+(hasLoc?'<a class="ml" href="https://www.google.com/maps?q='+r.LAT+','+r.LON+'" target="_blank">\ud83d\udccd</a>':'')+'</td>'+
+    '</tr>';
+  }).join('');
+  rp('fv-pg', page, Math.ceil(FV_FD.length/PS), renderFvTable);
 }
 
 window.loadDefaulters=loadDefaulters;
