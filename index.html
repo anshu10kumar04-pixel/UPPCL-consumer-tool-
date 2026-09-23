@@ -4567,35 +4567,32 @@ function showUserSplash(onDone){
   css.textContent='.sp-sc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;text-align:center;opacity:0;transition:opacity 0.55s ease;pointer-events:none;}.sp-sc.sp-on{opacity:1;pointer-events:all;}.sp-bg{position:absolute;inset:0;background-image:url(\''+LURL+'\');background-repeat:no-repeat;background-position:center;background-size:52%;opacity:0.1;pointer-events:none;}.sp-in{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:20px;}.sp-pop{transform:scale(0.4);opacity:0;transition:all 0.75s cubic-bezier(0.34,1.56,0.64,1);}.sp-pop.sp-sh{transform:scale(1);opacity:1;}.sp-rise{transform:translateY(22px);opacity:0;transition:all 0.6s ease;}.sp-rise.sp-sh{transform:translateY(0);opacity:1;}.sp-rise2{transform:translateY(22px);opacity:0;transition:all 0.6s ease 0.18s;}.sp-rise2.sp-sh{transform:translateY(0);opacity:1;}.sp-dots{position:fixed;bottom:26px;left:0;right:0;display:flex;justify-content:center;gap:8px;z-index:100000;}.sp-dot{width:8px;height:8px;border-radius:50%;transition:all 0.35s ease;}.sp-dot.sp-on{width:26px;border-radius:4px;}@keyframes sp-pulse{0%{transform:scale(0.8);opacity:0.6;}100%{transform:scale(2.2);opacity:0;}}@keyframes sp-orbit{from{rotate:0deg;translate:0 -52px;}to{rotate:360deg;translate:0 -52px;}}@keyframes sp-flash{0%,100%{opacity:0.3;}50%{opacity:1;}}@keyframes sp-wave{0%{height:12px;opacity:0.4;}100%{height:46px;opacity:1;}}@keyframes sp-spin{to{transform:rotate(360deg);}}@keyframes sp-bounce{0%{transform:translateY(0);}100%{transform:translateY(-34px);}}@keyframes sp-ripple{0%{width:18px;height:18px;opacity:0.8;}100%{width:96px;height:96px;opacity:0;}}@keyframes sp-tw{0%{opacity:0.08;transform:scale(0.6);}100%{opacity:0.5;transform:scale(1.4);}}';
   document.head.appendChild(css);
 
-  var s1=document.createElement('div');s1.className='sp-sc';s1.id='sp-s1';s1.style.background=st.bg;
-  s1.innerHTML='<div class="sp-bg"></div>'+mkP(st.pc,25)+'<div class="sp-in"><div class="sp-pop" id="sp-ldr">'+st.loader+'</div><div class="sp-rise" id="sp-t1" style="font-size:24px;font-weight:800;color:'+st.tc+';line-height:1.35;">Welcome to <span style="color:'+st.sc+'">UPPCL</span><br>Consumer Tool</div><div class="sp-rise2" id="sp-t1b" style="font-size:11px;color:'+st.sc+';font-weight:700;letter-spacing:1.2px;">DVVNL COMMERCIAL-2 DIVISION JHANSI</div></div>';
+  var s1=document.createElement('div');s1.className='sp-sc sp-on';s1.id='sp-s1';s1.style.background=st.bg;
+  s1.innerHTML='<div class="sp-bg"></div>'+mkP(st.pc,25)+'<div class="sp-in"><div class="sp-pop" id="sp-ldr">'+st.loader+'</div><div class="sp-rise" id="sp-t1" style="font-size:22px;font-weight:800;color:'+st.tc+';line-height:1.35;">Welcome to <span style="color:'+st.sc+'">UPPCL</span><br>Consumer Tool</div><div class="sp-rise2" id="sp-t1b" style="font-size:11px;color:'+st.sc+';font-weight:700;letter-spacing:1.2px;">DVVNL COMMERCIAL-2 DIVISION JHANSI</div><div class="sp-rise2" id="sp-t3" style="font-size:13px;font-style:italic;color:'+st.tc+';max-width:330px;line-height:1.7;font-weight:500;margin-top:14px;">\u201C'+q.q+'\u201D</div><div class="sp-rise2" id="sp-t3b" style="font-size:10px;font-weight:700;color:'+st.sc+';letter-spacing:2px;text-transform:uppercase;margin-top:4px;">\u2014 '+q.a+'</div></div>';
 
-  var s2=document.createElement('div');s2.className='sp-sc';s2.id='sp-s2';s2.style.background=st.bg;
-  s2.innerHTML='<div class="sp-bg"></div>'+mkP(st.pc,22)+'<div class="sp-in"><div class="sp-rise" id="sp-t2" style="font-size:22px;font-weight:800;color:'+st.tc+';">Have a Great Day!</div><div class="sp-rise2" id="sp-t2b" style="font-size:13px;color:'+st.sc+';max-width:310px;line-height:1.8;font-weight:500;">'+l2+'</div></div>';
-
-  var s3=document.createElement('div');s3.className='sp-sc';s3.id='sp-s3';s3.style.background=st.bg;
-  s3.innerHTML='<div class="sp-bg"></div>'+mkP(st.pc,22)+'<div class="sp-in"><div class="sp-rise" id="sp-t3" style="font-size:15px;font-style:italic;color:'+st.tc+';max-width:330px;line-height:1.85;font-weight:500;">\u201C'+q.q+'\u201D</div><div class="sp-rise2" id="sp-t3b" style="font-size:11px;font-weight:700;color:'+st.sc+';letter-spacing:2px;text-transform:uppercase;">\u2014 '+q.a+'</div></div>';
-
-  var dots=document.createElement('div');dots.className='sp-dots';
-  dots.innerHTML='<div class="sp-dot" id="sp-d1" style="background:'+st.pc+'"></div><div class="sp-dot" id="sp-d2" style="background:'+st.pc+'"></div><div class="sp-dot" id="sp-d3" style="background:'+st.pc+'"></div>';
-
-  wrap.appendChild(s1);wrap.appendChild(s2);wrap.appendChild(s3);wrap.appendChild(dots);
+  wrap.appendChild(s1);
   document.body.appendChild(wrap);
 
-  function setDot(n){['sp-d1','sp-d2','sp-d3'].forEach(function(id,i){var d=document.getElementById(id);if(!d)return;d.className='sp-dot'+(i===n-1?' sp-on':'');d.style.background=i===n-1?st.dot:st.pc;});}
-  function activate(sid,dotN,aids,delays){
-    ['sp-s1','sp-s2','sp-s3'].forEach(function(s){var el=document.getElementById(s);if(el)el.classList.remove('sp-on');});
-    var sc=document.getElementById(sid);if(sc)sc.classList.add('sp-on');
-    setDot(dotN);
-    aids.forEach(function(aid,i){setTimeout(function(){var el=document.getElementById(aid);if(el)el.classList.add('sp-sh');},delays[i]);});
+  ['sp-ldr','sp-t1','sp-t1b','sp-t3','sp-t3b'].forEach(function(aid,i){
+    var delays=[100,400,700,1000,1300];
+    setTimeout(function(){var el=document.getElementById(aid);if(el)el.classList.add('sp-sh');},delays[i]);
+  });
+
+  var startTs=Date.now();
+  var MIN_SPLASH_MS=1200;   // minimum time shown, so it doesn't flash for a split second
+  var HARD_CAP_MS=6000;     // safety cap in case data fetch stalls
+  var dismissed=false, readyPoll, capTimer;
+  function finish(){
+    if(dismissed) return;
+    dismissed=true;
+    clearInterval(readyPoll); clearTimeout(capTimer);
+    wrap.style.transition='opacity 0.4s';wrap.style.opacity='0';
+    setTimeout(function(){wrap.remove();css.remove();if(onDone)onDone();},400);
   }
-  activate('sp-s1',1,['sp-ldr','sp-t1','sp-t1b'],[100,500,800]);
-  setTimeout(function(){activate('sp-s2',2,['sp-t2','sp-t2b'],[100,400]);},2400);
-  setTimeout(function(){activate('sp-s3',3,['sp-t3','sp-t3b'],[100,400]);},4800);
-  setTimeout(function(){
-    wrap.style.transition='opacity 0.6s';wrap.style.opacity='0';
-    setTimeout(function(){wrap.remove();css.remove();if(onDone)onDone();},600);
-  },7000);
+  readyPoll=setInterval(function(){
+    if(Date.now()-startTs>=MIN_SPLASH_MS && D.length>0){ finish(); }
+  },150);
+  capTimer=setTimeout(finish,HARD_CAP_MS);
 }
 
 function loginSuccess(role){
@@ -4609,17 +4606,7 @@ function loginSuccess(role){
   if(role==='user'){
     applyTabTheme('dashboard');
     if(D.length===0) autoFetch();
-    function runSplashLoop(){
-      showUserSplash(function(){
-        // Splash cycle done - check if data loaded
-        if(D.length===0){
-          // Still loading - run again
-          runSplashLoop();
-        }
-        // else data ready - splash stops, tool visible
-      });
-    }
-    runSplashLoop();
+    showUserSplash(function(){});
   } else {
     if(D.length===0) autoFetch();
   }
