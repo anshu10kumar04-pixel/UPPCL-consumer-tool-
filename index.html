@@ -336,6 +336,7 @@ select option{background:#fff;color:#1E1B4B;}
     <div class="tab" onclick="st('defaulter')" ontouchstart="st('defaulter')">⚠️ DEFAULTERS</div>
     <div class="tab" onclick="st('tdnp')" ontouchstart="st('tdnp')">📋 TD NOT PAID</div>
     <div class="tab" onclick="st('fieldvisits')" ontouchstart="st('fieldvisits')">🔌 FIELD VISITS</div>
+    <div class="tab" onclick="st('fieldatr')" ontouchstart="st('fieldatr')">🧾 FIELD ATR</div>
     <div class="tab" onclick="st('map')" ontouchstart="st('map')">🗺️ MAP</div>
     <div class="tab mob-hide" id="tab-dashboard" onclick="st('dashboard')" ontouchstart="st('dashboard')">📊 DASHBOARD</div>
     <div class="tab" id="tab-progress" onclick="st('progress')" ontouchstart="st('progress')">📈 PROGRESS REPORT</div>
@@ -528,6 +529,79 @@ select option{background:#fff;color:#1E1B4B;}
       <tbody id="fv-tbody"></tbody>
     </table></div>
     <div class="pg" id="fv-pg"></div>
+  </div>
+
+  <!-- FIELD ATR PANEL (Site Visit + Calling ATR submitted from the AppSheet "Defaulter Revenue Recovery" app, read via published Google Sheet CSVs) -->
+  <div class="panel" id="panel-fieldatr">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#0369A1;">🧾 FIELD ATR (from AppSheet)</div>
+        <div style="font-size:12px;color:var(--muted);">Read-only — ATR submitted by field staff via the "Defaulter Revenue Recovery" AppSheet app (Log Site Visit / Log Calling). Shown as two separate sheets, exactly as stored.</div>
+      </div>
+      <button class="btn btn-acc" onclick="loadFieldAtr(true)">🔄 REFRESH BOTH</button>
+    </div>
+
+    <!-- SITE VISIT ATR -->
+    <div style="margin-bottom:26px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+        <div style="font-family:var(--fh);font-size:16px;font-weight:700;color:#7C3AED;">🚪 SITE VISIT ATR</div>
+        <button class="btn btn-acc" id="svatr-dl-btn" onclick="downloadFieldAtrXlsx('sv')">⬇️ DOWNLOAD XLSX</button>
+      </div>
+      <div class="fg" style="margin-bottom:10px;">
+        <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="svatr-search" placeholder="Acct, Name, Staff, Substation, Feeder, Remarks…" oninput="runSvAtrFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
+      </div>
+      <div class="btn-group" style="margin-bottom:10px;">
+        <div id="svatr-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>
+      </div>
+      <div class="tw" style="overflow-x:auto;"><table>
+        <thead><tr>
+          <th style="width:55px">S.NO</th>
+          <th style="width:110px">ACCT ID</th>
+          <th style="min-width:130px">NAME</th>
+          <th style="width:95px">STAFF</th>
+          <th style="min-width:110px">SUBSTATION</th>
+          <th style="width:90px">FEEDER</th>
+          <th style="width:110px">OUTSTANDING</th>
+          <th style="min-width:120px">VISIT STATUS</th>
+          <th style="min-width:150px">REMARKS</th>
+          <th style="width:95px">TIMESTAMP</th>
+        </tr></thead>
+        <tbody id="svatr-tbody"></tbody>
+      </table></div>
+      <div class="pg" id="svatr-pg"></div>
+    </div>
+
+    <!-- CALLING ATR -->
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+        <div style="font-family:var(--fh);font-size:16px;font-weight:700;color:#0891B2;">📞 CALLING ATR</div>
+        <button class="btn btn-acc" id="clatr-dl-btn" onclick="downloadFieldAtrXlsx('cl')">⬇️ DOWNLOAD XLSX</button>
+      </div>
+      <div class="fg" style="margin-bottom:10px;">
+        <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="clatr-search" placeholder="Acct, Name, Staff, Mobile, Substation, Feeder, Remarks…" oninput="runClAtrFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
+      </div>
+      <div class="btn-group" style="margin-bottom:10px;">
+        <div id="clatr-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>
+      </div>
+      <div class="tw" style="overflow-x:auto;"><table>
+        <thead><tr>
+          <th style="width:55px">S.NO</th>
+          <th style="width:110px">ACCT ID</th>
+          <th style="min-width:130px">NAME</th>
+          <th style="width:95px">STAFF</th>
+          <th style="width:100px">MOBILE</th>
+          <th style="min-width:110px">SUBSTATION</th>
+          <th style="width:90px">FEEDER</th>
+          <th style="width:110px">OUTSTANDING</th>
+          <th style="min-width:120px">CALL OUTCOME</th>
+          <th style="width:100px">PROMISE DATE</th>
+          <th style="min-width:150px">REMARKS</th>
+          <th style="width:95px">TIMESTAMP</th>
+        </tr></thead>
+        <tbody id="clatr-tbody"></tbody>
+      </table></div>
+      <div class="pg" id="clatr-pg"></div>
+    </div>
   </div>
 
   <!-- DEFAULTERS PANEL -->
@@ -4743,7 +4817,7 @@ function st(name){
   document.querySelectorAll('.tab').forEach(function(tab){
     tab.classList.toggle('active', tab.getAttribute('onclick')&&tab.getAttribute('onclick').indexOf("'"+name+"'")>-1);
   });
-  ['lookup','dc','dfp','defaulter','dashboard','settings','progress','map','tdnp','fieldvisits'].forEach(function(n){
+  ['lookup','dc','dfp','defaulter','dashboard','settings','progress','map','tdnp','fieldvisits','fieldatr'].forEach(function(n){
     var p=gel('panel-'+n); if(p)p.classList.toggle('active',n===name);
   });
   applyTabTheme(name);
@@ -4753,6 +4827,7 @@ function st(name){
     if(name==='defaulter') loadDefaulters();
     if(name==='tdnp'&&!_tdnpLoaded) loadTdnpTab();
     if(name==='fieldvisits'&&!_fvLoaded) loadFieldVisits();
+    if(name==='fieldatr'&&!_fieldAtrLoaded) loadFieldAtr();
     if(name==='dashboard') buildDashboard();
     if(name==='map'){
       if(!DEF_ALL.length) loadDefaulters();
@@ -7448,6 +7523,174 @@ function renderFvTable(page){
   }).join('');
   rp('fv-pg', page, Math.ceil(FV_FD.length/PS), renderFvTable);
 }
+
+// ─── FIELD ATR (Site Visit ATR + Calling ATR, published as CSV from the AppSheet Google Sheet) ───
+var SVATR_ALL=[], SVATR_FD=[], svAtrPage=1;
+var CLATR_ALL=[], CLATR_FD=[], clAtrPage=1;
+var _fieldAtrLoaded=false;
+var SVATR_CSV_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQu3FvhV4wFpr_af3B8MS3n98FG3XXprj_9hcjRiztpGFksIoJuaJQqnjoTVVH_g25BjIzvbZ1k6unl/pub?gid=1799386541&single=true&output=csv';
+var CLATR_CSV_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQu3FvhV4wFpr_af3B8MS3n98FG3XXprj_9hcjRiztpGFksIoJuaJQqnjoTVVH_g25BjIzvbZ1k6unl/pub?gid=1447803757&single=true&output=csv';
+
+function fetchCsvAsRows(url){
+  return fetch(url, {cache:'no-store'}).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.text();
+  }).then(function(txt){
+    var wb = XLSX.read(txt, {type:'string'});
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(ws, {defval:''});
+  });
+}
+
+function loadFieldAtr(force){
+  if(_fieldAtrLoaded && !force){ runSvAtrFilter(); runClAtrFilter(); return; }
+  var svBody = gel('svatr-tbody'), clBody = gel('clatr-tbody');
+  if(svBody) svBody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Site Visit ATR…</td></tr>';
+  if(clBody) clBody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Calling ATR…</td></tr>';
+
+  Promise.all([
+    fetchCsvAsRows(SVATR_CSV_URL).catch(function(e){ return {__err:e}; }),
+    fetchCsvAsRows(CLATR_CSV_URL).catch(function(e){ return {__err:e}; })
+  ]).then(function(res){
+    var svRows = res[0], clRows = res[1];
+    _fieldAtrLoaded = true;
+
+    if(svRows && svRows.__err){
+      if(svBody) svBody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:#F43F5E;">⚠ Failed to load Site Visit ATR: '+svRows.__err+'</td></tr>';
+      SVATR_ALL = [];
+    } else {
+      SVATR_ALL = (svRows||[]).filter(function(r){
+        return String(r.ATR_ID||'').trim() && String(r.ATR_ID||'').trim()!=='EXAMPLE_ROW' && String(r.ACCT_ID||'').trim();
+      }).map(function(r){
+        return {
+          ATR_ID: r.ATR_ID||'', TIMESTAMP: r.TIMESTAMP||'', STAFF: r.STAFF||'', ACCT_ID: String(r.ACCT_ID||''),
+          NAME: r.NAME||'', SUBSTATION: r.SUBSTATION||'', FEEDER: r.FEEDER||'', OUTSTANDING: r.OUTSTANDING||'',
+          VISIT_STATUS: r.VISIT_STATUS||'', REMARKS: r.REMARKS||''
+        };
+      });
+      SVATR_FD = SVATR_ALL.slice();
+      runSvAtrFilter();
+    }
+
+    if(clRows && clRows.__err){
+      if(clBody) clBody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:#F43F5E;">⚠ Failed to load Calling ATR: '+clRows.__err+'</td></tr>';
+      CLATR_ALL = [];
+    } else {
+      CLATR_ALL = (clRows||[]).filter(function(r){
+        return String(r.ATR_ID||'').trim() && String(r.ATR_ID||'').trim()!=='EXAMPLE_ROW' && String(r.ACCT_ID||'').trim();
+      }).map(function(r){
+        return {
+          ATR_ID: r.ATR_ID||'', TIMESTAMP: r.TIMESTAMP||'', STAFF: r.STAFF||'', ACCT_ID: String(r.ACCT_ID||''),
+          NAME: r.NAME||'', MOBILE: r.MOBILE||'', SUBSTATION: r.SUBSTATION||'', FEEDER: r.FEEDER||'', OUTSTANDING: r.OUTSTANDING||'',
+          CALL_OUTCOME: r.CALL_OUTCOME||'', PROMISE_DATE: r.PROMISE_DATE||'', REMARKS: r.REMARKS||''
+        };
+      });
+      CLATR_FD = CLATR_ALL.slice();
+      runClAtrFilter();
+    }
+  });
+}
+
+function runSvAtrFilter(){
+  var q = (gel('svatr-search')?gel('svatr-search').value:'').toLowerCase();
+  SVATR_FD = SVATR_ALL.filter(function(r){
+    if(!q) return true;
+    return (r.ACCT_ID+' '+r.NAME+' '+r.STAFF+' '+r.SUBSTATION+' '+r.FEEDER+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
+  });
+  var ci = gel('svatr-count-info');
+  if(ci) ci.textContent = 'Showing '+SVATR_FD.length.toLocaleString()+' of '+SVATR_ALL.length.toLocaleString()+' site visit ATR records';
+  renderSvAtrTable(1);
+}
+
+function renderSvAtrTable(page){
+  svAtrPage = page;
+  var tbody = gel('svatr-tbody'); if(!tbody) return;
+  if(!SVATR_FD.length){
+    tbody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);">No Site Visit ATR yet — they will appear here once field staff submit "Log Site Visit" in the AppSheet app.</td></tr>';
+    var pgEl = gel('svatr-pg'); if(pgEl) pgEl.innerHTML='';
+    return;
+  }
+  var slice = SVATR_FD.slice((page-1)*PS, page*PS);
+  tbody.innerHTML = slice.map(function(r,i){
+    var rank = (page-1)*PS+i+1;
+    return '<tr>'+
+      '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
+      '<td>'+(r.NAME||'-')+'</td>'+
+      '<td>'+(r.STAFF||'-')+'</td>'+
+      '<td>'+(r.SUBSTATION||'-')+'</td>'+
+      '<td>'+(r.FEEDER||'-')+'</td>'+
+      '<td>'+(r.OUTSTANDING||'-')+'</td>'+
+      '<td style="font-weight:600;">'+(r.VISIT_STATUS||'-')+'</td>'+
+      '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
+      '<td style="font-size:11px;color:var(--muted);">'+(r.TIMESTAMP||'-')+'</td>'+
+    '</tr>';
+  }).join('');
+  rp('svatr-pg', page, Math.ceil(SVATR_FD.length/PS), renderSvAtrTable);
+}
+
+function runClAtrFilter(){
+  var q = (gel('clatr-search')?gel('clatr-search').value:'').toLowerCase();
+  CLATR_FD = CLATR_ALL.filter(function(r){
+    if(!q) return true;
+    return (r.ACCT_ID+' '+r.NAME+' '+r.STAFF+' '+r.MOBILE+' '+r.SUBSTATION+' '+r.FEEDER+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
+  });
+  var ci = gel('clatr-count-info');
+  if(ci) ci.textContent = 'Showing '+CLATR_FD.length.toLocaleString()+' of '+CLATR_ALL.length.toLocaleString()+' calling ATR records';
+  renderClAtrTable(1);
+}
+
+function renderClAtrTable(page){
+  clAtrPage = page;
+  var tbody = gel('clatr-tbody'); if(!tbody) return;
+  if(!CLATR_FD.length){
+    tbody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:var(--muted);">No Calling ATR yet — they will appear here once field staff submit "Log Calling" in the AppSheet app.</td></tr>';
+    var pgEl = gel('clatr-pg'); if(pgEl) pgEl.innerHTML='';
+    return;
+  }
+  var slice = CLATR_FD.slice((page-1)*PS, page*PS);
+  tbody.innerHTML = slice.map(function(r,i){
+    var rank = (page-1)*PS+i+1;
+    return '<tr>'+
+      '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
+      '<td>'+(r.NAME||'-')+'</td>'+
+      '<td>'+(r.STAFF||'-')+'</td>'+
+      '<td>'+(r.MOBILE||'-')+'</td>'+
+      '<td>'+(r.SUBSTATION||'-')+'</td>'+
+      '<td>'+(r.FEEDER||'-')+'</td>'+
+      '<td>'+(r.OUTSTANDING||'-')+'</td>'+
+      '<td style="font-weight:600;">'+(r.CALL_OUTCOME||'-')+'</td>'+
+      '<td>'+(r.PROMISE_DATE||'-')+'</td>'+
+      '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
+      '<td style="font-size:11px;color:var(--muted);">'+(r.TIMESTAMP||'-')+'</td>'+
+    '</tr>';
+  }).join('');
+  rp('clatr-pg', page, Math.ceil(CLATR_FD.length/PS), renderClAtrTable);
+}
+
+function downloadFieldAtrXlsx(which){
+  var isSv = which==='sv';
+  var btn = gel(isSv?'svatr-dl-btn':'clatr-dl-btn');
+  var data = isSv ? SVATR_FD : CLATR_FD;
+  if(!data.length){ if(btn){ var old=btn.textContent; btn.textContent='⚠ NOTHING TO DOWNLOAD'; setTimeout(function(){btn.textContent=old;},1800);} return; }
+  if(btn) btn.textContent='⏳ BUILDING…';
+  try{
+    var ws = XLSX.utils.json_to_sheet(data);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, isSv?'SITE_VISIT_ATR':'CALLING_ATR');
+    var d = new Date(); var stamp = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    XLSX.writeFile(wb, (isSv?'Site_Visit_ATR_':'Calling_ATR_')+stamp+'.xlsx');
+    if(btn){ btn.textContent='✅ DOWNLOADED'; setTimeout(function(){btn.textContent='⬇️ DOWNLOAD XLSX';},2000); }
+  }catch(e){
+    if(btn){ btn.textContent='⚠ ERROR'; setTimeout(function(){btn.textContent='⬇️ DOWNLOAD XLSX';},2000); }
+  }
+}
+
+window.loadFieldAtr=loadFieldAtr;
+window.runSvAtrFilter=runSvAtrFilter;
+window.runClAtrFilter=runClAtrFilter;
+window.downloadFieldAtrXlsx=downloadFieldAtrXlsx;
 
 window.loadDefaulters=loadDefaulters;
 window.renderDefaulters=renderDefaulters;
