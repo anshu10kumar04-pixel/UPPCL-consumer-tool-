@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Google Drive Access Test — UPPCL Tool</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 20px; }
+  #clientIdBox { width: 100%; padding: 8px; font-size: 14px; margin-bottom: 12px; box-sizing: border-box; }
+  button { padding: 10px 18px; font-size: 15px; cursor: pointer; margin-right: 8px; }
+  #log { margin-top: 20px; padding: 14px; background: #f4f4f4; border-radius: 6px; white-space: pre-wrap; font-family: monospace; font-size: 13px; min-height: 60px; }
+  .ok { color: #1a7f37; font-weight: bold; }
+  .bad { color: #c0392b; font-weight: bold; }
+  .step { margin-bottom: 18px; }
+</style>
+</head>
+<body>
+
+<h1>Google Drive Access Test</h1>
+<p>Ye page sirf ek cheez check karta hai: kya aapka UPPCL Workspace admin third-party apps ko Google Drive access karne se block kar raha hai ya nahi. Koi photo/data yahan store nahi hoti — sirf ek chhota test file banega aur turant dikh jayega ki upload safal hua ya nahi.</p>
+
+<div class="step">
+  <b>Step 1:</b> Neeche apna Google OAuth Client ID daalo (banane ka tarika neeche instructions mein hai):
+  <input id="clientIdBox" type="text" placeholder="xxxxxxxxxx-xxxxxxxxxxxxxxxx.apps.googleusercontent.com">
+</div>
+
+<div class="step">
+  <b>Step 2:</b> Button dabao aur apne anshuman.pranami@uppcl.org account se sign in karo:
+  <br><br>
+  <button id="testBtn">Test Drive Access</button>
+</div>
+
+<div id="log">Result yahan dikhega...</div>
+
+<hr>
+<h3>Google Cloud Console mein Client ID banane ka tarika (ek baar ka kaam, ~5 minute)</h3>
+<ol>
+  <li><a href="https://console.cloud.google.com/" target="_blank">console.cloud.google.com</a> kholo (apne kisi bhi Google account se, personal Gmail bhi chalega).</li>
+  <li>Upar-left "Select a project" &rarr; "New Project" &rarr; naam do "UPPCL Tool Test" &rarr; Create.</li>
+  <li>Left menu &rarr; "APIs &amp; Services" &rarr; "Library" &rarr; search "Google Drive API" &rarr; Enable.</li>
+  <li>Left menu &rarr; "APIs &amp; Services" &rarr; "OAuth consent screen" &rarr; User Type "External" &rarr; Create &rarr; App name/email bhar ke Save (test mode mein hi rehne do).</li>
+  <li>Left menu &rarr; "APIs &amp; Services" &rarr; "Credentials" &rarr; "Create Credentials" &rarr; "OAuth client ID" &rarr; Application type "Web application".</li>
+  <li>"Authorized JavaScript origins" mein add karo: jahan se ye HTML file khola jayega us origin ko (agar sirf apne computer par file double-click karke khol rahe ho to <code>http://localhost</code> nahi chalega — is file ko kisi simple hosting jaise GitHub Pages par daal ke uska URL yahan daalna behtar rahega, jaise <code>https://anshu10kumar04-pixel.github.io</code>).</li>
+  <li>Create dabane ke baad jo Client ID milega (xxxx.apps.googleusercontent.com jaisa dikhega), usko upar Step 1 wale box mein paste kar do.</li>
+</ol>
+
+<script>
+let tokenClient;
+const logBox = document.getElementById('log');
+
+function log(msg, cls) {
+  const span = document.createElement('div');
+  if (cls) span.className = cls;
+  span.textContent = msg;
+  logBox.appendChild(span);
+}
+
+document.getElementById('testBtn').addEventListener('click', () => {
+  logBox.innerHTML = '';
+  const clientId = document.getElementById('clientIdBox').value.trim();
+  if (!clientId) {
+    log('Pehle Client ID daalo Step 1 mein.', 'bad');
+    return;
+  }
+
+  try {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: async (tokenResponse) => {
+        if (tokenResponse.error) {
+          log('BLOCKED / ERROR: ' + tokenResponse.error, 'bad');
+          log('Agar error mein "admin_policy_enforced" ya "access_denied" dikh raha hai, to aapke IT admin ne third-party apps block kar rakhe hain.', 'bad');
+          return;
+        }
+        log('Sign-in safal! Ab test file upload kar rahe hain...', 'ok');
+        await uploadTestFile(tokenResponse.access_token);
+      },
+      error_callback: (err) => {
+        log('BLOCKED by admin policy or consent screen error:', 'bad');
+        log(JSON.stringify(err, null, 2), 'bad');
+        log('Ye confirm karta hai ki aapka Workspace admin is app (ya third-party apps generally) ko Drive access karne se rok raha hai.', 'bad');
+      }
+    });
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+  } catch (e) {
+    log('Setup error: ' + e.message, 'bad');
+  }
+});
+
+async function uploadTestFile(accessToken) {
+  const boundary = '-------uppcltest';
+  const metadata = { name: 'uppcl_tool_test_' + Date.now() + '.txt', mimeType: 'text/plain' };
+  const fileContent = 'Ye ek test file hai UPPCL tool ke Drive access check karne ke liye. Isko delete kar sakte ho.';
+
+  const multipartBody =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\nContent-Type: text/plain\r\n\r\n${fileContent}\r\n` +
+    `--${boundary}--`;
+
+  try {
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + accessToken,
+        'Content-Type': `multipart/related; boundary=${boundary}`
+      },
+      body: multipartBody
+    });
+    const data = await res.json();
+    if (res.ok) {
+      log('SUCCESS: Drive access allowed hai! Test file bana: "' + data.name + '" (file ID: ' + data.id + ')', 'ok');
+      log('Matlab: aap Drive API ko apne tool mein safely use kar sakte ho. Ye test file aap apne Drive se delete kar sakte ho.', 'ok');
+    } else {
+      log('Upload FAILED: ' + JSON.stringify(data), 'bad');
+    }
+  } catch (e) {
+    log('Network/permission error during upload: ' + e.message, 'bad');
+  }
+}
+</script>
+
+</body>
+</html>
