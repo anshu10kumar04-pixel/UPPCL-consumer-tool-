@@ -542,11 +542,13 @@ select option{background:#fff;color:#1E1B4B;}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
       <div>
         <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#0891B2;">📞 CALLING LIST</div>
-        <div style="font-size:12px;color:var(--muted);">Defaulters above ₹2000 (LMV1/2/6, HV2) + consumers manually pushed for calling.</div>
+        <div style="font-size:12px;color:var(--muted);">Defaulters above ₹2000 (LMV1/2/6, HV2) + consumers manually pushed for calling. Click ACCT ID to open consumer detail &amp; log Calling ATR.</div>
       </div>
     </div>
     <div class="fg" style="margin-bottom:12px;">
       <div><div class="lbl">SUBSTATION</div><div class="sw"><select id="call-sub" onchange="runCallFilter()"><option value="">ALL SUBSTATIONS</option></select></div></div>
+      <div><div class="lbl">FEEDER</div><div class="sw"><select id="call-feeder" onchange="runCallFilter()"><option value="">ALL FEEDERS</option></select></div></div>
+      <div><div class="lbl">TARIFF</div><div class="sw"><select id="call-tariff" onchange="runCallFilter()"><option value="">ALL TARIFFS</option></select></div></div>
       <div><div class="lbl">SOURCE</div><div class="sw"><select id="call-source" onchange="runCallFilter()"><option value="">ALL</option><option value="auto">AUTO-FILTERED</option><option value="manual">MANUALLY PUSHED</option></select></div></div>
       <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="call-search" placeholder="Name, Acct, Mobile…" oninput="runCallFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
     </div>
@@ -563,10 +565,11 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:105px">MOBILE</th>
         <th style="width:110px">OUTSTANDING</th>
         <th style="width:70px">TARIFF</th>
-        <th style="min-width:110px">SUBSTATION</th>
-        <th style="width:90px">FEEDER</th>
-        <th style="width:80px">SOURCE</th>
-        <th style="width:150px">ACTIONS</th>
+        <th style="width:110px">METER NO</th>
+        <th style="width:95px">LP DATE</th>
+        <th style="width:95px">LP AMT</th>
+        <th style="width:90px">ACTIONS</th>
+        <th style="width:150px">ATR STATUS</th>
       </tr></thead>
       <tbody id="call-tbody"></tbody>
     </table></div>
@@ -578,11 +581,13 @@ select option{background:#fff;color:#1E1B4B;}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
       <div>
         <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#7C3AED;">🚶 FIELD VISIT</div>
-        <div style="font-size:12px;color:var(--muted);">All defaulter consumers. Click 📝 to log Field Visit ATR (saved to the SITE_VISIT_ATR sheet).</div>
+        <div style="font-size:12px;color:var(--muted);">Defaulters above ₹5000 (LMV1/2/6, HV2). Click ACCT ID to open consumer detail &amp; log Field Visit ATR.</div>
       </div>
     </div>
     <div class="fg" style="margin-bottom:12px;">
       <div><div class="lbl">SUBSTATION</div><div class="sw"><select id="fvv-sub" onchange="runFieldVisitFilter()"><option value="">ALL SUBSTATIONS</option></select></div></div>
+      <div><div class="lbl">FEEDER</div><div class="sw"><select id="fvv-feeder" onchange="runFieldVisitFilter()"><option value="">ALL FEEDERS</option></select></div></div>
+      <div><div class="lbl">TARIFF</div><div class="sw"><select id="fvv-tariff" onchange="runFieldVisitFilter()"><option value="">ALL TARIFFS</option></select></div></div>
       <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="fvv-search" placeholder="Name, Acct, Mobile…" oninput="runFieldVisitFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
     </div>
     <div class="btn-group" style="margin-bottom:14px;">
@@ -598,10 +603,11 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:105px">MOBILE</th>
         <th style="width:110px">OUTSTANDING</th>
         <th style="width:70px">TARIFF</th>
-        <th style="min-width:110px">SUBSTATION</th>
-        <th style="width:90px">FEEDER</th>
-        <th style="width:100px">ATR STATUS</th>
-        <th style="width:190px">ACTIONS</th>
+        <th style="width:110px">METER NO</th>
+        <th style="width:95px">LP DATE</th>
+        <th style="width:95px">LP AMT</th>
+        <th style="width:120px">ACTIONS</th>
+        <th style="width:150px">ATR STATUS</th>
       </tr></thead>
       <tbody id="fvv-tbody"></tbody>
     </table></div>
@@ -5703,6 +5709,8 @@ function toggleAtrComment(){
   var sel = gel('modal-atr-sel');
   var wrap = gel('modal-atr-comment-wrap');
   if(!sel || !wrap) return;
+  var atrType = gel('modal-atr-section') ? gel('modal-atr-section').dataset.type : '';
+  if(atrType === 'calling'){ wrap.style.display = 'block'; return; } // remarks always visible (optional) for calling ATR
   // Show comment box for OTHER, DISPUTE, PROMISE, PARTIAL (any that need explanation)
   var showFor = ['OTHER','DISPUTE','PROMISE','PARTIAL'];
   wrap.style.display = showFor.indexOf(sel.value) >= 0 ? 'block' : 'none';
@@ -5756,6 +5764,30 @@ function saveModalAtr(){
     sb.forEach(function(b){b.disabled=true;b.style.opacity='0.7';b.style.cursor='not-allowed';b.style.background='#9CA3AF';b.textContent='🔒 PUSH TO SHEET TO UNLOCK';b.style.fontSize='11px';});
     renderDefaulters(defPage);
     setTimeout(autoSyncAtr, 2000);
+    return;
+  }
+
+  if(atrType === 'calling'){
+    // Calling ATR is compulsory — block save until a real outcome is chosen
+    var callOutcome = newAtr;
+    if(!callOutcome){ alert('⚠️ Kripya CALL OUTCOME select karein — yeh compulsory hai.'); return; }
+    var callRemarks = gel('modal-atr-comment') ? gel('modal-atr-comment').value.trim() : '';
+    var callRec = findDefRec(modalCurrentAcct) || {};
+    var callUrl = getScriptUrl();
+    if(!callUrl){ alert('Pehle SETTINGS → ATR GOOGLE SHEET SYNC mein Apps Script URL set karo.'); return; }
+    var callPayload = {
+      type: 'calling_atr', acct: modalCurrentAcct, load: callRec.LOAD||0, substation: callRec.SUBSTATION||'', address: callRec.ADDRESS||'',
+      outstanding: callRec.OUTSTANDING||0, lp_date: callRec.PAY_DATE||'', lp_amt: callRec.PAY_AMT||0,
+      call_outcome: callOutcome, remarks: callRemarks
+    };
+    fetch(callUrl, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(callPayload) })
+      .then(function(){
+        CALLING_LATEST[String(modalCurrentAcct)] = { CALL_OUTCOME: callOutcome, REMARKS: callRemarks };
+        alert('✅ Calling ATR saved for '+modalCurrentAcct+'.');
+        closeModal();
+        if(gel('call-tbody')) runCallFilter();
+      })
+      .catch(function(e){ alert('❌ Error: '+e.message); });
     return;
   }
 
@@ -6626,7 +6658,8 @@ function renderDefaulters(page){
   rp('def-pg',page,Math.ceil(DEF_DATA.length/PS),renderDefaulters);
 }
 
-function openDefaulterModal(acctId){
+function openDefaulterModal(acctId, mode){
+  mode = mode || 'defaulter';
   var defRec = DEF_ALL.find(function(x){return String(x.ACCT_ID)===String(acctId);});
   if(!defRec){ alert('Consumer not found in defaulter data.'); return; }
   console.log('openDefaulterModal:', acctId, 'OUT:', defRec.OUTSTANDING, 'AMT:', defRec.PAY_AMT, 'DATE:', defRec.PAY_DATE);
@@ -6637,7 +6670,9 @@ function openDefaulterModal(acctId){
   var meterNo = METER_DATA[String(acctId)] || (r?r.SERIAL_NBR:'') || defRec.METER_NO || '-';
 
   // Source badge — show which dataset this came from
-  var srcBadge = '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:#FEF3C7;color:#92400E;">DEFAULTER</span>';
+  var srcBadge = mode === 'calling'
+    ? '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:#CFFAFE;color:#0E7490;">📞 CALLING</span>'
+    : '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:#FEF3C7;color:#92400E;">DEFAULTER</span>';
 
   gel('modal-title').innerHTML = (defRec.NAME||'Consumer Details') + '&nbsp;&nbsp;' + srcBadge;
   gel('modal-grid').innerHTML =
@@ -6677,48 +6712,69 @@ function openDefaulterModal(acctId){
   // ATR section
   var atrSec = gel('modal-atr-section');
   atrSec.style.display = 'block';
-  atrSec.querySelector('div:first-child').textContent = '📋 ATR STATUS — DEFAULTER ACTION REPORT';
-  var sel = gel('modal-atr-sel');
-  sel.innerHTML = '<option value="PENDING">⏳ PENDING</option><option value="PAID">✅ PAID</option><option value="PARTIAL">💰 PARTIAL PAYMENT</option><option value="PROMISE">🤝 PROMISE TO PAY</option><option value="LOCK">🔒 LOCK / AWAY</option><option value="DISPUTE">⚖️ DISPUTE</option><option value="TD">🔌 TEMP DISCONNECTED</option><option value="OTHER">📝 OTHER</option>';
-  var defSaved = {};
-  try{ defSaved = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
-  var defEntry = defSaved[String(acctId)] || {};
-  var savedAtr = typeof defEntry==='object' ? (defEntry.atr||'PENDING') : (defEntry||'PENDING');
-  var currentAtr = savedAtr !== 'PENDING' ? savedAtr : (defRec.ATR_STATUS || 'PENDING');
-  sel.value = currentAtr;
-  updateAtrSelectStyle();
-  var isSubmitted = currentAtr !== 'PENDING';
-  var isLocked = isAtrLocked(defRec.ACCT_ID, 'defaulter');
-  sel.disabled = isLocked;
-  sel.style.opacity = isLocked ? '0.7' : '1';
-  var defComment = typeof defEntry==='object' ? (defEntry.comment||'') : '';
-  var defCommentBox = gel('modal-atr-comment');
-  var defCommentWrap = gel('modal-atr-comment-wrap');
-  if(defCommentBox){ defCommentBox.value=defComment; defCommentBox.disabled=isSubmitted; }
-  if(defCommentWrap){
-    var showFor=['OTHER','DISPUTE','PROMISE','PARTIAL'];
-    defCommentWrap.style.display=(showFor.indexOf(currentAtr)>=0||defComment)?'block':'none';
-  }
-  atrSec.querySelectorAll('.save-atr-btn').forEach(function(b){
-    if(isLocked){
-      b.disabled=true; b.style.opacity='0.7'; b.style.cursor='not-allowed';
-      b.style.background='#9CA3AF'; b.textContent='🔒 PUSH TO SHEET TO UNLOCK'; b.style.fontSize='11px';
-    } else if(isSubmitted){
+  if(mode === 'calling'){
+    atrSec.querySelector('div:first-child').textContent = '📞 CALLING ATR — COMPULSORY';
+    var prevCl = CALLING_LATEST[String(acctId)] || {};
+    var sel = gel('modal-atr-sel');
+    sel.innerHTML = '<option value="">-- SELECT CALL OUTCOME --</option>' + CALL_OUTCOME_OPTIONS.map(function(k){
+      return '<option value="'+k+'"'+(prevCl.CALL_OUTCOME===k?' selected':'')+'>'+CALL_OUTCOME_LABELS[k]+'</option>';
+    }).join('');
+    sel.value = prevCl.CALL_OUTCOME || '';
+    sel.className = 'atr-dc';
+    sel.disabled = false; sel.style.opacity = '1';
+    var clCommentBox = gel('modal-atr-comment');
+    var clCommentWrap = gel('modal-atr-comment-wrap');
+    if(clCommentBox){ clCommentBox.value = prevCl.REMARKS||''; clCommentBox.disabled = false; clCommentBox.placeholder='Remarks (optional)…'; }
+    if(clCommentWrap){ clCommentWrap.style.display = 'block'; }
+    atrSec.querySelectorAll('.save-atr-btn').forEach(function(b){
       b.disabled=false; b.style.opacity='1'; b.style.cursor='pointer';
-      b.style.background='#6366F1'; b.textContent='✏️ EDIT ATR'; b.style.fontSize='';
-      b.onclick=function(){
-        var ds=gel('modal-def-atr-sel'), dc=gel('modal-def-atr-comment');
-        if(ds){ds.disabled=false;ds.style.opacity='1';ds.style.cursor='pointer';}
-        if(dc){dc.disabled=false;}
-        b.style.background='#F59E0B'; b.textContent='💾 SAVE ATR STATUS'; b.onclick=null;
-        b.addEventListener('click',function sh(){saveDefModalAtr();b.removeEventListener('click',sh);});
-      };
-    } else {
-      b.disabled=false; b.style.opacity='1'; b.style.cursor='pointer';
-      b.style.background='#F59E0B'; b.textContent='💾 SAVE ATR STATUS'; b.style.fontSize='';
+      b.style.background='#0891B2'; b.textContent='💾 SAVE CALLING ATR'; b.style.fontSize=''; b.onclick=null;
+    });
+    atrSec.dataset.type = 'calling';
+  } else {
+    atrSec.querySelector('div:first-child').textContent = '📋 ATR STATUS — DEFAULTER ACTION REPORT';
+    var sel = gel('modal-atr-sel');
+    sel.innerHTML = '<option value="PENDING">⏳ PENDING</option><option value="PAID">✅ PAID</option><option value="PARTIAL">💰 PARTIAL PAYMENT</option><option value="PROMISE">🤝 PROMISE TO PAY</option><option value="LOCK">🔒 LOCK / AWAY</option><option value="DISPUTE">⚖️ DISPUTE</option><option value="TD">🔌 TEMP DISCONNECTED</option><option value="OTHER">📝 OTHER</option>';
+    var defSaved = {};
+    try{ defSaved = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+    var defEntry = defSaved[String(acctId)] || {};
+    var savedAtr = typeof defEntry==='object' ? (defEntry.atr||'PENDING') : (defEntry||'PENDING');
+    var currentAtr = savedAtr !== 'PENDING' ? savedAtr : (defRec.ATR_STATUS || 'PENDING');
+    sel.value = currentAtr;
+    updateAtrSelectStyle();
+    var isSubmitted = currentAtr !== 'PENDING';
+    var isLocked = isAtrLocked(defRec.ACCT_ID, 'defaulter');
+    sel.disabled = isLocked;
+    sel.style.opacity = isLocked ? '0.7' : '1';
+    var defComment = typeof defEntry==='object' ? (defEntry.comment||'') : '';
+    var defCommentBox = gel('modal-atr-comment');
+    var defCommentWrap = gel('modal-atr-comment-wrap');
+    if(defCommentBox){ defCommentBox.value=defComment; defCommentBox.disabled=isSubmitted; }
+    if(defCommentWrap){
+      var showFor=['OTHER','DISPUTE','PROMISE','PARTIAL'];
+      defCommentWrap.style.display=(showFor.indexOf(currentAtr)>=0||defComment)?'block':'none';
     }
-  });
-  atrSec.dataset.type = 'defaulter';
+    atrSec.querySelectorAll('.save-atr-btn').forEach(function(b){
+      if(isLocked){
+        b.disabled=true; b.style.opacity='0.7'; b.style.cursor='not-allowed';
+        b.style.background='#9CA3AF'; b.textContent='🔒 PUSH TO SHEET TO UNLOCK'; b.style.fontSize='11px';
+      } else if(isSubmitted){
+        b.disabled=false; b.style.opacity='1'; b.style.cursor='pointer';
+        b.style.background='#6366F1'; b.textContent='✏️ EDIT ATR'; b.style.fontSize='';
+        b.onclick=function(){
+          var ds=gel('modal-def-atr-sel'), dc=gel('modal-def-atr-comment');
+          if(ds){ds.disabled=false;ds.style.opacity='1';ds.style.cursor='pointer';}
+          if(dc){dc.disabled=false;}
+          b.style.background='#F59E0B'; b.textContent='💾 SAVE ATR STATUS'; b.onclick=null;
+          b.addEventListener('click',function sh(){saveDefModalAtr();b.removeEventListener('click',sh);});
+        };
+      } else {
+        b.disabled=false; b.style.opacity='1'; b.style.cursor='pointer';
+        b.style.background='#F59E0B'; b.textContent='💾 SAVE ATR STATUS'; b.style.fontSize='';
+      }
+    });
+    atrSec.dataset.type = 'defaulter';
+  }
 
   // Nearby defaulters
   if(lat&&lon){
@@ -7378,6 +7434,32 @@ function rowActionButtons(acctId, mobile, mode){
   return telBtn+waBtn+photoBtn+atrBtn;
 }
 
+function copyMobile(mobile){
+  try{
+    var text = String(mobile||'').replace(/\D/g,'');
+    if(!text) return;
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text).catch(function(){}); }
+    else {
+      var ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    }
+  }catch(e){}
+}
+function callingActionIcons(acctId, mobile){
+  var telNum = String(mobile||'').replace(/\D/g,'');
+  var telBtn = telNum ? '<a href="tel:'+telNum+'" onclick="copyMobile(\''+telNum+'\')" title="Call (number copied)" style="margin-right:10px;text-decoration:none;font-size:16px;">📞</a>' : '<span style="opacity:0.3;margin-right:10px;">📞</span>';
+  var waBtn = telNum ? '<a href="javascript:void(0)" onclick="waConsumer(\''+acctId+'\',\''+telNum+'\')" title="WhatsApp" style="text-decoration:none;font-size:16px;">💬</a>' : '<span style="opacity:0.3;">💬</span>';
+  return telBtn+waBtn;
+}
+function fieldVisitActionIcons(acctId, mobile){
+  var telNum = String(mobile||'').replace(/\D/g,'');
+  var telBtn = telNum ? '<a href="tel:'+telNum+'" onclick="copyMobile(\''+telNum+'\')" title="Call (number copied)" style="margin-right:10px;text-decoration:none;font-size:16px;">📞</a>' : '<span style="opacity:0.3;margin-right:10px;">📞</span>';
+  var waBtn = telNum ? '<a href="javascript:void(0)" onclick="waConsumer(\''+acctId+'\',\''+telNum+'\')" title="WhatsApp" style="margin-right:10px;text-decoration:none;font-size:16px;">💬</a>' : '<span style="opacity:0.3;margin-right:10px;">💬</span>';
+  var hasPhoto = !!PHOTO_LINKS[String(acctId)];
+  var photoBtn = '<a href="javascript:void(0)" id="photo-btn-'+acctId+'" onclick="openPhotoUpload(\''+acctId+'\')" title="'+(hasPhoto?'View Photo':'Take/Upload Photo')+'" style="text-decoration:none;font-size:16px;">'+(hasPhoto?'✅':'📷')+'</a>';
+  return telBtn+waBtn+photoBtn;
+}
+
 // ---- CALLING TAB ----
 var CALL_PUSH_IDS = {}, _callPushLoaded = false;
 var CALL_ALL = [], CALL_FD = [], callPage = 1, _callLoaded = false;
@@ -7423,15 +7505,25 @@ function buildCallingPanel(){
   var subs = [].concat(Array.from(new Set(CALL_ALL.map(function(r){ return r.SUBSTATION; }).filter(Boolean)))).sort();
   var sel = gel('call-sub');
   if(sel){ while(sel.options.length>1) sel.remove(1); subs.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; sel.appendChild(o); }); }
+  var feeders = [].concat(Array.from(new Set(CALL_ALL.map(function(r){ return r.FEEDER; }).filter(Boolean)))).sort();
+  var fsel = gel('call-feeder');
+  if(fsel){ while(fsel.options.length>1) fsel.remove(1); feeders.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; fsel.appendChild(o); }); }
+  var tariffs = [].concat(Array.from(new Set(CALL_ALL.map(function(r){ return r.TARIFF; }).filter(Boolean)))).sort();
+  var tsel = gel('call-tariff');
+  if(tsel){ while(tsel.options.length>1) tsel.remove(1); tariffs.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; tsel.appendChild(o); }); }
   runCallFilter();
 }
 
 function runCallFilter(){
   var q = (gel('call-search') ? gel('call-search').value : '').toLowerCase();
   var sub = gel('call-sub') ? gel('call-sub').value : '';
+  var feeder = gel('call-feeder') ? gel('call-feeder').value : '';
+  var tariff = gel('call-tariff') ? gel('call-tariff').value : '';
   var src = gel('call-source') ? gel('call-source').value : '';
   CALL_FD = CALL_ALL.filter(function(r){
     if(sub && r.SUBSTATION !== sub) return false;
+    if(feeder && r.FEEDER !== feeder) return false;
+    if(tariff && r.TARIFF !== tariff) return false;
     if(src && r._SRC !== src) return false;
     if(q && !String(r.ACCT_ID).includes(q) && !(r.NAME && r.NAME.toLowerCase().includes(q)) && !(r.MOBILE && String(r.MOBILE).includes(q))) return false;
     return true;
@@ -7447,29 +7539,37 @@ function renderCallTable(page){
   tbody.innerHTML = slice.map(function(r, i){
     var rank = (page-1)*PS + i + 1;
     var out = Math.round(parseFloat(r.OUTSTANDING)||0);
+    var cl = CALLING_LATEST[String(r.ACCT_ID)] || {};
+    var done = !!cl.CALL_OUTCOME;
+    var atrLabel = done ? (CALL_OUTCOME_LABELS[cl.CALL_OUTCOME]||cl.CALL_OUTCOME) : '⏳ PENDING';
+    var atrColor = done ? '#059669' : '#9CA3AF';
+    var manualTag = r._SRC==='manual' ? ' <span title="Manually pushed" style="color:#F59E0B;font-size:10px;font-weight:700;">[M]</span>' : '';
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
-      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
+      '<td><a href="javascript:void(0)" onclick="openCallingLogModal(\''+r.ACCT_ID+'\')" title="Open consumer detail / log Calling ATR" style="font-family:var(--fh);color:#4F46E5;font-weight:700;text-decoration:none;">'+r.ACCT_ID+'</a>'+manualTag+'</td>'+
       '<td style="font-weight:600;">'+(r.NAME||'-')+'</td>'+
-      '<td>'+(r.MOBILE||'-')+'</td>'+
+      '<td>'+(r.MOBILE ? '<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" title="Call (number copied)" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+'</a>' : '-')+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
       '<td>'+(r.TARIFF||'-')+'</td>'+
-      '<td>'+(r.SUBSTATION||'-')+'</td>'+
-      '<td>'+(r.FEEDER||'-')+'</td>'+
-      '<td>'+(r._SRC==='manual' ? '<span style="color:#F59E0B;font-weight:700;font-size:11px;">MANUAL</span>' : '<span style="color:#6B7280;font-size:11px;">AUTO</span>')+'</td>'+
-      '<td style="white-space:nowrap;">'+rowActionButtons(r.ACCT_ID, r.MOBILE, 'calling')+(r._SRC==='manual' ? ' <a href="javascript:void(0)" onclick="removeFromCalling(\''+r.ACCT_ID+'\')" title="Remove from Calling" style="margin-left:6px;text-decoration:none;">\U0001F5D1</a>' : '')+'</td>'+
+      '<td>'+(r.METER_NO||'-')+'</td>'+
+      '<td>'+(r.PAY_DATE||'-')+'</td>'+
+      '<td>'+(r.PAY_AMT?'₹'+Math.round(r.PAY_AMT).toLocaleString():'-')+'</td>'+
+      '<td style="white-space:nowrap;">'+callingActionIcons(r.ACCT_ID, r.MOBILE)+(r._SRC==='manual' ? ' <a href="javascript:void(0)" onclick="removeFromCalling(\''+r.ACCT_ID+'\')" title="Remove from Calling" style="margin-left:10px;text-decoration:none;font-size:15px;">🗑️</a>' : '')+'</td>'+
+      '<td><span style="color:'+atrColor+';font-weight:700;font-size:11px;">'+atrLabel+'</span></td>'+
     '</tr>';
   }).join('');
   rp('call-pg', page, Math.ceil(CALL_FD.length/PS), renderCallTable);
 }
 
-function resetCall(){ if(gel('call-search')) gel('call-search').value=''; if(gel('call-sub')) gel('call-sub').value=''; if(gel('call-source')) gel('call-source').value=''; runCallFilter(); }
+function resetCall(){ if(gel('call-search')) gel('call-search').value=''; if(gel('call-sub')) gel('call-sub').value=''; if(gel('call-feeder')) gel('call-feeder').value=''; if(gel('call-tariff')) gel('call-tariff').value=''; if(gel('call-source')) gel('call-source').value=''; runCallFilter(); }
 
 function expCallX(){
   if(!CALL_FD.length) return alert('No data.');
   var ws = XLSX.utils.json_to_sheet(CALL_FD.map(function(r){
+    var cl = CALLING_LATEST[String(r.ACCT_ID)] || {};
     return { ACCT_ID:r.ACCT_ID, NAME:r.NAME, MOBILE:r.MOBILE, ADDRESS:r.ADDRESS, SUBSTATION:r.SUBSTATION, FEEDER:r.FEEDER,
-             TARIFF:r.TARIFF, LOAD:r.LOAD, OUTSTANDING:r.OUTSTANDING, SOURCE:r._SRC };
+             TARIFF:r.TARIFF, LOAD:r.LOAD, METER_NO:r.METER_NO, LP_DATE:r.PAY_DATE, LP_AMT:r.PAY_AMT, OUTSTANDING:r.OUTSTANDING, SOURCE:r._SRC,
+             CALL_OUTCOME:cl.CALL_OUTCOME||'PENDING', REMARKS:cl.REMARKS||'' };
   }));
   var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Calling List');
   XLSX.writeFile(wb, 'Calling_List_'+Date.now()+'.xlsx');
@@ -7537,20 +7637,36 @@ function buildFieldVisitPanel(){
   var subs = getAllSubValues();
   var sel = gel('fvv-sub');
   if(sel){ while(sel.options.length>1) sel.remove(1); subs.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; sel.appendChild(o); }); }
-  runFieldVisitFilter();
-}
-
-function runFieldVisitFilter(){
-  var q = (gel('fvv-search') ? gel('fvv-search').value : '').toLowerCase();
-  var sub = gel('fvv-sub') ? gel('fvv-sub').value : '';
   var fvBase = DEF_ALL.map(function(r){
     var tariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
     return Object.assign({}, r, { TARIFF: tariff });
   }).filter(function(r){
     return (parseFloat(r.OUTSTANDING)||0) > FIELDVISIT_AUTO_THRESHOLD && AUTO_TARIFFS.indexOf(r.TARIFF) >= 0;
   });
+  var feeders = [].concat(Array.from(new Set(fvBase.map(function(r){ return r.FEEDER; }).filter(Boolean)))).sort();
+  var fsel = gel('fvv-feeder');
+  if(fsel){ while(fsel.options.length>1) fsel.remove(1); feeders.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; fsel.appendChild(o); }); }
+  var tariffs = [].concat(Array.from(new Set(fvBase.map(function(r){ return r.TARIFF; }).filter(Boolean)))).sort();
+  var tsel = gel('fvv-tariff');
+  if(tsel){ while(tsel.options.length>1) tsel.remove(1); tariffs.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; tsel.appendChild(o); }); }
+  runFieldVisitFilter();
+}
+
+function runFieldVisitFilter(){
+  var q = (gel('fvv-search') ? gel('fvv-search').value : '').toLowerCase();
+  var sub = gel('fvv-sub') ? gel('fvv-sub').value : '';
+  var feeder = gel('fvv-feeder') ? gel('fvv-feeder').value : '';
+  var tariff = gel('fvv-tariff') ? gel('fvv-tariff').value : '';
+  var fvBase = DEF_ALL.map(function(r){
+    var t = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
+    return Object.assign({}, r, { TARIFF: t });
+  }).filter(function(r){
+    return (parseFloat(r.OUTSTANDING)||0) > FIELDVISIT_AUTO_THRESHOLD && AUTO_TARIFFS.indexOf(r.TARIFF) >= 0;
+  });
   FV2_FD = fvBase.filter(function(r){
     if(sub && r.SUBSTATION !== sub) return false;
+    if(feeder && r.FEEDER !== feeder) return false;
+    if(tariff && r.TARIFF !== tariff) return false;
     if(q && !String(r.ACCT_ID).includes(q) && !(r.NAME && r.NAME.toLowerCase().includes(q)) && !(r.MOBILE && String(r.MOBILE).includes(q))) return false;
     return true;
   }).map(function(r){
@@ -7571,31 +7687,33 @@ function renderFieldVisitTable(page){
     var out = Math.round(parseFloat(r.OUTSTANDING)||0);
     var col = ATR_COLORS_FV[r._ATR] || '#6B7280';
     var isPushed = !!CALL_PUSH_IDS[String(r.ACCT_ID)];
+    var atrLabel = (r._ATR && r._ATR!=='PENDING') ? (LOG_ATR_LABELS[r._ATR]||r._ATR) : '⏳ PENDING';
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
-      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
+      '<td><a href="javascript:void(0)" onclick="openSiteVisitLogModal(\''+r.ACCT_ID+'\')" title="Open consumer detail / log Field Visit ATR" style="font-family:var(--fh);color:#4F46E5;font-weight:700;text-decoration:none;">'+r.ACCT_ID+'</a></td>'+
       '<td style="font-weight:600;">'+(r.NAME||'-')+'</td>'+
-      '<td>'+(r.MOBILE||'-')+'</td>'+
+      '<td>'+(r.MOBILE ? '<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" title="Call (number copied)" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+'</a>' : '-')+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
       '<td>'+(r.TARIFF||'-')+'</td>'+
-      '<td>'+(r.SUBSTATION||'-')+'</td>'+
-      '<td>'+(r.FEEDER||'-')+'</td>'+
-      '<td><span style="color:'+col+';font-weight:700;font-size:11px;">'+r._ATR+'</span></td>'+
-      '<td style="white-space:nowrap;">'+rowActionButtons(r.ACCT_ID, r.MOBILE, 'fieldvisit')+
-        ' <a href="javascript:void(0)" onclick="pushToCalling(\''+r.ACCT_ID+'\')" title="Add to Calling list" style="margin-left:6px;text-decoration:none;'+(isPushed?'opacity:0.35;pointer-events:none;':'')+'">\U0001F4F2</a>'+
+      '<td>'+(r.METER_NO||'-')+'</td>'+
+      '<td>'+(r.PAY_DATE||'-')+'</td>'+
+      '<td>'+(r.PAY_AMT?'₹'+Math.round(r.PAY_AMT).toLocaleString():'-')+'</td>'+
+      '<td style="white-space:nowrap;">'+fieldVisitActionIcons(r.ACCT_ID, r.MOBILE)+
+        ' <a href="javascript:void(0)" onclick="pushToCalling(\''+r.ACCT_ID+'\')" title="Add to Calling list" style="margin-left:10px;text-decoration:none;font-size:15px;'+(isPushed?'opacity:0.35;pointer-events:none;':'')+'">📲</a>'+
       '</td>'+
+      '<td><span style="color:'+col+';font-weight:700;font-size:11px;">'+atrLabel+'</span></td>'+
     '</tr>';
   }).join('');
   rp('fvv-pg', page, Math.ceil(FV2_FD.length/PS), renderFieldVisitTable);
 }
 
-function resetFieldVisit(){ if(gel('fvv-search')) gel('fvv-search').value=''; if(gel('fvv-sub')) gel('fvv-sub').value=''; runFieldVisitFilter(); }
+function resetFieldVisit(){ if(gel('fvv-search')) gel('fvv-search').value=''; if(gel('fvv-sub')) gel('fvv-sub').value=''; if(gel('fvv-feeder')) gel('fvv-feeder').value=''; if(gel('fvv-tariff')) gel('fvv-tariff').value=''; runFieldVisitFilter(); }
 
 function expFieldVisitX(){
   if(!FV2_FD.length) return alert('No data.');
   var ws = XLSX.utils.json_to_sheet(FV2_FD.map(function(r){
     return { ACCT_ID:r.ACCT_ID, NAME:r.NAME, MOBILE:r.MOBILE, ADDRESS:r.ADDRESS, SUBSTATION:r.SUBSTATION, FEEDER:r.FEEDER,
-             TARIFF:r.TARIFF, LOAD:r.LOAD, OUTSTANDING:r.OUTSTANDING, ATR_STATUS:r._ATR, REMARKS:r._REMARKS };
+             TARIFF:r.TARIFF, LOAD:r.LOAD, METER_NO:r.METER_NO, LP_DATE:r.PAY_DATE, LP_AMT:r.PAY_AMT, OUTSTANDING:r.OUTSTANDING, ATR_STATUS:r._ATR, REMARKS:r._REMARKS };
   }));
   var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Field Visit');
   XLSX.writeFile(wb, 'Field_Visit_'+Date.now()+'.xlsx');
@@ -7605,6 +7723,25 @@ function expFieldVisitX(){
 var SITEVISIT_LATEST = {}, CALLING_LATEST = {}, _atrLogsLoaded = false;
 var LOG_ATR_OPTIONS = ['PENDING','PAID','PARTIAL','PROMISE','LOCK','DISPUTE','TD','OTHER'];
 var LOG_ATR_LABELS = { PENDING:'\u23F3 PENDING', PAID:'\u2705 PAID', PARTIAL:'\uD83D\uDCB0 PARTIAL PAYMENT', PROMISE:'\uD83E\uDD1D PROMISE TO PAY', LOCK:'\uD83D\uDD12 LOCK / AWAY', DISPUTE:'\u2696\uFE0F DISPUTE', TD:'\uD83D\uDD0C TEMP DISCONNECTED', OTHER:'\uD83D\uDCDD OTHER' };
+var CALL_OUTCOME_OPTIONS = ['NOT_PICKED','SWITCHED_OFF','WRONG_NUMBER','NOT_REACHABLE','PROMISE','PARTIAL','PAID','REFUSED','DISPUTE','CALLBACK','OTHER'];
+var CALL_OUTCOME_LABELS = { NOT_PICKED:'\uD83D\uDCF5 NOT PICKED / NO ANSWER', SWITCHED_OFF:'\uD83D\uDCF4 SWITCHED OFF', WRONG_NUMBER:'\u274C WRONG NUMBER', NOT_REACHABLE:'\uD83D\uDCF6 NOT REACHABLE', PROMISE:'\uD83E\uDD1D PROMISED TO PAY', PARTIAL:'\uD83D\uDCB0 PARTIAL PAYMENT DISCUSSED', PAID:'\u2705 ALREADY PAID', REFUSED:'\uD83D\uDEAB REFUSED TO PAY', DISPUTE:'\u2696\uFE0F DISPUTE / BILL ISSUE', CALLBACK:'\uD83D\uDD01 CALL BACK LATER', OTHER:'\uD83D\uDCDD OTHER' };
+
+// Calling-specific outcome options (used in the CALLING tab consumer card ATR dropdown)
+var CALL_OUTCOME_OPTIONS = ['NOT_PICKED','SWITCHED_OFF','NOT_REACHABLE','WRONG_NUMBER','PROMISED_TO_PAY','PARTIAL_PAYMENT','PAID','REFUSED','DISPUTE','CALL_BACK_LATER','WARNED_DISCONNECTION','OTHER'];
+var CALL_OUTCOME_LABELS = {
+  NOT_PICKED:'\uD83D\uDCF5 NOT PICKED / NO ANSWER',
+  SWITCHED_OFF:'\uD83D\uDCF4 SWITCHED OFF',
+  NOT_REACHABLE:'\uD83D\uDCF6 NOT REACHABLE',
+  WRONG_NUMBER:'\u274C WRONG NUMBER',
+  PROMISED_TO_PAY:'\uD83E\uDD1D PROMISED TO PAY',
+  PARTIAL_PAYMENT:'\uD83D\uDCB0 PARTIAL PAYMENT DISCUSSED',
+  PAID:'\u2705 ALREADY PAID',
+  REFUSED:'\uD83D\uDEAB REFUSED TO PAY',
+  DISPUTE:'\u2696\uFE0F DISPUTE / BILL ISSUE',
+  CALL_BACK_LATER:'\uD83D\uDD01 CALL BACK LATER',
+  WARNED_DISCONNECTION:'\u26A0\uFE0F DISCONNECTION WARNING GIVEN',
+  OTHER:'\uD83D\uDCDD OTHER'
+};
 
 function loadAtrLogs(cb){
   Promise.all([
@@ -7628,8 +7765,10 @@ function loadAtrLogs(cb){
 
 function closeLogModal(){ var m=gel('log-modal'); if(m) m.classList.remove('open'); }
 
-function atrOptionsHtml(selected){
-  return LOG_ATR_OPTIONS.map(function(s){ return '<option value="'+s+'"'+(selected===s?' selected':'')+'>'+LOG_ATR_LABELS[s]+'</option>'; }).join('');
+function atrOptionsHtml(selected, opts, labels){
+  opts = opts || LOG_ATR_OPTIONS; labels = labels || LOG_ATR_LABELS;
+  var ph = '<option value="" disabled'+(!selected?' selected':'')+'>-- SELECT (REQUIRED) --</option>';
+  return ph + opts.map(function(s){ return '<option value="'+s+'"'+(selected===s?' selected':'')+'>'+labels[s]+'</option>'; }).join('');
 }
 
 function openSiteVisitLogModal(acctId){
@@ -7639,14 +7778,19 @@ function openSiteVisitLogModal(acctId){
   box.innerHTML =
     '<div style="padding:22px;">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'+
-        '<div style="font-family:var(--fh);font-size:17px;font-weight:700;color:#7C3AED;">\uD83D\uDEB6 LOG FIELD VISIT ATR</div>'+
+        '<div style="font-family:var(--fh);font-size:17px;font-weight:700;color:#7C3AED;">\uD83D\uDEB6 CONSUMER DETAIL &mdash; LOG FIELD VISIT ATR</div>'+
         '<span style="cursor:pointer;font-size:20px;color:var(--muted);line-height:1;" onclick="closeLogModal()">&times;</span>'+
       '</div>'+
-      '<div style="font-size:13px;margin-bottom:14px;color:var(--muted);line-height:1.6;">'+(r.NAME||'-')+' &bull; '+acctId+'<br>'+(r.SUBSTATION||'-')+' &bull; \u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</div>'+
-      '<div class="lbl">FIELD VISIT ATR</div>'+
+      '<div style="font-size:13px;margin-bottom:14px;color:var(--muted);line-height:1.9;background:#FAF5FF;border-radius:8px;padding:10px 12px;">'+
+        '<b style="color:#111827;">'+(r.NAME||'-')+'</b> &bull; '+acctId+'<br>'+
+        'Mobile: '+(r.MOBILE?'<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+' \uD83D\uDCDE</a>':'-')+' &bull; Tariff: '+(r.TARIFF||stToTariff(r.SUPPLY_TYPE)||'-')+'<br>'+
+        (r.SUBSTATION||'-')+' / '+(r.FEEDER||'-')+' &bull; Meter: '+(r.METER_NO||'-')+'<br>'+
+        'Outstanding: <b style="color:#F43F5E;">\u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</b>'+
+      '</div>'+
+      '<div class="lbl">FIELD VISIT ATR (REQUIRED)</div>'+
       '<select id="log-sv-status" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;">'+atrOptionsHtml(prev.FIELD_VISIT_ATR)+'</select>'+
-      '<div class="lbl">REMARKS</div>'+
-      '<textarea id="log-sv-remarks" rows="3" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:16px;box-sizing:border-box;">'+(prev.REMARKS||'')+'</textarea>'+
+      '<div class="lbl">REMARKS (OPTIONAL)</div>'+
+      '<textarea id="log-sv-remarks" rows="3" placeholder="Optional note\u2026" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:16px;box-sizing:border-box;">'+(prev.REMARKS||'')+'</textarea>'+
       '<button class="btn" style="background:#7C3AED;color:#fff;width:100%;" onclick="submitSiteVisitLog(\''+acctId+'\')">\u2705 SAVE</button>'+
     '</div>';
   gel('log-modal').classList.add('open');
@@ -7655,6 +7799,7 @@ function openSiteVisitLogModal(acctId){
 function submitSiteVisitLog(acctId){
   var r = findDefRec(acctId) || {};
   var status = gel('log-sv-status').value;
+  if(!status){ alert('Kripya FIELD VISIT ATR select karein (yeh compulsory hai).'); return; }
   var remarks = gel('log-sv-remarks').value.trim();
   var url = getScriptUrl();
   if(!url){ alert('Pehle SETTINGS \u2192 ATR GOOGLE SHEET SYNC mein Apps Script URL set karo.'); return; }
@@ -7680,14 +7825,19 @@ function openCallingLogModal(acctId){
   box.innerHTML =
     '<div style="padding:22px;">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'+
-        '<div style="font-family:var(--fh);font-size:17px;font-weight:700;color:#0891B2;">\uD83D\uDCDE LOG CALLING ATR</div>'+
+        '<div style="font-family:var(--fh);font-size:17px;font-weight:700;color:#0891B2;">\uD83D\uDCDE CONSUMER DETAIL &mdash; LOG CALLING ATR</div>'+
         '<span style="cursor:pointer;font-size:20px;color:var(--muted);line-height:1;" onclick="closeLogModal()">&times;</span>'+
       '</div>'+
-      '<div style="font-size:13px;margin-bottom:14px;color:var(--muted);line-height:1.6;">'+(r.NAME||'-')+' &bull; '+acctId+'<br>'+(r.SUBSTATION||'-')+' &bull; \u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</div>'+
-      '<div class="lbl">CALL OUTCOME</div>'+
-      '<select id="log-cl-outcome" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;">'+atrOptionsHtml(prev.CALL_OUTCOME)+'</select>'+
-      '<div class="lbl">REMARKS</div>'+
-      '<textarea id="log-cl-remarks" rows="3" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:16px;box-sizing:border-box;">'+(prev.REMARKS||'')+'</textarea>'+
+      '<div style="font-size:13px;margin-bottom:14px;color:var(--muted);line-height:1.9;background:#F0FDFF;border-radius:8px;padding:10px 12px;">'+
+        '<b style="color:#111827;">'+(r.NAME||'-')+'</b> &bull; '+acctId+'<br>'+
+        'Mobile: '+(r.MOBILE?'<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+' \uD83D\uDCDE</a>':'-')+' &bull; Tariff: '+(r.TARIFF||stToTariff(r.SUPPLY_TYPE)||'-')+'<br>'+
+        (r.SUBSTATION||'-')+' / '+(r.FEEDER||'-')+' &bull; Meter: '+(r.METER_NO||'-')+'<br>'+
+        'Outstanding: <b style="color:#F43F5E;">\u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</b>'+
+      '</div>'+
+      '<div class="lbl">CALL OUTCOME (REQUIRED)</div>'+
+      '<select id="log-cl-outcome" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;">'+atrOptionsHtml(prev.CALL_OUTCOME, CALL_OUTCOME_OPTIONS, CALL_OUTCOME_LABELS)+'</select>'+
+      '<div class="lbl">REMARKS (OPTIONAL)</div>'+
+      '<textarea id="log-cl-remarks" rows="3" placeholder="Optional note\u2026" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:16px;box-sizing:border-box;">'+(prev.REMARKS||'')+'</textarea>'+
       '<button class="btn" style="background:#0891B2;color:#fff;width:100%;" onclick="submitCallingLog(\''+acctId+'\')">\u2705 SAVE</button>'+
     '</div>';
   gel('log-modal').classList.add('open');
@@ -7696,6 +7846,7 @@ function openCallingLogModal(acctId){
 function submitCallingLog(acctId){
   var r = findDefRec(acctId) || {};
   var outcome = gel('log-cl-outcome').value;
+  if(!outcome){ alert('Kripya CALL OUTCOME select karein (yeh compulsory hai).'); return; }
   var remarks = gel('log-cl-remarks').value.trim();
   var url = getScriptUrl();
   if(!url){ alert('Pehle SETTINGS \u2192 ATR GOOGLE SHEET SYNC mein Apps Script URL set karo.'); return; }
