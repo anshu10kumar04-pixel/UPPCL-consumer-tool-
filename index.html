@@ -7382,7 +7382,9 @@ function rowActionButtons(acctId, mobile, mode){
 // ---- CALLING TAB ----
 var CALL_PUSH_IDS = {}, _callPushLoaded = false;
 var CALL_ALL = [], CALL_FD = [], callPage = 1, _callLoaded = false;
-var CALLING_TARIFFS = ['LMV1','LMV2','LMV6','HV2'];
+var CALLING_AUTO_THRESHOLD = 2000;
+var FIELDVISIT_AUTO_THRESHOLD = 5000;
+var AUTO_TARIFFS = ['LMV1','LMV2','LMV6','HV2'];
 
 function loadCallPushList(cb){
   fetch(RAW_BASE+'calling_push.json?_='+Date.now())
@@ -7399,7 +7401,7 @@ function buildCallAll(){
   var byId = {};
   DEF_ALL.forEach(function(r){
     var tariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
-    var isAuto = (parseFloat(r.OUTSTANDING)||0) > 5000 && CALLING_TARIFFS.indexOf(tariff) >= 0;
+    var isAuto = (parseFloat(r.OUTSTANDING)||0) > CALLING_AUTO_THRESHOLD && AUTO_TARIFFS.indexOf(tariff) >= 0;
     var isManual = !!CALL_PUSH_IDS[String(r.ACCT_ID)];
     if(isAuto || isManual){
       byId[r.ACCT_ID] = Object.assign({}, r, { TARIFF: tariff, _SRC: isManual ? 'manual' : 'auto' });
@@ -7542,18 +7544,23 @@ function buildFieldVisitPanel(){
 function runFieldVisitFilter(){
   var q = (gel('fvv-search') ? gel('fvv-search').value : '').toLowerCase();
   var sub = gel('fvv-sub') ? gel('fvv-sub').value : '';
-  FV2_FD = DEF_ALL.filter(function(r){
+  var fvBase = DEF_ALL.map(function(r){
+    var tariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
+    return Object.assign({}, r, { TARIFF: tariff });
+  }).filter(function(r){
+    return (parseFloat(r.OUTSTANDING)||0) > FIELDVISIT_AUTO_THRESHOLD && AUTO_TARIFFS.indexOf(r.TARIFF) >= 0;
+  });
+  FV2_FD = fvBase.filter(function(r){
     if(sub && r.SUBSTATION !== sub) return false;
     if(q && !String(r.ACCT_ID).includes(q) && !(r.NAME && r.NAME.toLowerCase().includes(q)) && !(r.MOBILE && String(r.MOBILE).includes(q))) return false;
     return true;
   }).map(function(r){
-    var tariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
     var sv = SITEVISIT_LATEST[String(r.ACCT_ID)] || {};
     var status = sv.FIELD_VISIT_ATR || 'PENDING';
-    return Object.assign({}, r, { TARIFF: tariff, _ATR: status, _REMARKS: sv.REMARKS||'' });
+    return Object.assign({}, r, { _ATR: status, _REMARKS: sv.REMARKS||'' });
   });
   FV2_FD.sort(function(a,b){ return (parseFloat(b.OUTSTANDING)||0) - (parseFloat(a.OUTSTANDING)||0); });
-  var ci = gel('fvv-count-info'); if(ci) ci.textContent = 'Showing '+FV2_FD.length+' of '+DEF_ALL.length+' records';
+  var ci = gel('fvv-count-info'); if(ci) ci.textContent = 'Showing '+FV2_FD.length+' of '+fvBase.length+' records (OUTSTANDING > ₹'+FIELDVISIT_AUTO_THRESHOLD.toLocaleString()+')';
   renderFieldVisitTable(1);
 }
 
