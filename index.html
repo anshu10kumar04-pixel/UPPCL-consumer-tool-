@@ -483,7 +483,7 @@ select option{background:#fff;color:#1E1B4B;}
         <button class="btn btn-acc" id="svatr-dl-btn" onclick="downloadFieldAtrXlsx('sv')">⬇️ DOWNLOAD XLSX</button>
       </div>
       <div class="fg" style="margin-bottom:10px;">
-        <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="svatr-search" placeholder="Acct, Name, Staff, Substation, Feeder, Remarks…" oninput="runSvAtrFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
+        <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="svatr-search" placeholder="Acct, Substation, Address, Remarks…" oninput="runSvAtrFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
       </div>
       <div class="btn-group" style="margin-bottom:10px;">
         <div id="svatr-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>
@@ -492,14 +492,14 @@ select option{background:#fff;color:#1E1B4B;}
         <thead><tr>
           <th style="width:55px">S.NO</th>
           <th style="width:110px">ACCT ID</th>
-          <th style="min-width:130px">NAME</th>
-          <th style="width:95px">STAFF</th>
+          <th style="width:80px">LOAD</th>
           <th style="min-width:110px">SUBSTATION</th>
-          <th style="width:90px">FEEDER</th>
+          <th style="min-width:150px">ADDRESS</th>
           <th style="width:110px">OUTSTANDING</th>
-          <th style="min-width:120px">VISIT STATUS</th>
+          <th style="width:95px">LP DATE</th>
+          <th style="width:95px">LP AMT</th>
+          <th style="min-width:130px">FIELD VISIT ATR</th>
           <th style="min-width:150px">REMARKS</th>
-          <th style="width:95px">TIMESTAMP</th>
         </tr></thead>
         <tbody id="svatr-tbody"></tbody>
       </table></div>
@@ -513,7 +513,7 @@ select option{background:#fff;color:#1E1B4B;}
         <button class="btn btn-acc" id="clatr-dl-btn" onclick="downloadFieldAtrXlsx('cl')">⬇️ DOWNLOAD XLSX</button>
       </div>
       <div class="fg" style="margin-bottom:10px;">
-        <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="clatr-search" placeholder="Acct, Name, Staff, Mobile, Substation, Feeder, Remarks…" oninput="runClAtrFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
+        <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="clatr-search" placeholder="Acct, Substation, Address, Remarks…" oninput="runClAtrFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
       </div>
       <div class="btn-group" style="margin-bottom:10px;">
         <div id="clatr-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>
@@ -522,16 +522,14 @@ select option{background:#fff;color:#1E1B4B;}
         <thead><tr>
           <th style="width:55px">S.NO</th>
           <th style="width:110px">ACCT ID</th>
-          <th style="min-width:130px">NAME</th>
-          <th style="width:95px">STAFF</th>
-          <th style="width:100px">MOBILE</th>
+          <th style="width:80px">LOAD</th>
           <th style="min-width:110px">SUBSTATION</th>
-          <th style="width:90px">FEEDER</th>
+          <th style="min-width:150px">ADDRESS</th>
           <th style="width:110px">OUTSTANDING</th>
-          <th style="min-width:120px">CALL OUTCOME</th>
-          <th style="width:100px">PROMISE DATE</th>
+          <th style="width:95px">LP DATE</th>
+          <th style="width:95px">LP AMT</th>
+          <th style="min-width:130px">CALL OUTCOME</th>
           <th style="min-width:150px">REMARKS</th>
-          <th style="width:95px">TIMESTAMP</th>
         </tr></thead>
         <tbody id="clatr-tbody"></tbody>
       </table></div>
@@ -576,7 +574,7 @@ select option{background:#fff;color:#1E1B4B;}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
       <div>
         <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#7C3AED;">🚶 FIELD VISIT</div>
-        <div style="font-size:12px;color:var(--muted);">All defaulter consumers. Click ✏️ to log ATR status/remarks (same system as the Defaulters tab).</div>
+        <div style="font-size:12px;color:var(--muted);">All defaulter consumers. Click 📝 to log Field Visit ATR (saved to the SITE_VISIT_ATR sheet).</div>
       </div>
     </div>
     <div class="fg" style="margin-bottom:12px;">
@@ -793,6 +791,11 @@ select option{background:#fff;color:#1E1B4B;}
   <div class="panel" id="panel-progress" style="overflow-x:hidden;max-width:100%;padding:16px;"></div>
 
 </div><!-- end #app -->
+
+<!-- CALLING / FIELD VISIT LOG MODAL -->
+<div class="modal-overlay" id="log-modal" onclick="if(event.target===this)closeLogModal()">
+  <div class="modal-box" id="log-modal-box" style="max-width:460px;"></div>
+</div>
 
 <!-- CONSUMER DETAIL MODAL -->
 <div class="modal-overlay" id="detail-modal" onclick="if(event.target===this)closeModal()">
@@ -7359,13 +7362,20 @@ function waConsumer(acctId, mobile){
   var msg = 'Namaste '+(r.NAME||'Consumer')+', aapka UPPCL vidyut bill outstanding Rs. '+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+' hai. Kripya jald bhugtan karein. Dhanyawad. - DVVNL';
   window.open('https://wa.me/'+mob+'?text='+encodeURIComponent(msg), '_blank');
 }
-function rowActionButtons(acctId, mobile){
+function rowActionButtons(acctId, mobile, mode){
   var telNum = String(mobile||'').replace(/\D/g,'');
   var telBtn = telNum ? '<a href="tel:'+telNum+'" title="Call" style="margin-right:6px;text-decoration:none;">\U0001F4DE</a>' : '<span style="opacity:0.3;margin-right:6px;">\U0001F4DE</span>';
   var waBtn = telNum ? '<a href="javascript:void(0)" onclick="waConsumer(\''+acctId+'\',\''+telNum+'\')" title="WhatsApp" style="margin-right:6px;text-decoration:none;">\U0001F4AC</a>' : '<span style="opacity:0.3;margin-right:6px;">\U0001F4AC</span>';
   var hasPhoto = !!PHOTO_LINKS[String(acctId)];
   var photoBtn = '<a href="javascript:void(0)" id="photo-btn-'+acctId+'" onclick="openPhotoUpload(\''+acctId+'\')" title="'+(hasPhoto?'View Photo':'Take/Upload Photo')+'" style="margin-right:6px;text-decoration:none;">'+(hasPhoto?'✅':'\U0001F4F7')+'</a>';
-  var atrBtn = '<a href="javascript:void(0)" onclick="openDefaulterModal(\''+acctId+'\')" title="Detail / ATR" style="text-decoration:none;">✏️</a>';
+  var atrBtn;
+  if(mode==='calling'){
+    atrBtn = '<a href="javascript:void(0)" onclick="openCallingLogModal(\''+acctId+'\')" title="Log Calling ATR" style="text-decoration:none;">\U0001F4DD</a>';
+  } else if(mode==='fieldvisit'){
+    atrBtn = '<a href="javascript:void(0)" onclick="openSiteVisitLogModal(\''+acctId+'\')" title="Log Field Visit ATR" style="text-decoration:none;">\U0001F4DD</a>';
+  } else {
+    atrBtn = '<a href="javascript:void(0)" onclick="openDefaulterModal(\''+acctId+'\')" title="Detail / ATR" style="text-decoration:none;">✏️</a>';
+  }
   return telBtn+waBtn+photoBtn+atrBtn;
 }
 
@@ -7402,6 +7412,7 @@ function loadCallingTab(){
   if(!DEF_ALL.length){ buildDefAll(); setTimeout(loadCallingTab, 600); return; }
   if(!_callPushLoaded){ loadCallPushList(loadCallingTab); return; }
   if(!_photoLinksLoaded){ loadPhotoLinks(loadCallingTab); return; }
+  if(!_atrLogsLoaded){ loadAtrLogs(loadCallingTab); return; }
   buildCallAll();
   _callLoaded = true;
   buildCallingPanel();
@@ -7445,7 +7456,7 @@ function renderCallTable(page){
       '<td>'+(r.SUBSTATION||'-')+'</td>'+
       '<td>'+(r.FEEDER||'-')+'</td>'+
       '<td>'+(r._SRC==='manual' ? '<span style="color:#F59E0B;font-weight:700;font-size:11px;">MANUAL</span>' : '<span style="color:#6B7280;font-size:11px;">AUTO</span>')+'</td>'+
-      '<td style="white-space:nowrap;">'+rowActionButtons(r.ACCT_ID, r.MOBILE)+(r._SRC==='manual' ? ' <a href="javascript:void(0)" onclick="removeFromCalling(\''+r.ACCT_ID+'\')" title="Remove from Calling" style="margin-left:6px;text-decoration:none;">\U0001F5D1</a>' : '')+'</td>'+
+      '<td style="white-space:nowrap;">'+rowActionButtons(r.ACCT_ID, r.MOBILE, 'calling')+(r._SRC==='manual' ? ' <a href="javascript:void(0)" onclick="removeFromCalling(\''+r.ACCT_ID+'\')" title="Remove from Calling" style="margin-left:6px;text-decoration:none;">\U0001F5D1</a>' : '')+'</td>'+
     '</tr>';
   }).join('');
   rp('call-pg', page, Math.ceil(CALL_FD.length/PS), renderCallTable);
@@ -7517,6 +7528,7 @@ function loadFieldVisitTab(){
   if(!DEF_ALL.length){ buildDefAll(); setTimeout(loadFieldVisitTab, 600); return; }
   if(!_callPushLoaded){ loadCallPushList(loadFieldVisitTab); return; }
   if(!_photoLinksLoaded){ loadPhotoLinks(loadFieldVisitTab); return; }
+  if(!_atrLogsLoaded){ loadAtrLogs(loadFieldVisitTab); return; }
   buildFieldVisitPanel();
 }
 
@@ -7530,16 +7542,15 @@ function buildFieldVisitPanel(){
 function runFieldVisitFilter(){
   var q = (gel('fvv-search') ? gel('fvv-search').value : '').toLowerCase();
   var sub = gel('fvv-sub') ? gel('fvv-sub').value : '';
-  var defAtr = {}; try{ defAtr = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
   FV2_FD = DEF_ALL.filter(function(r){
     if(sub && r.SUBSTATION !== sub) return false;
     if(q && !String(r.ACCT_ID).includes(q) && !(r.NAME && r.NAME.toLowerCase().includes(q)) && !(r.MOBILE && String(r.MOBILE).includes(q))) return false;
     return true;
   }).map(function(r){
     var tariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
-    var ae = defAtr[String(r.ACCT_ID)] || {};
-    var status = typeof ae === 'object' ? (ae.atr || 'PENDING') : (ae || 'PENDING');
-    return Object.assign({}, r, { TARIFF: tariff, _ATR: status });
+    var sv = SITEVISIT_LATEST[String(r.ACCT_ID)] || {};
+    var status = sv.FIELD_VISIT_ATR || 'PENDING';
+    return Object.assign({}, r, { TARIFF: tariff, _ATR: status, _REMARKS: sv.REMARKS||'' });
   });
   FV2_FD.sort(function(a,b){ return (parseFloat(b.OUTSTANDING)||0) - (parseFloat(a.OUTSTANDING)||0); });
   var ci = gel('fvv-count-info'); if(ci) ci.textContent = 'Showing '+FV2_FD.length+' of '+DEF_ALL.length+' records';
@@ -7564,7 +7575,7 @@ function renderFieldVisitTable(page){
       '<td>'+(r.SUBSTATION||'-')+'</td>'+
       '<td>'+(r.FEEDER||'-')+'</td>'+
       '<td><span style="color:'+col+';font-weight:700;font-size:11px;">'+r._ATR+'</span></td>'+
-      '<td style="white-space:nowrap;">'+rowActionButtons(r.ACCT_ID, r.MOBILE)+
+      '<td style="white-space:nowrap;">'+rowActionButtons(r.ACCT_ID, r.MOBILE, 'fieldvisit')+
         ' <a href="javascript:void(0)" onclick="pushToCalling(\''+r.ACCT_ID+'\')" title="Add to Calling list" style="margin-left:6px;text-decoration:none;'+(isPushed?'opacity:0.35;pointer-events:none;':'')+'">\U0001F4F2</a>'+
       '</td>'+
     '</tr>';
@@ -7578,11 +7589,125 @@ function expFieldVisitX(){
   if(!FV2_FD.length) return alert('No data.');
   var ws = XLSX.utils.json_to_sheet(FV2_FD.map(function(r){
     return { ACCT_ID:r.ACCT_ID, NAME:r.NAME, MOBILE:r.MOBILE, ADDRESS:r.ADDRESS, SUBSTATION:r.SUBSTATION, FEEDER:r.FEEDER,
-             TARIFF:r.TARIFF, LOAD:r.LOAD, OUTSTANDING:r.OUTSTANDING, ATR_STATUS:r._ATR };
+             TARIFF:r.TARIFF, LOAD:r.LOAD, OUTSTANDING:r.OUTSTANDING, ATR_STATUS:r._ATR, REMARKS:r._REMARKS };
   }));
   var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Field Visit');
   XLSX.writeFile(wb, 'Field_Visit_'+Date.now()+'.xlsx');
 }
+
+// ---- CALLING ATR / FIELD VISIT ATR (writes to "UPPCL ATR Data" sheet: CALLING_ATR / SITE_VISIT_ATR tabs) ----
+var SITEVISIT_LATEST = {}, CALLING_LATEST = {}, _atrLogsLoaded = false;
+var LOG_ATR_OPTIONS = ['PENDING','PAID','PARTIAL','PROMISE','LOCK','DISPUTE','TD','OTHER'];
+var LOG_ATR_LABELS = { PENDING:'\u23F3 PENDING', PAID:'\u2705 PAID', PARTIAL:'\uD83D\uDCB0 PARTIAL PAYMENT', PROMISE:'\uD83E\uDD1D PROMISE TO PAY', LOCK:'\uD83D\uDD12 LOCK / AWAY', DISPUTE:'\u2696\uFE0F DISPUTE', TD:'\uD83D\uDD0C TEMP DISCONNECTED', OTHER:'\uD83D\uDCDD OTHER' };
+
+function loadAtrLogs(cb){
+  Promise.all([
+    fetchCsvAsRows(SVATR_CSV_URL).catch(function(){ return []; }),
+    fetchCsvAsRows(CLATR_CSV_URL).catch(function(){ return []; })
+  ]).then(function(res){
+    var svRows = res[0]||[], clRows = res[1]||[];
+    SITEVISIT_LATEST = {}; CALLING_LATEST = {};
+    svRows.forEach(function(r){
+      var acct = String(r.ACCT_ID||'').trim(); if(!acct) return;
+      SITEVISIT_LATEST[acct] = { FIELD_VISIT_ATR: r.FIELD_VISIT_ATR||'', REMARKS: r.REMARKS||'' };
+    });
+    clRows.forEach(function(r){
+      var acct = String(r.ACCT_ID||'').trim(); if(!acct) return;
+      CALLING_LATEST[acct] = { CALL_OUTCOME: r.CALL_OUTCOME||'', REMARKS: r.REMARKS||'' };
+    });
+    _atrLogsLoaded = true;
+    if(cb) cb();
+  }).catch(function(){ _atrLogsLoaded = true; if(cb) cb(); });
+}
+
+function closeLogModal(){ var m=gel('log-modal'); if(m) m.classList.remove('open'); }
+
+function atrOptionsHtml(selected){
+  return LOG_ATR_OPTIONS.map(function(s){ return '<option value="'+s+'"'+(selected===s?' selected':'')+'>'+LOG_ATR_LABELS[s]+'</option>'; }).join('');
+}
+
+function openSiteVisitLogModal(acctId){
+  var r = findDefRec(acctId); if(!r) return alert('Consumer record not found.');
+  var prev = SITEVISIT_LATEST[String(acctId)] || {};
+  var box = gel('log-modal-box'); if(!box) return;
+  box.innerHTML =
+    '<div style="padding:22px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'+
+        '<div style="font-family:var(--fh);font-size:17px;font-weight:700;color:#7C3AED;">\uD83D\uDEB6 LOG FIELD VISIT ATR</div>'+
+        '<span style="cursor:pointer;font-size:20px;color:var(--muted);line-height:1;" onclick="closeLogModal()">&times;</span>'+
+      '</div>'+
+      '<div style="font-size:13px;margin-bottom:14px;color:var(--muted);line-height:1.6;">'+(r.NAME||'-')+' &bull; '+acctId+'<br>'+(r.SUBSTATION||'-')+' &bull; \u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</div>'+
+      '<div class="lbl">FIELD VISIT ATR</div>'+
+      '<select id="log-sv-status" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;">'+atrOptionsHtml(prev.FIELD_VISIT_ATR)+'</select>'+
+      '<div class="lbl">REMARKS</div>'+
+      '<textarea id="log-sv-remarks" rows="3" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:16px;box-sizing:border-box;">'+(prev.REMARKS||'')+'</textarea>'+
+      '<button class="btn" style="background:#7C3AED;color:#fff;width:100%;" onclick="submitSiteVisitLog(\''+acctId+'\')">\u2705 SAVE</button>'+
+    '</div>';
+  gel('log-modal').classList.add('open');
+}
+
+function submitSiteVisitLog(acctId){
+  var r = findDefRec(acctId) || {};
+  var status = gel('log-sv-status').value;
+  var remarks = gel('log-sv-remarks').value.trim();
+  var url = getScriptUrl();
+  if(!url){ alert('Pehle SETTINGS \u2192 ATR GOOGLE SHEET SYNC mein Apps Script URL set karo.'); return; }
+  var payload = {
+    type: 'sitevisit_atr', acct: acctId, load: r.LOAD||0, substation: r.SUBSTATION||'', address: r.ADDRESS||'',
+    outstanding: r.OUTSTANDING||0, lp_date: r.PAY_DATE||'', lp_amt: r.PAY_AMT||0,
+    visit_status: status, remarks: remarks
+  };
+  fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+    .then(function(){
+      SITEVISIT_LATEST[String(acctId)] = { FIELD_VISIT_ATR: status, REMARKS: remarks };
+      closeLogModal();
+      if(gel('fvv-tbody')) runFieldVisitFilter();
+      alert('\u2705 Field Visit ATR saved for '+acctId+'.');
+    })
+    .catch(function(e){ alert('\u274C Error: '+e.message); });
+}
+
+function openCallingLogModal(acctId){
+  var r = findDefRec(acctId); if(!r) return alert('Consumer record not found.');
+  var prev = CALLING_LATEST[String(acctId)] || {};
+  var box = gel('log-modal-box'); if(!box) return;
+  box.innerHTML =
+    '<div style="padding:22px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'+
+        '<div style="font-family:var(--fh);font-size:17px;font-weight:700;color:#0891B2;">\uD83D\uDCDE LOG CALLING ATR</div>'+
+        '<span style="cursor:pointer;font-size:20px;color:var(--muted);line-height:1;" onclick="closeLogModal()">&times;</span>'+
+      '</div>'+
+      '<div style="font-size:13px;margin-bottom:14px;color:var(--muted);line-height:1.6;">'+(r.NAME||'-')+' &bull; '+acctId+'<br>'+(r.SUBSTATION||'-')+' &bull; \u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</div>'+
+      '<div class="lbl">CALL OUTCOME</div>'+
+      '<select id="log-cl-outcome" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;">'+atrOptionsHtml(prev.CALL_OUTCOME)+'</select>'+
+      '<div class="lbl">REMARKS</div>'+
+      '<textarea id="log-cl-remarks" rows="3" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:16px;box-sizing:border-box;">'+(prev.REMARKS||'')+'</textarea>'+
+      '<button class="btn" style="background:#0891B2;color:#fff;width:100%;" onclick="submitCallingLog(\''+acctId+'\')">\u2705 SAVE</button>'+
+    '</div>';
+  gel('log-modal').classList.add('open');
+}
+
+function submitCallingLog(acctId){
+  var r = findDefRec(acctId) || {};
+  var outcome = gel('log-cl-outcome').value;
+  var remarks = gel('log-cl-remarks').value.trim();
+  var url = getScriptUrl();
+  if(!url){ alert('Pehle SETTINGS \u2192 ATR GOOGLE SHEET SYNC mein Apps Script URL set karo.'); return; }
+  var payload = {
+    type: 'calling_atr', acct: acctId, load: r.LOAD||0, substation: r.SUBSTATION||'', address: r.ADDRESS||'',
+    outstanding: r.OUTSTANDING||0, lp_date: r.PAY_DATE||'', lp_amt: r.PAY_AMT||0,
+    call_outcome: outcome, remarks: remarks
+  };
+  fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+    .then(function(){
+      CALLING_LATEST[String(acctId)] = { CALL_OUTCOME: outcome, REMARKS: remarks };
+      closeLogModal();
+      if(gel('call-tbody')) runCallFilter();
+      alert('\u2705 Calling ATR saved for '+acctId+'.');
+    })
+    .catch(function(e){ alert('\u274C Error: '+e.message); });
+}
+
 
 
 // ─── CONSUMER MAP (multi-point) ─────────────────────────────────────────────
@@ -7907,7 +8032,7 @@ function loadFieldAtr(force){
   if(_fieldAtrLoaded && !force){ runSvAtrFilter(); runClAtrFilter(); return; }
   var svBody = gel('svatr-tbody'), clBody = gel('clatr-tbody');
   if(svBody) svBody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Site Visit ATR…</td></tr>';
-  if(clBody) clBody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Calling ATR…</td></tr>';
+  if(clBody) clBody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Calling ATR…</td></tr>';
 
   Promise.all([
     fetchCsvAsRows(SVATR_CSV_URL).catch(function(e){ return {__err:e}; }),
@@ -7921,12 +8046,12 @@ function loadFieldAtr(force){
       SVATR_ALL = [];
     } else {
       SVATR_ALL = (svRows||[]).filter(function(r){
-        return String(r.ATR_ID||'').trim() && String(r.ATR_ID||'').trim()!=='EXAMPLE_ROW' && String(r.ACCT_ID||'').trim();
+        return String(r.ACCT_ID||'').trim();
       }).map(function(r){
         return {
-          ATR_ID: r.ATR_ID||'', TIMESTAMP: r.TIMESTAMP||'', STAFF: r.STAFF||'', ACCT_ID: String(r.ACCT_ID||''),
-          NAME: r.NAME||'', SUBSTATION: r.SUBSTATION||'', FEEDER: r.FEEDER||'', OUTSTANDING: r.OUTSTANDING||'',
-          VISIT_STATUS: r.VISIT_STATUS||'', REMARKS: r.REMARKS||''
+          ACCT_ID: String(r.ACCT_ID||''), LOAD: r.LOAD||'', SUBSTATION: r.SUBSTATION||'', ADDRESS: r.ADDRESS||'',
+          OUTSTANDING: r.OUTSTANDING||'', LP_DATE: r.LP_DATE||'', LP_AMT: r.LP_AMT||'',
+          FIELD_VISIT_ATR: r.FIELD_VISIT_ATR||'', REMARKS: r.REMARKS||''
         };
       });
       SVATR_FD = SVATR_ALL.slice();
@@ -7934,16 +8059,16 @@ function loadFieldAtr(force){
     }
 
     if(clRows && clRows.__err){
-      if(clBody) clBody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:#F43F5E;">⚠ Failed to load Calling ATR: '+clRows.__err+'</td></tr>';
+      if(clBody) clBody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:#F43F5E;">⚠ Failed to load Calling ATR: '+clRows.__err+'</td></tr>';
       CLATR_ALL = [];
     } else {
       CLATR_ALL = (clRows||[]).filter(function(r){
-        return String(r.ATR_ID||'').trim() && String(r.ATR_ID||'').trim()!=='EXAMPLE_ROW' && String(r.ACCT_ID||'').trim();
+        return String(r.ACCT_ID||'').trim();
       }).map(function(r){
         return {
-          ATR_ID: r.ATR_ID||'', TIMESTAMP: r.TIMESTAMP||'', STAFF: r.STAFF||'', ACCT_ID: String(r.ACCT_ID||''),
-          NAME: r.NAME||'', MOBILE: r.MOBILE||'', SUBSTATION: r.SUBSTATION||'', FEEDER: r.FEEDER||'', OUTSTANDING: r.OUTSTANDING||'',
-          CALL_OUTCOME: r.CALL_OUTCOME||'', PROMISE_DATE: r.PROMISE_DATE||'', REMARKS: r.REMARKS||''
+          ACCT_ID: String(r.ACCT_ID||''), LOAD: r.LOAD||'', SUBSTATION: r.SUBSTATION||'', ADDRESS: r.ADDRESS||'',
+          OUTSTANDING: r.OUTSTANDING||'', LP_DATE: r.LP_DATE||'', LP_AMT: r.LP_AMT||'',
+          CALL_OUTCOME: r.CALL_OUTCOME||'', REMARKS: r.REMARKS||''
         };
       });
       CLATR_FD = CLATR_ALL.slice();
@@ -7956,7 +8081,7 @@ function runSvAtrFilter(){
   var q = (gel('svatr-search')?gel('svatr-search').value:'').toLowerCase();
   SVATR_FD = SVATR_ALL.filter(function(r){
     if(!q) return true;
-    return (r.ACCT_ID+' '+r.NAME+' '+r.STAFF+' '+r.SUBSTATION+' '+r.FEEDER+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
+    return (r.ACCT_ID+' '+r.SUBSTATION+' '+r.ADDRESS+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
   });
   var ci = gel('svatr-count-info');
   if(ci) ci.textContent = 'Showing '+SVATR_FD.length.toLocaleString()+' of '+SVATR_ALL.length.toLocaleString()+' site visit ATR records';
@@ -7967,7 +8092,7 @@ function renderSvAtrTable(page){
   svAtrPage = page;
   var tbody = gel('svatr-tbody'); if(!tbody) return;
   if(!SVATR_FD.length){
-    tbody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);">No Site Visit ATR yet — they will appear here once field staff submit "Log Site Visit" in the AppSheet app.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);">No Field Visit ATR yet — log one from the FIELD VISIT tab (📝 icon).</td></tr>';
     var pgEl = gel('svatr-pg'); if(pgEl) pgEl.innerHTML='';
     return;
   }
@@ -7977,14 +8102,14 @@ function renderSvAtrTable(page){
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
       '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
-      '<td>'+(r.NAME||'-')+'</td>'+
-      '<td>'+(r.STAFF||'-')+'</td>'+
+      '<td>'+(r.LOAD||'-')+'</td>'+
       '<td>'+(r.SUBSTATION||'-')+'</td>'+
-      '<td>'+(r.FEEDER||'-')+'</td>'+
+      '<td style="font-size:12px;">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.OUTSTANDING||'-')+'</td>'+
-      '<td style="font-weight:600;">'+(r.VISIT_STATUS||'-')+'</td>'+
+      '<td style="font-size:11px;">'+(r.LP_DATE||'-')+'</td>'+
+      '<td>'+(r.LP_AMT||'-')+'</td>'+
+      '<td style="font-weight:600;">'+(r.FIELD_VISIT_ATR||'-')+'</td>'+
       '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
-      '<td style="font-size:11px;color:var(--muted);">'+(r.TIMESTAMP||'-')+'</td>'+
     '</tr>';
   }).join('');
   rp('svatr-pg', page, Math.ceil(SVATR_FD.length/PS), renderSvAtrTable);
@@ -7994,7 +8119,7 @@ function runClAtrFilter(){
   var q = (gel('clatr-search')?gel('clatr-search').value:'').toLowerCase();
   CLATR_FD = CLATR_ALL.filter(function(r){
     if(!q) return true;
-    return (r.ACCT_ID+' '+r.NAME+' '+r.STAFF+' '+r.MOBILE+' '+r.SUBSTATION+' '+r.FEEDER+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
+    return (r.ACCT_ID+' '+r.SUBSTATION+' '+r.ADDRESS+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
   });
   var ci = gel('clatr-count-info');
   if(ci) ci.textContent = 'Showing '+CLATR_FD.length.toLocaleString()+' of '+CLATR_ALL.length.toLocaleString()+' calling ATR records';
@@ -8005,7 +8130,7 @@ function renderClAtrTable(page){
   clAtrPage = page;
   var tbody = gel('clatr-tbody'); if(!tbody) return;
   if(!CLATR_FD.length){
-    tbody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:var(--muted);">No Calling ATR yet — they will appear here once field staff submit "Log Calling" in the AppSheet app.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);">No Calling ATR yet — log one from the CALLING tab (📝 icon).</td></tr>';
     var pgEl = gel('clatr-pg'); if(pgEl) pgEl.innerHTML='';
     return;
   }
@@ -8015,16 +8140,14 @@ function renderClAtrTable(page){
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
       '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
-      '<td>'+(r.NAME||'-')+'</td>'+
-      '<td>'+(r.STAFF||'-')+'</td>'+
-      '<td>'+(r.MOBILE||'-')+'</td>'+
+      '<td>'+(r.LOAD||'-')+'</td>'+
       '<td>'+(r.SUBSTATION||'-')+'</td>'+
-      '<td>'+(r.FEEDER||'-')+'</td>'+
+      '<td style="font-size:12px;">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.OUTSTANDING||'-')+'</td>'+
+      '<td style="font-size:11px;">'+(r.LP_DATE||'-')+'</td>'+
+      '<td>'+(r.LP_AMT||'-')+'</td>'+
       '<td style="font-weight:600;">'+(r.CALL_OUTCOME||'-')+'</td>'+
-      '<td>'+(r.PROMISE_DATE||'-')+'</td>'+
       '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
-      '<td style="font-size:11px;color:var(--muted);">'+(r.TIMESTAMP||'-')+'</td>'+
     '</tr>';
   }).join('');
   rp('clatr-pg', page, Math.ceil(CLATR_FD.length/PS), renderClAtrTable);
