@@ -6,6 +6,7 @@
 <title>UPPCL Consumer Data Tool</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css"/>
@@ -334,9 +335,9 @@ select option{background:#fff;color:#1E1B4B;}
   <div class="tabs">
     <div class="tab active" onclick="st('lookup')" ontouchstart="st('lookup')">🔍 SEARCH</div>
     <div class="tab" onclick="st('defaulter')" ontouchstart="st('defaulter')">⚠️ DEFAULTERS</div>
-    <div class="tab" onclick="st('tdnp')" ontouchstart="st('tdnp')">📋 TD NOT PAID</div>
-    <div class="tab" onclick="st('fieldvisits')" ontouchstart="st('fieldvisits')">🔌 FIELD VISITS</div>
     <div class="tab" onclick="st('fieldatr')" ontouchstart="st('fieldatr')">🧾 FIELD ATR</div>
+    <div class="tab" onclick="st('calling')" ontouchstart="st('calling')">📞 CALLING</div>
+    <div class="tab" onclick="st('fieldvisit')" ontouchstart="st('fieldvisit')">🚶 FIELD VISIT</div>
     <div class="tab" onclick="st('map')" ontouchstart="st('map')">🗺️ MAP</div>
     <div class="tab mob-hide" id="tab-dashboard" onclick="st('dashboard')" ontouchstart="st('dashboard')">📊 DASHBOARD</div>
     <div class="tab" id="tab-progress" onclick="st('progress')" ontouchstart="st('progress')">📈 PROGRESS REPORT</div>
@@ -464,72 +465,6 @@ select option{background:#fff;color:#1E1B4B;}
     <div id="map-container" style="width:100%;height:600px;border-radius:12px;border:1.5px solid #C7D2FE;overflow:hidden;"></div>
   </div>
 
-  <!-- TD NOT PAID PANEL -->
-  <div class="panel" id="panel-tdnp">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
-      <div>
-        <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#D97706;">📋 TD NOT PAID</div>
-        <div style="font-size:12px;color:var(--muted);">Static list, uploaded via SETTINGS → UPLOAD TD NOT PAID DATA. No calculation happens here — shows exactly what was uploaded.</div>
-      </div>
-    </div>
-    <div class="fg" style="margin-bottom:12px;">
-      <div><div class="lbl">SUBSTATION</div><div class="sw"><select id="tdnp-sub" onchange="runTdnpFilter()"><option value="">ALL SUBSTATIONS</option></select></div></div>
-      <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="tdnp-search" placeholder="Name, Acct, Mobile…" oninput="runTdnpFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
-    </div>
-    <div class="btn-group" style="margin-bottom:14px;">
-      <div id="tdnp-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>
-      <button class="btn btn-acc" onclick="expTdnpX()">⬇ EXPORT XLSX</button>
-      <button class="btn" style="background:#fff;border:1.5px solid #C7D2FE;color:var(--muted);" onclick="resetTdnp()">↺ RESET</button>
-    </div>
-    <div class="tw" style="overflow-x:auto;"><table>
-      <thead><tr>
-        <th style="width:55px">S.NO</th>
-        <th style="width:110px;cursor:pointer" onclick="sortTdnpCol(&quot;ACCT_ID&quot;)">ACCT ID ⇅</th>
-        <th style="min-width:130px;cursor:pointer" onclick="sortTdnpCol(&quot;NAME&quot;)">NAME ⇅</th>
-        <th style="width:105px">MOBILE</th>
-        <th style="width:110px;cursor:pointer" onclick="sortTdnpCol(&quot;OUTSTANDING&quot;)">OUTSTANDING ⇅</th>
-        <th style="width:95px">DC DATE</th>
-        <th style="width:95px">LAST PAY DATE</th>
-        <th style="width:95px;cursor:pointer" onclick="sortTdnpCol(&quot;SUBSTATION&quot;)">SUBSTATION ⇅</th>
-        <th style="width:110px">FEEDER</th>
-        <th style="width:60px">MAP</th>
-      </tr></thead>
-      <tbody id="tdnp-tbody"></tbody>
-    </table></div>
-    <div class="pg" id="tdnp-pg"></div>
-  </div>
-
-  <!-- FIELD VISITS PANEL (fed by AppSheet, via the same Apps Script URL as ATR sync) -->
-  <div class="panel" id="panel-fieldvisits">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
-      <div>
-        <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#0369A1;">🔌 FIELD VISITS</div>
-        <div style="font-size:12px;color:var(--muted);">Read-only — shows what field staff submitted in the AppSheet mobile app (Disconnection form). Source: same Google Sheet as ATR sync (SETTINGS → ATR GOOGLE SHEET SYNC URL).</div>
-      </div>
-    </div>
-    <div class="fg" style="margin-bottom:12px;">
-      <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="fv-search" placeholder="Acct, Staff, Remarks…" oninput="runFvFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
-    </div>
-    <div class="btn-group" style="margin-bottom:14px;">
-      <div id="fv-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>
-      <button class="btn btn-acc" onclick="loadFieldVisits(true)">🔄 REFRESH</button>
-    </div>
-    <div class="tw" style="overflow-x:auto;"><table>
-      <thead><tr>
-        <th style="width:55px">S.NO</th>
-        <th style="width:110px">ACCT ID</th>
-        <th style="width:100px">STAFF</th>
-        <th style="width:95px">DATE</th>
-        <th style="width:90px">FOUND?</th>
-        <th style="min-width:130px">STATUS</th>
-        <th style="min-width:160px">REMARKS</th>
-        <th style="width:70px">PHOTOS</th>
-        <th style="width:60px">MAP</th>
-      </tr></thead>
-      <tbody id="fv-tbody"></tbody>
-    </table></div>
-    <div class="pg" id="fv-pg"></div>
-  </div>
 
   <!-- FIELD ATR PANEL (Site Visit + Calling ATR submitted from the AppSheet "Defaulter Revenue Recovery" app, read via published Google Sheet CSVs) -->
   <div class="panel" id="panel-fieldatr">
@@ -600,6 +535,78 @@ select option{background:#fff;color:#1E1B4B;}
         </tr></thead>
         <tbody id="clatr-tbody"></tbody>
       </table></div>
+  <!-- CALLING PANEL -->
+  <div class="panel" id="panel-calling">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#0891B2;">📞 CALLING LIST</div>
+        <div style="font-size:12px;color:var(--muted);">Defaulters above ₹5000 (LMV1/2/6, HV2) + consumers manually pushed for calling.</div>
+      </div>
+    </div>
+    <div class="fg" style="margin-bottom:12px;">
+      <div><div class="lbl">SUBSTATION</div><div class="sw"><select id="call-sub" onchange="runCallFilter()"><option value="">ALL SUBSTATIONS</option></select></div></div>
+      <div><div class="lbl">SOURCE</div><div class="sw"><select id="call-source" onchange="runCallFilter()"><option value="">ALL</option><option value="auto">AUTO-FILTERED</option><option value="manual">MANUALLY PUSHED</option></select></div></div>
+      <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="call-search" placeholder="Name, Acct, Mobile…" oninput="runCallFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
+    </div>
+    <div class="btn-group" style="margin-bottom:14px;">
+      <div id="call-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>
+      <button class="btn btn-acc" onclick="expCallX()">⬇ EXPORT XLSX</button>
+      <button class="btn" style="background:#fff;border:1.5px solid #C7D2FE;color:var(--muted);" onclick="resetCall()">↺ RESET</button>
+    </div>
+    <div class="tw" style="overflow-x:auto;"><table>
+      <thead><tr>
+        <th style="width:55px">S.NO</th>
+        <th style="width:110px">ACCT ID</th>
+        <th style="min-width:130px">NAME</th>
+        <th style="width:105px">MOBILE</th>
+        <th style="width:110px">OUTSTANDING</th>
+        <th style="width:70px">TARIFF</th>
+        <th style="min-width:110px">SUBSTATION</th>
+        <th style="width:90px">FEEDER</th>
+        <th style="width:80px">SOURCE</th>
+        <th style="width:150px">ACTIONS</th>
+      </tr></thead>
+      <tbody id="call-tbody"></tbody>
+    </table></div>
+    <div class="pg" id="call-pg"></div>
+  </div>
+
+  <!-- FIELD VISIT PANEL -->
+  <div class="panel" id="panel-fieldvisit">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#7C3AED;">🚶 FIELD VISIT</div>
+        <div style="font-size:12px;color:var(--muted);">All defaulter consumers. Click ✏️ to log ATR status/remarks (same system as the Defaulters tab).</div>
+      </div>
+    </div>
+    <div class="fg" style="margin-bottom:12px;">
+      <div><div class="lbl">SUBSTATION</div><div class="sw"><select id="fvv-sub" onchange="runFieldVisitFilter()"><option value="">ALL SUBSTATIONS</option></select></div></div>
+      <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="fvv-search" placeholder="Name, Acct, Mobile…" oninput="runFieldVisitFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
+    </div>
+    <div class="btn-group" style="margin-bottom:14px;">
+      <div id="fvv-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>
+      <button class="btn btn-acc" onclick="expFieldVisitX()">⬇ EXPORT XLSX</button>
+      <button class="btn" style="background:#fff;border:1.5px solid #C7D2FE;color:var(--muted);" onclick="resetFieldVisit()">↺ RESET</button>
+    </div>
+    <div class="tw" style="overflow-x:auto;"><table>
+      <thead><tr>
+        <th style="width:55px">S.NO</th>
+        <th style="width:110px">ACCT ID</th>
+        <th style="min-width:130px">NAME</th>
+        <th style="width:105px">MOBILE</th>
+        <th style="width:110px">OUTSTANDING</th>
+        <th style="width:70px">TARIFF</th>
+        <th style="min-width:110px">SUBSTATION</th>
+        <th style="width:90px">FEEDER</th>
+        <th style="width:100px">ATR STATUS</th>
+        <th style="width:190px">ACTIONS</th>
+      </tr></thead>
+      <tbody id="fvv-tbody"></tbody>
+    </table></div>
+    <div class="pg" id="fvv-pg"></div>
+  </div>
+
+  <!-- DEFAULTERS PANEL -->
       <div class="pg" id="clatr-pg"></div>
     </div>
   </div>
@@ -4090,6 +4097,22 @@ function buildSettingsPanel(){
         '</div>'+
       '</div>'+
 
+      /* GOOGLE DRIVE PHOTO SETUP CARD */
+      '<div class="settings-card" style="background:#EFF6FF;border-color:#BFDBFE;">'+
+        '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:12px;color:#1D4ED8;display:flex;align-items:center;gap:8px;">📷 GOOGLE DRIVE PHOTO SETUP</div>'+
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:15px;line-height:1.5;">Powers the 📷 photo button on CALLING and FIELD VISIT tabs. Paste your Google OAuth Client ID (Google Cloud Console → Google Auth Platform → Clients). Photos upload to your own Google Drive.</div>'+
+        '<input type="text" id="drive-client-id" placeholder="xxxxxxxxxx.apps.googleusercontent.com" value="'+getDriveClientId()+'" style="width:100%;border:1.5px solid #BFDBFE;border-radius:10px;padding:10px 14px;font-size:12px;font-family:var(--fb);outline:none;box-sizing:border-box;" oninput="localStorage.setItem(&#39;drive_client_id&#39;,this.value)"/>'+
+      '</div>'+
+
+      /* CALLING PUSH LIST UPLOAD CARD */
+      '<div class="settings-card" style="background:#ECFEFF;border-color:#A5F3FC;">'+
+        '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:12px;color:#0E7490;display:flex;align-items:center;gap:8px;">📞 UPLOAD CALLING PUSH LIST</div>'+
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:15px;line-height:1.5;">Bulk-add consumers to the CALLING tab that do not meet the auto-filter (₹5000+, LMV1/2/6/HV2). Just needs a file with an <b>ACCT_ID</b> column.</div>'+
+        '<input type="file" id="calling-upload-file" accept=".xlsx,.xls,.csv" style="width:100%;margin-bottom:15px;padding:8px;border:1px solid #A5F3FC;border-radius:8px;font-size:12px;background:#fff;"/>'+
+        '<button class="btn" style="background:#0E7490;color:#fff;width:100%;" onclick="processCallingPushUpload()">📞 ADD TO CALLING LIST</button>'+
+        '<div id="calling-upload-log" style="margin-top:12px;font-size:11px;font-family:monospace;display:none;"></div>'+
+      '</div>'+
+
     '</div>';
   checkSyncServer();
 }
@@ -4817,7 +4840,7 @@ function st(name){
   document.querySelectorAll('.tab').forEach(function(tab){
     tab.classList.toggle('active', tab.getAttribute('onclick')&&tab.getAttribute('onclick').indexOf("'"+name+"'")>-1);
   });
-  ['lookup','dc','dfp','defaulter','dashboard','settings','progress','map','tdnp','fieldvisits','fieldatr'].forEach(function(n){
+  ['lookup','dc','dfp','defaulter','dashboard','settings','progress','map','tdnp','fieldvisits','fieldatr','calling','fieldvisit'].forEach(function(n){
     var p=gel('panel-'+n); if(p)p.classList.toggle('active',n===name);
   });
   applyTabTheme(name);
@@ -4828,6 +4851,8 @@ function st(name){
     if(name==='tdnp'&&!_tdnpLoaded) loadTdnpTab();
     if(name==='fieldvisits'&&!_fvLoaded) loadFieldVisits();
     if(name==='fieldatr'&&!_fieldAtrLoaded) loadFieldAtr();
+    if(name==='calling') loadCallingTab();
+    if(name==='fieldvisit') loadFieldVisitTab();
     if(name==='dashboard') buildDashboard();
     if(name==='map'){
       if(!DEF_ALL.length) loadDefaulters();
@@ -7223,6 +7248,342 @@ function expTdnpX(){
   var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'TD Not Paid');
   XLSX.writeFile(wb,'TD_Not_Paid_'+Date.now()+'.xlsx');
 }
+
+// ================= CALLING + FIELD VISIT TABS (added) =================
+
+// ---- shared: photo links (Google Drive) ----
+var PHOTO_LINKS = {}, _photoLinksLoaded = false;
+function loadPhotoLinks(cb){
+  fetch(RAW_BASE+'photo_links.json?_='+Date.now())
+    .then(function(r){ return r.ok ? r.json() : {}; })
+    .then(function(data){ PHOTO_LINKS = (data && typeof data==='object') ? data : {}; _photoLinksLoaded = true; if(cb) cb(); })
+    .catch(function(){ PHOTO_LINKS = {}; _photoLinksLoaded = true; if(cb) cb(); });
+}
+function getDriveClientId(){ return localStorage.getItem('drive_client_id') || ''; }
+
+var _driveAccessToken = null, _driveTokenExpiry = 0, _driveTokenClient = null;
+function getDriveToken(){
+  return new Promise(function(resolve, reject){
+    var cid = getDriveClientId();
+    if(!cid){ reject(new Error('Google Drive Client ID not set. Add it in SETTINGS → GOOGLE DRIVE PHOTO SETUP.')); return; }
+    if(_driveAccessToken && Date.now() < _driveTokenExpiry){ resolve(_driveAccessToken); return; }
+    if(typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2){
+      reject(new Error('Google sign-in script not ready yet — wait a moment and try again.')); return;
+    }
+    try{
+      _driveTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: cid,
+        scope: 'https://www.googleapis.com/auth/drive.file',
+        callback: function(resp){
+          if(resp.error){ reject(new Error(resp.error)); return; }
+          _driveAccessToken = resp.access_token;
+          _driveTokenExpiry = Date.now() + ((resp.expires_in||3000)*1000) - 30000;
+          resolve(_driveAccessToken);
+        },
+        error_callback: function(err){ reject(new Error((err && err.type) ? err.type : 'Google Drive sign-in failed')); }
+      });
+      _driveTokenClient.requestAccessToken({ prompt: '' });
+    }catch(e){ reject(e); }
+  });
+}
+
+function openPhotoUpload(acctId){
+  if(PHOTO_LINKS[String(acctId)]){
+    window.open(PHOTO_LINKS[String(acctId)], '_blank');
+    return;
+  }
+  var inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
+  inp.onchange = function(){
+    if(inp.files && inp.files[0]) uploadPhotoForConsumer(acctId, inp.files[0]);
+  };
+  inp.click();
+}
+
+function uploadPhotoForConsumer(acctId, file){
+  var btn = gel('photo-btn-'+acctId);
+  if(btn) btn.textContent = '⏳';
+  getDriveToken().then(function(token){
+    return new Promise(function(resolve, reject){
+      var reader = new FileReader();
+      reader.onload = function(){
+        var boundary = '-------uppclphoto'+Date.now();
+        var metadata = { name: 'defaulter_'+acctId+'_'+Date.now()+'.jpg', mimeType: file.type || 'image/jpeg' };
+        var base64Data = String(reader.result).split(',')[1];
+        var multipartBody =
+          '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+'\r\n'+
+          '--'+boundary+'\r\nContent-Type: '+(file.type||'image/jpeg')+'\r\nContent-Transfer-Encoding: base64\r\n\r\n'+base64Data+'\r\n'+
+          '--'+boundary+'--';
+        fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer '+token, 'Content-Type': 'multipart/related; boundary='+boundary },
+          body: multipartBody
+        }).then(function(r){ return r.json(); }).then(function(data){
+          if(!data || !data.id){ reject(new Error('Upload failed')); return; }
+          // best-effort: make link viewable by anyone with the link (fire and forget)
+          fetch('https://www.googleapis.com/drive/v3/files/'+data.id+'/permissions', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer '+token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: 'reader', type: 'anyone' })
+          }).catch(function(){});
+          resolve(data.id);
+        }).catch(reject);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }).then(function(fileId){
+    var link = 'https://drive.google.com/file/d/'+fileId+'/view';
+    PHOTO_LINKS[String(acctId)] = link;
+    if(btn){ btn.textContent = '✅'; btn.setAttribute('onclick', "openPhotoUpload('"+acctId+"')"); }
+    savePhotoLinks();
+  }).catch(function(e){
+    if(btn) btn.textContent = '\U0001F4F7';
+    alert('Photo upload failed: '+e.message);
+  });
+}
+
+function savePhotoLinks(){
+  if(!getGhPat()){ alert('Photo uploaded to Drive, but GitHub PAT is not set in SETTINGS, so the link could not be saved in the tool for next time. Set the PAT once to enable this.'); return; }
+  ghPutFile('photo_links.json', JSON.stringify(PHOTO_LINKS), 'Update photo links').catch(function(e){ console.error('Failed to save photo link', e); });
+}
+
+// ---- shared: call / whatsapp ----
+function findDefRec(acctId){
+  return DEF_ALL.find(function(x){ return String(x.ACCT_ID)===String(acctId); });
+}
+function waConsumer(acctId, mobile){
+  var r = findDefRec(acctId) || {};
+  var mob = String(mobile||'').replace(/\D/g,'');
+  if(mob.length===10) mob = '91'+mob;
+  var msg = 'Namaste '+(r.NAME||'Consumer')+', aapka UPPCL vidyut bill outstanding Rs. '+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+' hai. Kripya jald bhugtan karein. Dhanyawad. - DVVNL';
+  window.open('https://wa.me/'+mob+'?text='+encodeURIComponent(msg), '_blank');
+}
+function rowActionButtons(acctId, mobile){
+  var telNum = String(mobile||'').replace(/\D/g,'');
+  var telBtn = telNum ? '<a href="tel:'+telNum+'" title="Call" style="margin-right:6px;text-decoration:none;">\U0001F4DE</a>' : '<span style="opacity:0.3;margin-right:6px;">\U0001F4DE</span>';
+  var waBtn = telNum ? '<a href="javascript:void(0)" onclick="waConsumer(\''+acctId+'\',\''+telNum+'\')" title="WhatsApp" style="margin-right:6px;text-decoration:none;">\U0001F4AC</a>' : '<span style="opacity:0.3;margin-right:6px;">\U0001F4AC</span>';
+  var hasPhoto = !!PHOTO_LINKS[String(acctId)];
+  var photoBtn = '<a href="javascript:void(0)" id="photo-btn-'+acctId+'" onclick="openPhotoUpload(\''+acctId+'\')" title="'+(hasPhoto?'View Photo':'Take/Upload Photo')+'" style="margin-right:6px;text-decoration:none;">'+(hasPhoto?'✅':'\U0001F4F7')+'</a>';
+  var atrBtn = '<a href="javascript:void(0)" onclick="openDefaulterModal(\''+acctId+'\')" title="Detail / ATR" style="text-decoration:none;">✏️</a>';
+  return telBtn+waBtn+photoBtn+atrBtn;
+}
+
+// ---- CALLING TAB ----
+var CALL_PUSH_IDS = {}, _callPushLoaded = false;
+var CALL_ALL = [], CALL_FD = [], callPage = 1, _callLoaded = false;
+var CALLING_TARIFFS = ['LMV1','LMV2','LMV6','HV2'];
+
+function loadCallPushList(cb){
+  fetch(RAW_BASE+'calling_push.json?_='+Date.now())
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(data){
+      CALL_PUSH_IDS = {};
+      if(Array.isArray(data)) data.forEach(function(id){ CALL_PUSH_IDS[String(id)] = true; });
+      else if(data && typeof data==='object') Object.keys(data).forEach(function(k){ CALL_PUSH_IDS[k]=true; });
+      _callPushLoaded = true; if(cb) cb();
+    }).catch(function(){ _callPushLoaded = true; if(cb) cb(); });
+}
+
+function buildCallAll(){
+  var byId = {};
+  DEF_ALL.forEach(function(r){
+    var tariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
+    var isAuto = (parseFloat(r.OUTSTANDING)||0) > 5000 && CALLING_TARIFFS.indexOf(tariff) >= 0;
+    var isManual = !!CALL_PUSH_IDS[String(r.ACCT_ID)];
+    if(isAuto || isManual){
+      byId[r.ACCT_ID] = Object.assign({}, r, { TARIFF: tariff, _SRC: isManual ? 'manual' : 'auto' });
+    }
+  });
+  CALL_ALL = Object.keys(byId).map(function(k){ return byId[k]; });
+}
+
+function loadCallingTab(){
+  if(!DEF_ALL.length){ buildDefAll(); setTimeout(loadCallingTab, 600); return; }
+  if(!_callPushLoaded){ loadCallPushList(loadCallingTab); return; }
+  if(!_photoLinksLoaded){ loadPhotoLinks(loadCallingTab); return; }
+  buildCallAll();
+  _callLoaded = true;
+  buildCallingPanel();
+}
+
+function buildCallingPanel(){
+  var subs = [].concat(Array.from(new Set(CALL_ALL.map(function(r){ return r.SUBSTATION; }).filter(Boolean)))).sort();
+  var sel = gel('call-sub');
+  if(sel){ while(sel.options.length>1) sel.remove(1); subs.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; sel.appendChild(o); }); }
+  runCallFilter();
+}
+
+function runCallFilter(){
+  var q = (gel('call-search') ? gel('call-search').value : '').toLowerCase();
+  var sub = gel('call-sub') ? gel('call-sub').value : '';
+  var src = gel('call-source') ? gel('call-source').value : '';
+  CALL_FD = CALL_ALL.filter(function(r){
+    if(sub && r.SUBSTATION !== sub) return false;
+    if(src && r._SRC !== src) return false;
+    if(q && !String(r.ACCT_ID).includes(q) && !(r.NAME && r.NAME.toLowerCase().includes(q)) && !(r.MOBILE && String(r.MOBILE).includes(q))) return false;
+    return true;
+  });
+  CALL_FD.sort(function(a,b){ return (parseFloat(b.OUTSTANDING)||0) - (parseFloat(a.OUTSTANDING)||0); });
+  var ci = gel('call-count-info'); if(ci) ci.textContent = 'Showing '+CALL_FD.length+' of '+CALL_ALL.length+' records';
+  renderCallTable(1);
+}
+
+function renderCallTable(page){
+  callPage = page; var tbody = gel('call-tbody'); if(!tbody) return;
+  var slice = CALL_FD.slice((page-1)*PS, page*PS);
+  tbody.innerHTML = slice.map(function(r, i){
+    var rank = (page-1)*PS + i + 1;
+    var out = Math.round(parseFloat(r.OUTSTANDING)||0);
+    return '<tr>'+
+      '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
+      '<td style="font-weight:600;">'+(r.NAME||'-')+'</td>'+
+      '<td>'+(r.MOBILE||'-')+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
+      '<td>'+(r.TARIFF||'-')+'</td>'+
+      '<td>'+(r.SUBSTATION||'-')+'</td>'+
+      '<td>'+(r.FEEDER||'-')+'</td>'+
+      '<td>'+(r._SRC==='manual' ? '<span style="color:#F59E0B;font-weight:700;font-size:11px;">MANUAL</span>' : '<span style="color:#6B7280;font-size:11px;">AUTO</span>')+'</td>'+
+      '<td style="white-space:nowrap;">'+rowActionButtons(r.ACCT_ID, r.MOBILE)+(r._SRC==='manual' ? ' <a href="javascript:void(0)" onclick="removeFromCalling(\''+r.ACCT_ID+'\')" title="Remove from Calling" style="margin-left:6px;text-decoration:none;">\U0001F5D1</a>' : '')+'</td>'+
+    '</tr>';
+  }).join('');
+  rp('call-pg', page, Math.ceil(CALL_FD.length/PS), renderCallTable);
+}
+
+function resetCall(){ if(gel('call-search')) gel('call-search').value=''; if(gel('call-sub')) gel('call-sub').value=''; if(gel('call-source')) gel('call-source').value=''; runCallFilter(); }
+
+function expCallX(){
+  if(!CALL_FD.length) return alert('No data.');
+  var ws = XLSX.utils.json_to_sheet(CALL_FD.map(function(r){
+    return { ACCT_ID:r.ACCT_ID, NAME:r.NAME, MOBILE:r.MOBILE, ADDRESS:r.ADDRESS, SUBSTATION:r.SUBSTATION, FEEDER:r.FEEDER,
+             TARIFF:r.TARIFF, LOAD:r.LOAD, OUTSTANDING:r.OUTSTANDING, SOURCE:r._SRC };
+  }));
+  var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Calling List');
+  XLSX.writeFile(wb, 'Calling_List_'+Date.now()+'.xlsx');
+}
+
+function pushToCalling(acctId){
+  CALL_PUSH_IDS[String(acctId)] = true;
+  persistCallPushList();
+  if(_callLoaded){ buildCallAll(); runCallFilter(); }
+  if(gel('fvv-tbody')) runFieldVisitFilter();
+  alert('Consumer '+acctId+' added to the Calling list.');
+}
+function removeFromCalling(acctId){
+  delete CALL_PUSH_IDS[String(acctId)];
+  persistCallPushList();
+  buildCallAll(); runCallFilter();
+}
+function persistCallPushList(){
+  if(!getGhPat()){ alert('Set the GitHub PAT in SETTINGS to save this permanently (it will only last for this session otherwise).'); return; }
+  ghPutFile('calling_push.json', JSON.stringify(Object.keys(CALL_PUSH_IDS)), 'Update Calling push list').catch(function(e){ console.error('Failed to save calling push list', e); });
+}
+
+function processCallingPushUpload(){
+  var fEl = gel('calling-upload-file');
+  if(!fEl || !fEl.files[0]) return alert('Choose a file first.');
+  var logEl = gel('calling-upload-log'); logEl.style.display='block'; logEl.innerHTML='⏳ Reading…';
+  var reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      var wb = XLSX.read(e.target.result, { type: 'array' });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if(!rows.length) throw new Error('File is empty.');
+      var keys = Object.keys(rows[0]), hdrs = keys.map(function(k){ return String(k).trim().toUpperCase(); });
+      var iAcct = findCol(hdrs, ['ACCT_ID','ACCOUNT_ID']);
+      if(iAcct < 0) throw new Error('Missing ACCT_ID column.');
+      var added = 0;
+      rows.forEach(function(r){
+        var v = keys.map(function(k){ return r[k]; });
+        var acct = String(v[iAcct]||'').trim();
+        if(acct && !CALL_PUSH_IDS[acct]){ CALL_PUSH_IDS[acct] = true; added++; }
+      });
+      logEl.innerHTML = '✅ '+added+' new ACCT_IDs found. Uploading to GitHub…';
+      ghPutFile('calling_push.json', JSON.stringify(Object.keys(CALL_PUSH_IDS)), 'Bulk update Calling push list')
+        .then(function(){ logEl.innerHTML = '\U0001F389 DONE! '+added+' new consumers added to the Calling list. Reload the tool to see them.'; })
+        .catch(function(err){ logEl.innerHTML = '❌ Error: '+err.message; });
+    }catch(err){ logEl.innerHTML = '❌ Error: '+err.message; }
+  };
+  reader.readAsArrayBuffer(fEl.files[0]);
+}
+
+// ---- FIELD VISIT TAB ----
+var FV2_FD = [], fv2Page = 1;
+var ATR_COLORS_FV = { PENDING:'#6B7280', PAID:'#059669', PARTIAL:'#0EA5E9', PROMISE:'#7C3AED', LOCK:'#DC2626', DISPUTE:'#F59E0B', TD:'#DB2777', OTHER:'#334155' };
+
+function loadFieldVisitTab(){
+  if(!DEF_ALL.length){ buildDefAll(); setTimeout(loadFieldVisitTab, 600); return; }
+  if(!_callPushLoaded){ loadCallPushList(loadFieldVisitTab); return; }
+  if(!_photoLinksLoaded){ loadPhotoLinks(loadFieldVisitTab); return; }
+  buildFieldVisitPanel();
+}
+
+function buildFieldVisitPanel(){
+  var subs = getAllSubValues();
+  var sel = gel('fvv-sub');
+  if(sel){ while(sel.options.length>1) sel.remove(1); subs.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; sel.appendChild(o); }); }
+  runFieldVisitFilter();
+}
+
+function runFieldVisitFilter(){
+  var q = (gel('fvv-search') ? gel('fvv-search').value : '').toLowerCase();
+  var sub = gel('fvv-sub') ? gel('fvv-sub').value : '';
+  var defAtr = {}; try{ defAtr = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
+  FV2_FD = DEF_ALL.filter(function(r){
+    if(sub && r.SUBSTATION !== sub) return false;
+    if(q && !String(r.ACCT_ID).includes(q) && !(r.NAME && r.NAME.toLowerCase().includes(q)) && !(r.MOBILE && String(r.MOBILE).includes(q))) return false;
+    return true;
+  }).map(function(r){
+    var tariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
+    var ae = defAtr[String(r.ACCT_ID)] || {};
+    var status = typeof ae === 'object' ? (ae.atr || 'PENDING') : (ae || 'PENDING');
+    return Object.assign({}, r, { TARIFF: tariff, _ATR: status });
+  });
+  FV2_FD.sort(function(a,b){ return (parseFloat(b.OUTSTANDING)||0) - (parseFloat(a.OUTSTANDING)||0); });
+  var ci = gel('fvv-count-info'); if(ci) ci.textContent = 'Showing '+FV2_FD.length+' of '+DEF_ALL.length+' records';
+  renderFieldVisitTable(1);
+}
+
+function renderFieldVisitTable(page){
+  fv2Page = page; var tbody = gel('fvv-tbody'); if(!tbody) return;
+  var slice = FV2_FD.slice((page-1)*PS, page*PS);
+  tbody.innerHTML = slice.map(function(r, i){
+    var rank = (page-1)*PS + i + 1;
+    var out = Math.round(parseFloat(r.OUTSTANDING)||0);
+    var col = ATR_COLORS_FV[r._ATR] || '#6B7280';
+    var isPushed = !!CALL_PUSH_IDS[String(r.ACCT_ID)];
+    return '<tr>'+
+      '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
+      '<td style="font-weight:600;">'+(r.NAME||'-')+'</td>'+
+      '<td>'+(r.MOBILE||'-')+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
+      '<td>'+(r.TARIFF||'-')+'</td>'+
+      '<td>'+(r.SUBSTATION||'-')+'</td>'+
+      '<td>'+(r.FEEDER||'-')+'</td>'+
+      '<td><span style="color:'+col+';font-weight:700;font-size:11px;">'+r._ATR+'</span></td>'+
+      '<td style="white-space:nowrap;">'+rowActionButtons(r.ACCT_ID, r.MOBILE)+
+        ' <a href="javascript:void(0)" onclick="pushToCalling(\''+r.ACCT_ID+'\')" title="Add to Calling list" style="margin-left:6px;text-decoration:none;'+(isPushed?'opacity:0.35;pointer-events:none;':'')+'">\U0001F4F2</a>'+
+      '</td>'+
+    '</tr>';
+  }).join('');
+  rp('fvv-pg', page, Math.ceil(FV2_FD.length/PS), renderFieldVisitTable);
+}
+
+function resetFieldVisit(){ if(gel('fvv-search')) gel('fvv-search').value=''; if(gel('fvv-sub')) gel('fvv-sub').value=''; runFieldVisitFilter(); }
+
+function expFieldVisitX(){
+  if(!FV2_FD.length) return alert('No data.');
+  var ws = XLSX.utils.json_to_sheet(FV2_FD.map(function(r){
+    return { ACCT_ID:r.ACCT_ID, NAME:r.NAME, MOBILE:r.MOBILE, ADDRESS:r.ADDRESS, SUBSTATION:r.SUBSTATION, FEEDER:r.FEEDER,
+             TARIFF:r.TARIFF, LOAD:r.LOAD, OUTSTANDING:r.OUTSTANDING, ATR_STATUS:r._ATR };
+  }));
+  var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Field Visit');
+  XLSX.writeFile(wb, 'Field_Visit_'+Date.now()+'.xlsx');
+}
+
 
 // ─── CONSUMER MAP (multi-point) ─────────────────────────────────────────────
 function onMapSrcChange(){
