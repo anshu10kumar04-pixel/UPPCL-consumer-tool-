@@ -7533,7 +7533,8 @@ function loadPhotoLinks(cb){
     .then(function(data){ PHOTO_LINKS = (data && typeof data==='object') ? data : {}; _photoLinksLoaded = true; if(cb) cb(); })
     .catch(function(){ PHOTO_LINKS = {}; _photoLinksLoaded = true; if(cb) cb(); });
 }
-function getDriveClientId(){ return localStorage.getItem('drive_client_id') || ''; }
+const DEFAULT_DRIVE_CLIENT_ID = '374533575118-hjfqjkvr29epd88pm4pqu4hnp2bddfc0.apps.googleusercontent.com';
+function getDriveClientId(){ return localStorage.getItem('drive_client_id') || DEFAULT_DRIVE_CLIENT_ID; }
 
 var _driveAccessToken = null, _driveTokenExpiry = 0, _driveTokenClient = null;
 function getDriveToken(){
