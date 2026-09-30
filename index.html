@@ -7576,7 +7576,9 @@ function openPhotoUpload(acctId){
 
 function uploadPhotoForConsumer(acctId, file){
   var btn = gel('photo-btn-'+acctId);
+  var modalBtn = gel('photo-modal-btn-'+acctId);
   if(btn) btn.textContent = '⏳';
+  if(modalBtn){ modalBtn.disabled = true; modalBtn.textContent = '⏳ UPLOADING… / अपलोड हो रहा है…'; }
   getDriveToken().then(function(token){
     return new Promise(function(resolve, reject){
       var reader = new FileReader();
@@ -7610,9 +7612,17 @@ function uploadPhotoForConsumer(acctId, file){
     var link = 'https://drive.google.com/file/d/'+fileId+'/view';
     PHOTO_LINKS[String(acctId)] = link;
     if(btn){ btn.textContent = '✅'; btn.setAttribute('onclick', "openPhotoUpload('"+acctId+"')"); }
+    if(modalBtn){
+      modalBtn.disabled = false;
+      modalBtn.style.border = '1.5px dashed #16A34A';
+      modalBtn.style.background = '#F0FDF4';
+      modalBtn.style.color = '#16A34A';
+      modalBtn.textContent = '✅ PHOTO UPLOADED — TAP TO VIEW / फोटो अपलोड हो गई';
+    }
     savePhotoLinks();
   }).catch(function(e){
-    if(btn) btn.textContent = '\U0001F4F7';
+    if(btn) btn.textContent = '📷';
+    if(modalBtn){ modalBtn.disabled = false; modalBtn.textContent = '📷 TAKE / UPLOAD PHOTO / फोटो लें (REQUIRED)'; }
     alert('Photo upload failed: '+e.message);
   });
 }
@@ -7670,10 +7680,18 @@ function callingActionIcons(acctId, mobile){
 function fieldVisitActionIcons(acctId, mobile){
   var telNum = String(mobile||'').replace(/\D/g,'');
   var telBtn = telNum ? '<a href="tel:'+telNum+'" onclick="copyMobile(\''+telNum+'\')" title="Call (number copied)" style="margin-right:10px;text-decoration:none;font-size:16px;">📞</a>' : '<span style="opacity:0.3;margin-right:10px;">📞</span>';
-  var waBtn = telNum ? '<a href="javascript:void(0)" onclick="waConsumer(\''+acctId+'\',\''+telNum+'\')" title="WhatsApp" style="margin-right:10px;text-decoration:none;font-size:16px;">💬</a>' : '<span style="opacity:0.3;margin-right:10px;">💬</span>';
+  var waBtn = telNum ? '<a href="javascript:void(0)" onclick="waConsumer(\''+acctId+'\',\''+telNum+'\')" title="WhatsApp" style="text-decoration:none;font-size:16px;">💬</a>' : '<span style="opacity:0.3;">💬</span>';
+  return telBtn+waBtn;
+}
+
+// Photo button shown inside the Field Visit ATR modal (below Remarks) — photo is compulsory before ATR submit
+function svPhotoSectionHtml(acctId){
   var hasPhoto = !!PHOTO_LINKS[String(acctId)];
-  var photoBtn = '<a href="javascript:void(0)" id="photo-btn-'+acctId+'" onclick="openPhotoUpload(\''+acctId+'\')" title="'+(hasPhoto?'View Photo':'Take/Upload Photo')+'" style="text-decoration:none;font-size:16px;">'+(hasPhoto?'✅':'📷')+'</a>';
-  return telBtn+waBtn+photoBtn;
+  var border = hasPhoto ? '#16A34A' : '#C7D2FE';
+  var bg = hasPhoto ? '#F0FDF4' : '#FAFAFF';
+  var color = hasPhoto ? '#16A34A' : '#4B5563';
+  var label = hasPhoto ? '✅ PHOTO UPLOADED — TAP TO VIEW / फोटो अपलोड हो गई' : '📷 TAKE / UPLOAD PHOTO / फोटो लें (REQUIRED)';
+  return '<button type="button" id="photo-modal-btn-'+acctId+'" onclick="openPhotoUpload(\''+acctId+'\')" style="width:100%;padding:10px;border:1.5px dashed '+border+';border-radius:8px;background:'+bg+';color:'+color+';font-size:13px;font-weight:600;cursor:pointer;">'+label+'</button>';
 }
 
 // ---- SHARED MULTI-SELECT / RANGE FILTER HELPERS (used by CALLING + FIELD VISIT tabs; independent of the Defaulter tab's own def-* filter code) ----
@@ -8155,7 +8173,9 @@ function openSiteVisitLogModal(acctId){
       '<div class="lbl">FIELD VISIT ATR / फील्ड विज़िट परिणाम (REQUIRED)</div>'+
       '<select id="log-sv-status" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;">'+atrOptionsHtml(prev.FIELD_VISIT_ATR)+'</select>'+
       '<div class="lbl">REMARKS / टिप्पणी (OPTIONAL)</div>'+
-      '<textarea id="log-sv-remarks" rows="3" placeholder="Optional note\u2026" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:16px;box-sizing:border-box;">'+(prev.REMARKS||'')+'</textarea>'+
+      '<textarea id="log-sv-remarks" rows="3" placeholder="Optional note\u2026" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;">'+(prev.REMARKS||'')+'</textarea>'+
+      '<div class="lbl">PHOTO / \u092b\u094b\u091f\u094b (REQUIRED)</div>'+
+      '<div style="margin-bottom:16px;">'+svPhotoSectionHtml(acctId)+'</div>'+
       '<button class="btn" style="background:#7C3AED;color:#fff;width:100%;" onclick="submitSiteVisitLog(\''+acctId+'\')">\u2705 SAVE</button>'+
     '</div>';
   gel('log-modal').classList.add('open');
@@ -8165,6 +8185,7 @@ function submitSiteVisitLog(acctId){
   var r = findDefRec(acctId) || {};
   var status = gel('log-sv-status').value;
   if(!status){ alert('Kripya FIELD VISIT ATR select karein (yeh compulsory hai).'); return; }
+  if(!PHOTO_LINKS[String(acctId)]){ alert('Kripya pehle PHOTO upload karein (yeh compulsory hai).'); return; }
   var remarks = gel('log-sv-remarks').value.trim();
   var url = getScriptUrl();
   if(!url){ alert('Pehle SETTINGS \u2192 ATR GOOGLE SHEET SYNC mein Apps Script URL set karo.'); return; }
