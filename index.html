@@ -55,6 +55,7 @@ button,select,input{-webkit-tap-highlight-color:transparent;touch-action:manipul
 .role-badge{display:inline-block;padding:3px 10px;border-radius:5px;font-size:10px;font-weight:700;font-family:var(--fh);letter-spacing:1px;}
 .badge-admin{background:#EEF2FF;color:#4F46E5;}
 .badge-user{background:#E0F2FE;color:#0EA5E9;}
+.badge-revenue{background:#FEF3C7;color:#D97706;}
 
 /* ── LOADING ── */
 #loading{position:fixed;inset:0;background:rgba(79,70,229,0.93);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9998;display:none;}
@@ -272,6 +273,7 @@ select option{background:#fff;color:#1E1B4B;}
     <div class="role-tabs">
       <button class="role-tab active" id="tab-admin" onclick="setLoginRole('admin')">👑 ADMIN</button>
       <button class="role-tab" id="tab-user" onclick="setLoginRole('user')">👤 USER</button>
+      <button class="role-tab" id="tab-revenue" onclick="setLoginRole('revenue')">💰 REVENUE WORK</button>
     </div>
     <div class="pin-display" id="pin-display">
       <div class="pin-dot" id="pd0"></div>
@@ -294,7 +296,7 @@ select option{background:#fff;color:#1E1B4B;}
       <button class="pin-btn" onclick="pinPress('0')">0</button>
       <button class="pin-btn" onclick="pinBackspace()">⌫</button>
     </div>
-    <div style="font-size:11px;color:var(--muted)">👑 Admin · 👤 User</div>
+    <div style="font-size:11px;color:var(--muted)">👑 Admin · 👤 User · 💰 Revenue Work</div>
   </div>
 </div>
 
@@ -334,11 +336,11 @@ select option{background:#fff;color:#1E1B4B;}
   <!-- TABS -->
   <div class="tabs">
     <div class="tab active" onclick="st('lookup')" ontouchstart="st('lookup')">🔍 SEARCH</div>
-    <div class="tab" onclick="st('defaulter')" ontouchstart="st('defaulter')">⚠️ DEFAULTERS</div>
+    <div class="tab" id="tab-defaulter" onclick="st('defaulter')" ontouchstart="st('defaulter')">⚠️ DEFAULTERS</div>
     <div class="tab" onclick="st('fieldatr')" ontouchstart="st('fieldatr')">🧾 FIELD ATR</div>
     <div class="tab" onclick="st('calling')" ontouchstart="st('calling')">📞 CALLING</div>
     <div class="tab" onclick="st('fieldvisit')" ontouchstart="st('fieldvisit')">🚶 FIELD VISIT</div>
-    <div class="tab" onclick="st('map')" ontouchstart="st('map')">🗺️ MAP</div>
+    <div class="tab" id="tab-map" onclick="st('map')" ontouchstart="st('map')">🗺️ MAP</div>
     <div class="tab mob-hide" id="tab-dashboard" onclick="st('dashboard')" ontouchstart="st('dashboard')">📊 DASHBOARD</div>
     <div class="tab" id="tab-progress" onclick="st('progress')" ontouchstart="st('progress')">📈 PROGRESS REPORT</div>
     <div class="tab" id="tab-settings" onclick="st('settings')" ontouchstart="st('settings')" style="display:none">⚙️ SETTINGS</div>
@@ -4779,18 +4781,18 @@ function syncAtrFromSheet(){
 }
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
-const ADMIN_PIN='1995', USER_PIN='1234';
+const ADMIN_PIN='1995', USER_PIN='1234', REVENUE_PIN='1111';
 const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours
 let currentPin='', loginRole='admin', CURRENT_ROLE=null;
 
-function setLoginRole(r){ loginRole=r; gel('tab-admin').classList.toggle('active',r==='admin'); gel('tab-user').classList.toggle('active',r==='user'); pinReset(); }
+function setLoginRole(r){ loginRole=r; gel('tab-admin').classList.toggle('active',r==='admin'); gel('tab-user').classList.toggle('active',r==='user'); var tr=gel('tab-revenue'); if(tr) tr.classList.toggle('active',r==='revenue'); pinReset(); }
 function pinPress(d){ if(currentPin.length>=4)return; currentPin+=d; updatePinDots(); if(currentPin.length===4)setTimeout(checkPin,150); }
 function pinBackspace(){ currentPin=currentPin.slice(0,-1); updatePinDots(); setText('login-error',''); }
 function pinClear(){ pinReset(); }
 function pinReset(){ currentPin=''; updatePinDots(false); setText('login-error',''); }
 function updatePinDots(err){ for(var i=0;i<4;i++){var d=gel('pd'+i); if(!d)continue; d.classList.toggle('filled',i<currentPin.length); d.classList.toggle('error',err===true);} }
 function checkPin(){
-  var ok=loginRole==='admin'?ADMIN_PIN:USER_PIN;
+  var ok = loginRole==='admin' ? ADMIN_PIN : (loginRole==='revenue' ? REVENUE_PIN : USER_PIN);
   if(currentPin===ok){ loginSuccess(loginRole); }
   else{ updatePinDots(true); setText('login-error','✗ INCORRECT PIN'); setTimeout(pinReset,800); }
 }
@@ -4898,7 +4900,12 @@ function loginSuccess(role){
   var ls=gel('login-screen'); ls.style.display='none'; ls.style.pointerEvents='none';
   gel('app').style.display='block';
   gel('sbar').style.display='flex';
-  var b=gel('role-indicator'); if(b){b.textContent=role==='admin'?'👑 ADMIN':'👤 USER'; b.className='role-badge '+(role==='admin'?'badge-admin':'badge-user');}
+  var b=gel('role-indicator');
+  if(b){
+    var roleText = role==='admin' ? '👑 ADMIN' : (role==='revenue' ? '💰 REVENUE WORK' : '👤 USER');
+    var roleBadge = role==='admin' ? 'badge-admin' : (role==='revenue' ? 'badge-revenue' : 'badge-user');
+    b.textContent = roleText; b.className = 'role-badge '+roleBadge;
+  }
   applyRoleRestrictions(role);
   if(role==='user'){
     applyTabTheme('dashboard');
@@ -4909,7 +4916,19 @@ function loginSuccess(role){
   }
 }
 function applyRoleRestrictions(role){
-  if(role==='admin'){ var st=gel('tab-settings'); if(st) st.style.display=''; }
+  // Reset controlled tabs to default visibility first (handles switching roles without a page reload)
+  ['tab-defaulter','tab-map','tab-dashboard','tab-progress'].forEach(function(id){ var el=gel(id); if(el) el.style.display=''; });
+  var settingsTab=gel('tab-settings'); if(settingsTab) settingsTab.style.display='none';
+
+  if(role==='admin'){ if(settingsTab) settingsTab.style.display=''; }
+
+  // REVENUE WORK profile: only SEARCH, FIELD ATR, CALLING, FIELD VISIT tabs
+  if(role==='revenue'){
+    ['tab-defaulter','tab-map','tab-dashboard','tab-progress'].forEach(function(id){
+      var el=gel(id); if(el) el.style.display='none';
+    });
+  }
+
   // ATR Report available to all roles
   if(role==='user'){
     document.querySelectorAll('button').forEach(function(btn){
@@ -4921,6 +4940,7 @@ function logout(){
   CURRENT_ROLE=null; currentPin=''; loginRole='admin';
   localStorage.removeItem('uppcl_session');
   gel('tab-admin').classList.add('active'); gel('tab-user').classList.remove('active');
+  var tr=gel('tab-revenue'); if(tr) tr.classList.remove('active');
   pinReset();
   var ls=gel('login-screen'); ls.style.display='flex'; ls.style.pointerEvents='all';
   gel('app').style.display='none';
@@ -4971,7 +4991,11 @@ window.addEventListener('DOMContentLoaded',function(){
     gel('login-screen').style.display='flex';
   }
 });
-function showHelp(){var m=gel('help-modal');if(!m)return;var info=gel('help-login-info');if(info)info.innerHTML=CURRENT_ROLE==='admin'?'👑 <b>Admin PIN: 1995</b> — Full access<br/>👤 <b>User PIN: 1234</b> — View only':'👤 <b>User PIN: 1234</b> — View only';m.classList.add('open');document.body.style.overflow='hidden';}
+function showHelp(){var m=gel('help-modal');if(!m)return;var info=gel('help-login-info');if(info){
+  if(CURRENT_ROLE==='admin') info.innerHTML='👑 <b>Admin PIN: 1995</b> — Full access<br/>👤 <b>User PIN: 1234</b> — View only<br/>💰 <b>Revenue Work PIN: 1111</b> — Search, Field ATR, Calling, Field Visit only';
+  else if(CURRENT_ROLE==='revenue') info.innerHTML='💰 <b>Revenue Work PIN: 1111</b> — Search, Field ATR, Calling, Field Visit only';
+  else info.innerHTML='👤 <b>User PIN: 1234</b> — View only';
+}m.classList.add('open');document.body.style.overflow='hidden';}
 function closeHelp(){ var m=gel('help-modal'); if(m){m.classList.remove('open');document.body.style.overflow='';} }
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
