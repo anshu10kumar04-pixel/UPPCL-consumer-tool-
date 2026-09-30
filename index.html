@@ -545,10 +545,104 @@ select option{background:#fff;color:#1E1B4B;}
         <div style="font-size:12px;color:var(--muted);">Defaulters above ₹2000 (LMV1/2/6, HV2) + consumers manually pushed for calling. Click ACCT ID to open consumer detail &amp; log Calling ATR.</div>
       </div>
     </div>
-    <div class="fg" style="margin-bottom:12px;">
-      <div><div class="lbl">SUBSTATION</div><div class="sw"><select id="call-sub" onchange="runCallFilter()"><option value="">ALL SUBSTATIONS</option></select></div></div>
-      <div><div class="lbl">FEEDER</div><div class="sw"><select id="call-feeder" onchange="runCallFilter()"><option value="">ALL FEEDERS</option></select></div></div>
-      <div><div class="lbl">TARIFF</div><div class="sw"><select id="call-tariff" onchange="runCallFilter()"><option value="">ALL TARIFFS</option></select></div></div>
+    <div class="fg" style="margin-bottom:12px;flex-wrap:wrap;">
+      <div><div class="lbl">SUBSTATION</div>
+        <div class="ms-wrap" id="call-sub-wrap">
+          <button class="ms-btn" id="call-sub-btn" onclick="toggleMs('call-sub-dd')">ALL SUBSTATIONS</button>
+          <div class="ms-dropdown" id="call-sub-dd">
+            <div class="ms-search"><input type="text" placeholder="Search…" oninput="filterMsOptions('call-sub-dd',this.value)"/></div>
+            <div id="call-sub-opts"></div>
+            <div class="ms-clear" onclick="clearMsX('call','sub')">Clear All</div>
+          </div>
+        </div>
+      </div>
+      <div><div class="lbl">FEEDER</div>
+        <div class="ms-wrap" id="call-feed-wrap">
+          <button class="ms-btn" id="call-feed-btn" onclick="toggleMs('call-feed-dd')">ALL FEEDERS</button>
+          <div class="ms-dropdown" id="call-feed-dd">
+            <div class="ms-search"><input type="text" placeholder="Search…" oninput="filterMsOptions('call-feed-dd',this.value)"/></div>
+            <div id="call-feed-opts"></div>
+            <div class="ms-clear" onclick="clearMsX('call','feed')">Clear All</div>
+          </div>
+        </div>
+      </div>
+      <div><div class="lbl">TARIFF TYPE</div>
+        <div class="ms-wrap" id="call-supply-wrap">
+          <button class="ms-btn" id="call-supply-btn" onclick="toggleMs('call-supply-dd')">ALL TARIFF</button>
+          <div class="ms-dropdown" id="call-supply-dd">
+            <div class="ms-search"><input type="text" placeholder="Search…" oninput="filterMsOptions('call-supply-dd',this.value)"/></div>
+            <div id="call-supply-opts"></div>
+            <div class="ms-clear" onclick="clearMsX('call','supply')">Clear All</div>
+          </div>
+        </div>
+      </div>
+      <div><div class="lbl">LOAD RANGE (kW)</div>
+        <div class="ms-wrap" id="call-load-wrap">
+          <button class="ms-btn" id="call-load-btn" onclick="toggleMs('call-load-dd')">ALL LOAD</button>
+          <div class="ms-dropdown" id="call-load-dd">
+            <label class="ms-option"><input type="checkbox" value="1-2" onchange="runCallFilter()"> 1-2 kW</label>
+            <label class="ms-option"><input type="checkbox" value="3-4" onchange="runCallFilter()"> 3-4 kW</label>
+            <label class="ms-option"><input type="checkbox" value="5-9" onchange="runCallFilter()"> 5-9 kW</label>
+            <label class="ms-option"><input type="checkbox" value="10-24" onchange="runCallFilter()"> 10-24 kW</label>
+            <label class="ms-option"><input type="checkbox" value="25-75" onchange="runCallFilter()"> 25-75 kW</label>
+            <label class="ms-option"><input type="checkbox" value="75-9999" onchange="runCallFilter()"> 75+ kW</label>
+            <div class="ms-clear" onclick="clearCheckGroupX('call-load-dd','call-load-btn','ALL LOAD', runCallFilter)">Clear All</div>
+          </div>
+        </div>
+      </div>
+      <div><div class="lbl">METER TYPE</div>
+        <div class="ms-wrap" id="call-sm-wrap">
+          <button class="ms-btn" id="call-sm-btn" onclick="toggleMs('call-sm-dd')">ALL METERS</button>
+          <div class="ms-dropdown" id="call-sm-dd">
+            <label class="ms-option"><input type="checkbox" value="sm" onchange="runCallFilter()"> Smart Meter (GE)</label>
+            <label class="ms-option"><input type="checkbox" value="nonsm" onchange="runCallFilter()"> Non-SM</label>
+            <div class="ms-clear" onclick="clearCheckGroupX('call-sm-dd','call-sm-btn','ALL METERS', runCallFilter)">Clear All</div>
+          </div>
+        </div>
+      </div>
+      <div><div class="lbl">BILL BASIS</div>
+        <div class="ms-wrap" id="call-basis-wrap">
+          <button class="ms-btn" id="call-basis-btn" onclick="toggleMs('call-basis-dd')">ALL BASIS</button>
+          <div class="ms-dropdown" id="call-basis-dd">
+            <label class="ms-option"><input type="checkbox" value="MU" onchange="runCallFilter()"> Actual (MU)</label>
+            <label class="ms-option"><input type="checkbox" value="ASS" onchange="runCallFilter()"> Assessed</label>
+            <label class="ms-option"><input type="checkbox" value="PROV" onchange="runCallFilter()"> Provisional</label>
+            <label class="ms-option"><input type="checkbox" value="CEIL" onchange="runCallFilter()"> Ceiling</label>
+            <div class="ms-clear" onclick="clearCheckGroupX('call-basis-dd','call-basis-btn','ALL BASIS', runCallFilter)">Clear All</div>
+          </div>
+        </div>
+      </div>
+      <div><div class="lbl">LAST PAYMENT</div>
+        <div class="sw"><select id="call-lp-month" onchange="runCallFilter()">
+          <option value="">All Months</option>
+          <option value="cur">Current Month</option>
+          <option value="prev">Previous Month</option>
+          <option value="prev2">Other (Older/Never Paid)</option>
+        </select></div>
+      </div>
+      <div class="ms-wrap" id="call-outstanding-wrap">
+        <div class="lbl">OUTSTANDING RANGE</div>
+        <button class="ms-btn" id="call-outstanding-btn" onclick="toggleMs('call-outstanding-dd')">ALL AMOUNTS</button>
+        <div class="ms-dropdown" id="call-outstanding-dd">
+          <label class="ms-option"><input type="checkbox" value="2000-5000" onchange="runCallFilter()"> &#8377;2,000 - &#8377;5,000</label>
+          <label class="ms-option"><input type="checkbox" value="5000-10000" onchange="runCallFilter()"> &#8377;5,000 - &#8377;10,000</label>
+          <label class="ms-option"><input type="checkbox" value="10000-25000" onchange="runCallFilter()"> &#8377;10,000 - &#8377;25,000</label>
+          <label class="ms-option"><input type="checkbox" value="25000-50000" onchange="runCallFilter()"> &#8377;25,000 - &#8377;50,000</label>
+          <label class="ms-option"><input type="checkbox" value="50000-100000" onchange="runCallFilter()"> &#8377;50,000 - &#8377;1,00,000</label>
+          <label class="ms-option"><input type="checkbox" value="100000-500000" onchange="runCallFilter()"> &#8377;1,00,000 - &#8377;5,00,000</label>
+          <label class="ms-option"><input type="checkbox" value="500000-999999999" onchange="runCallFilter()"> Above &#8377;5,00,000</label>
+          <div class="ms-clear" onclick="clearCheckGroupX('call-outstanding-dd','call-outstanding-btn','ALL AMOUNTS', runCallFilter)">Clear All</div>
+        </div>
+      </div>
+      <div><div class="lbl">SORT</div><div class="sw"><select id="call-sort" onchange="runCallFilter()">
+        <option value="desc" selected>Highest Outstanding</option>
+        <option value="asc">Lowest Outstanding</option>
+        <option value="load_desc">Highest Load</option>
+        <option value="load_asc">Lowest Load</option>
+        <option value="sm_first">SM First</option>
+        <option value="nonsm_first">Non-SM First</option>
+        <option value="tariff_asc">Tariff Type</option>
+      </select></div></div>
       <div><div class="lbl">SOURCE</div><div class="sw"><select id="call-source" onchange="runCallFilter()"><option value="">ALL</option><option value="auto">AUTO-FILTERED</option><option value="manual">MANUALLY PUSHED</option></select></div></div>
       <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="call-search" placeholder="Name, Acct, Mobile…" oninput="runCallFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
     </div>
@@ -562,6 +656,7 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:55px">S.NO</th>
         <th style="width:110px">ACCT ID</th>
         <th style="min-width:130px">NAME</th>
+        <th style="min-width:160px">ADDRESS</th>
         <th style="width:105px">MOBILE</th>
         <th style="width:110px">OUTSTANDING</th>
         <th style="width:70px">TARIFF</th>
@@ -570,6 +665,7 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:95px">LP AMT</th>
         <th style="width:90px">ACTIONS</th>
         <th style="width:150px">ATR STATUS</th>
+        <th style="min-width:140px">REMARKS</th>
       </tr></thead>
       <tbody id="call-tbody"></tbody>
     </table></div>
@@ -584,10 +680,104 @@ select option{background:#fff;color:#1E1B4B;}
         <div style="font-size:12px;color:var(--muted);">Defaulters above ₹5000 (LMV1/2/6, HV2). Click ACCT ID to open consumer detail &amp; log Field Visit ATR.</div>
       </div>
     </div>
-    <div class="fg" style="margin-bottom:12px;">
-      <div><div class="lbl">SUBSTATION</div><div class="sw"><select id="fvv-sub" onchange="runFieldVisitFilter()"><option value="">ALL SUBSTATIONS</option></select></div></div>
-      <div><div class="lbl">FEEDER</div><div class="sw"><select id="fvv-feeder" onchange="runFieldVisitFilter()"><option value="">ALL FEEDERS</option></select></div></div>
-      <div><div class="lbl">TARIFF</div><div class="sw"><select id="fvv-tariff" onchange="runFieldVisitFilter()"><option value="">ALL TARIFFS</option></select></div></div>
+    <div class="fg" style="margin-bottom:12px;flex-wrap:wrap;">
+      <div><div class="lbl">SUBSTATION</div>
+        <div class="ms-wrap" id="fvv-sub-wrap">
+          <button class="ms-btn" id="fvv-sub-btn" onclick="toggleMs('fvv-sub-dd')">ALL SUBSTATIONS</button>
+          <div class="ms-dropdown" id="fvv-sub-dd">
+            <div class="ms-search"><input type="text" placeholder="Search…" oninput="filterMsOptions('fvv-sub-dd',this.value)"/></div>
+            <div id="fvv-sub-opts"></div>
+            <div class="ms-clear" onclick="clearMsX('fvv','sub')">Clear All</div>
+          </div>
+        </div>
+      </div>
+      <div><div class="lbl">FEEDER</div>
+        <div class="ms-wrap" id="fvv-feed-wrap">
+          <button class="ms-btn" id="fvv-feed-btn" onclick="toggleMs('fvv-feed-dd')">ALL FEEDERS</button>
+          <div class="ms-dropdown" id="fvv-feed-dd">
+            <div class="ms-search"><input type="text" placeholder="Search…" oninput="filterMsOptions('fvv-feed-dd',this.value)"/></div>
+            <div id="fvv-feed-opts"></div>
+            <div class="ms-clear" onclick="clearMsX('fvv','feed')">Clear All</div>
+          </div>
+        </div>
+      </div>
+      <div><div class="lbl">TARIFF TYPE</div>
+        <div class="ms-wrap" id="fvv-supply-wrap">
+          <button class="ms-btn" id="fvv-supply-btn" onclick="toggleMs('fvv-supply-dd')">ALL TARIFF</button>
+          <div class="ms-dropdown" id="fvv-supply-dd">
+            <div class="ms-search"><input type="text" placeholder="Search…" oninput="filterMsOptions('fvv-supply-dd',this.value)"/></div>
+            <div id="fvv-supply-opts"></div>
+            <div class="ms-clear" onclick="clearMsX('fvv','supply')">Clear All</div>
+          </div>
+        </div>
+      </div>
+      <div><div class="lbl">LOAD RANGE (kW)</div>
+        <div class="ms-wrap" id="fvv-load-wrap">
+          <button class="ms-btn" id="fvv-load-btn" onclick="toggleMs('fvv-load-dd')">ALL LOAD</button>
+          <div class="ms-dropdown" id="fvv-load-dd">
+            <label class="ms-option"><input type="checkbox" value="1-2" onchange="runFieldVisitFilter()"> 1-2 kW</label>
+            <label class="ms-option"><input type="checkbox" value="3-4" onchange="runFieldVisitFilter()"> 3-4 kW</label>
+            <label class="ms-option"><input type="checkbox" value="5-9" onchange="runFieldVisitFilter()"> 5-9 kW</label>
+            <label class="ms-option"><input type="checkbox" value="10-24" onchange="runFieldVisitFilter()"> 10-24 kW</label>
+            <label class="ms-option"><input type="checkbox" value="25-75" onchange="runFieldVisitFilter()"> 25-75 kW</label>
+            <label class="ms-option"><input type="checkbox" value="75-9999" onchange="runFieldVisitFilter()"> 75+ kW</label>
+            <div class="ms-clear" onclick="clearCheckGroupX('fvv-load-dd','fvv-load-btn','ALL LOAD', runFieldVisitFilter)">Clear All</div>
+          </div>
+        </div>
+      </div>
+      <div><div class="lbl">METER TYPE</div>
+        <div class="ms-wrap" id="fvv-sm-wrap">
+          <button class="ms-btn" id="fvv-sm-btn" onclick="toggleMs('fvv-sm-dd')">ALL METERS</button>
+          <div class="ms-dropdown" id="fvv-sm-dd">
+            <label class="ms-option"><input type="checkbox" value="sm" onchange="runFieldVisitFilter()"> Smart Meter (GE)</label>
+            <label class="ms-option"><input type="checkbox" value="nonsm" onchange="runFieldVisitFilter()"> Non-SM</label>
+            <div class="ms-clear" onclick="clearCheckGroupX('fvv-sm-dd','fvv-sm-btn','ALL METERS', runFieldVisitFilter)">Clear All</div>
+          </div>
+        </div>
+      </div>
+      <div><div class="lbl">BILL BASIS</div>
+        <div class="ms-wrap" id="fvv-basis-wrap">
+          <button class="ms-btn" id="fvv-basis-btn" onclick="toggleMs('fvv-basis-dd')">ALL BASIS</button>
+          <div class="ms-dropdown" id="fvv-basis-dd">
+            <label class="ms-option"><input type="checkbox" value="MU" onchange="runFieldVisitFilter()"> Actual (MU)</label>
+            <label class="ms-option"><input type="checkbox" value="ASS" onchange="runFieldVisitFilter()"> Assessed</label>
+            <label class="ms-option"><input type="checkbox" value="PROV" onchange="runFieldVisitFilter()"> Provisional</label>
+            <label class="ms-option"><input type="checkbox" value="CEIL" onchange="runFieldVisitFilter()"> Ceiling</label>
+            <div class="ms-clear" onclick="clearCheckGroupX('fvv-basis-dd','fvv-basis-btn','ALL BASIS', runFieldVisitFilter)">Clear All</div>
+          </div>
+        </div>
+      </div>
+      <div><div class="lbl">LAST PAYMENT</div>
+        <div class="sw"><select id="fvv-lp-month" onchange="runFieldVisitFilter()">
+          <option value="">All Months</option>
+          <option value="cur">Current Month</option>
+          <option value="prev">Previous Month</option>
+          <option value="prev2">Other (Older/Never Paid)</option>
+        </select></div>
+      </div>
+      <div class="ms-wrap" id="fvv-outstanding-wrap">
+        <div class="lbl">OUTSTANDING RANGE</div>
+        <button class="ms-btn" id="fvv-outstanding-btn" onclick="toggleMs('fvv-outstanding-dd')">ALL AMOUNTS</button>
+        <div class="ms-dropdown" id="fvv-outstanding-dd">
+          <label class="ms-option"><input type="checkbox" value="2000-5000" onchange="runFieldVisitFilter()"> &#8377;2,000 - &#8377;5,000</label>
+          <label class="ms-option"><input type="checkbox" value="5000-10000" onchange="runFieldVisitFilter()"> &#8377;5,000 - &#8377;10,000</label>
+          <label class="ms-option"><input type="checkbox" value="10000-25000" onchange="runFieldVisitFilter()"> &#8377;10,000 - &#8377;25,000</label>
+          <label class="ms-option"><input type="checkbox" value="25000-50000" onchange="runFieldVisitFilter()"> &#8377;25,000 - &#8377;50,000</label>
+          <label class="ms-option"><input type="checkbox" value="50000-100000" onchange="runFieldVisitFilter()"> &#8377;50,000 - &#8377;1,00,000</label>
+          <label class="ms-option"><input type="checkbox" value="100000-500000" onchange="runFieldVisitFilter()"> &#8377;1,00,000 - &#8377;5,00,000</label>
+          <label class="ms-option"><input type="checkbox" value="500000-999999999" onchange="runFieldVisitFilter()"> Above &#8377;5,00,000</label>
+          <div class="ms-clear" onclick="clearCheckGroupX('fvv-outstanding-dd','fvv-outstanding-btn','ALL AMOUNTS', runFieldVisitFilter)">Clear All</div>
+        </div>
+      </div>
+      <div><div class="lbl">SORT</div><div class="sw"><select id="fvv-sort" onchange="runFieldVisitFilter()">
+        <option value="desc" selected>Highest Outstanding</option>
+        <option value="asc">Lowest Outstanding</option>
+        <option value="load_desc">Highest Load</option>
+        <option value="load_asc">Lowest Load</option>
+        <option value="sm_first">SM First</option>
+        <option value="nonsm_first">Non-SM First</option>
+        <option value="tariff_asc">Tariff Type</option>
+      </select></div></div>
       <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="fvv-search" placeholder="Name, Acct, Mobile…" oninput="runFieldVisitFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
     </div>
     <div class="btn-group" style="margin-bottom:14px;">
@@ -600,6 +790,7 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:55px">S.NO</th>
         <th style="width:110px">ACCT ID</th>
         <th style="min-width:130px">NAME</th>
+        <th style="min-width:160px">ADDRESS</th>
         <th style="width:105px">MOBILE</th>
         <th style="width:110px">OUTSTANDING</th>
         <th style="width:70px">TARIFF</th>
@@ -608,6 +799,7 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:95px">LP AMT</th>
         <th style="width:120px">ACTIONS</th>
         <th style="width:150px">ATR STATUS</th>
+        <th style="min-width:140px">ATR REMARK</th>
       </tr></thead>
       <tbody id="fvv-tbody"></tbody>
     </table></div>
@@ -7460,6 +7652,63 @@ function fieldVisitActionIcons(acctId, mobile){
   return telBtn+waBtn+photoBtn;
 }
 
+// ---- SHARED MULTI-SELECT / RANGE FILTER HELPERS (used by CALLING + FIELD VISIT tabs; independent of the Defaulter tab's own def-* filter code) ----
+var _callSelSubs=[], _callSelFeeds=[], _callSelSupplies=[];
+var _fvvSelSubs=[], _fvvSelFeeds=[], _fvvSelSupplies=[];
+function msSel(prefix, type){
+  var map = { call:{sub:_callSelSubs,feed:_callSelFeeds,supply:_callSelSupplies}, fvv:{sub:_fvvSelSubs,feed:_fvvSelFeeds,supply:_fvvSelSupplies} };
+  return map[prefix][type];
+}
+function msBaseArr(prefix){ return prefix==='call' ? CALL_ALL : (window._fvBaseAll||[]); }
+function getAllSubValuesX(prefix){ return [].concat(Array.from(new Set(msBaseArr(prefix).map(function(r){return r.SUBSTATION;}).filter(Boolean)))).sort(); }
+function getAllFeedValuesX(prefix){
+  var subs = msSel(prefix,'sub');
+  return [].concat(Array.from(new Set(msBaseArr(prefix).filter(function(r){return !subs.length||subs.indexOf(r.SUBSTATION)>=0;}).map(function(r){return r.FEEDER;}).filter(Boolean)))).sort();
+}
+function getAllSupplyValuesX(prefix){ return [].concat(Array.from(new Set(msBaseArr(prefix).map(function(r){return r.TARIFF;}).filter(Boolean)))).sort(); }
+function buildMsOptionsX(prefix, type, values){
+  var optsEl = gel(prefix+'-'+type+'-opts'); if(!optsEl) return;
+  var sel = msSel(prefix, type);
+  optsEl.innerHTML = '';
+  values.forEach(function(v){
+    var lbl=document.createElement('label'); lbl.className='ms-option';
+    var cb=document.createElement('input'); cb.type='checkbox'; cb.value=v; cb.checked=sel.indexOf(v)>=0;
+    cb.addEventListener('change', function(){ onMsChangeX(prefix, type, this); });
+    lbl.appendChild(cb); lbl.appendChild(document.createTextNode(' '+v));
+    optsEl.appendChild(lbl);
+  });
+}
+function updateMsBtnX(prefix, type){
+  var sel = msSel(prefix, type); var btn = gel(prefix+'-'+type+'-btn'); if(!btn) return;
+  var allLabel = type==='sub'?'ALL SUBSTATIONS':type==='feed'?'ALL FEEDERS':'ALL TARIFF';
+  btn.textContent = sel.length===0 ? allLabel : sel.length===1 ? sel[0] : sel.length+' selected';
+}
+function onMsChangeX(prefix, type, cb){
+  var sel = msSel(prefix, type);
+  if(cb.checked){ if(sel.indexOf(cb.value)<0) sel.push(cb.value); }
+  else { var i=sel.indexOf(cb.value); if(i>=0) sel.splice(i,1); }
+  updateMsBtnX(prefix, type);
+  if(type==='sub') buildMsOptionsX(prefix,'feed', getAllFeedValuesX(prefix));
+  if(prefix==='call') runCallFilter(); else runFieldVisitFilter();
+}
+function clearMsX(prefix, type){
+  var sel = msSel(prefix, type); sel.length = 0;
+  if(type==='sub'){ buildMsOptionsX(prefix,'sub', getAllSubValuesX(prefix)); buildMsOptionsX(prefix,'feed', getAllFeedValuesX(prefix)); }
+  else if(type==='feed'){ buildMsOptionsX(prefix,'feed', getAllFeedValuesX(prefix)); }
+  else { buildMsOptionsX(prefix,'supply', getAllSupplyValuesX(prefix)); }
+  updateMsBtnX(prefix, type);
+  if(prefix==='call') runCallFilter(); else runFieldVisitFilter();
+}
+function getSelectedRangeX(ddId){
+  var dd=gel(ddId); if(!dd) return [];
+  return Array.from(dd.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
+}
+function clearCheckGroupX(ddId, btnId, allLabel, cb){
+  var dd=gel(ddId); if(dd) dd.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=false;});
+  var btn=gel(btnId); if(btn) btn.textContent=allLabel;
+  if(cb) cb();
+}
+
 // ---- CALLING TAB ----
 var CALL_PUSH_IDS = {}, _callPushLoaded = false;
 var CALL_ALL = [], CALL_FD = [], callPage = 1, _callLoaded = false;
@@ -7502,33 +7751,71 @@ function loadCallingTab(){
 }
 
 function buildCallingPanel(){
-  var subs = [].concat(Array.from(new Set(CALL_ALL.map(function(r){ return r.SUBSTATION; }).filter(Boolean)))).sort();
-  var sel = gel('call-sub');
-  if(sel){ while(sel.options.length>1) sel.remove(1); subs.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; sel.appendChild(o); }); }
-  var feeders = [].concat(Array.from(new Set(CALL_ALL.map(function(r){ return r.FEEDER; }).filter(Boolean)))).sort();
-  var fsel = gel('call-feeder');
-  if(fsel){ while(fsel.options.length>1) fsel.remove(1); feeders.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; fsel.appendChild(o); }); }
-  var tariffs = [].concat(Array.from(new Set(CALL_ALL.map(function(r){ return r.TARIFF; }).filter(Boolean)))).sort();
-  var tsel = gel('call-tariff');
-  if(tsel){ while(tsel.options.length>1) tsel.remove(1); tariffs.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; tsel.appendChild(o); }); }
+  buildMsOptionsX('call','sub', getAllSubValuesX('call'));
+  buildMsOptionsX('call','feed', getAllFeedValuesX('call'));
+  buildMsOptionsX('call','supply', getAllSupplyValuesX('call'));
   runCallFilter();
 }
 
 function runCallFilter(){
   var q = (gel('call-search') ? gel('call-search').value : '').toLowerCase();
-  var sub = gel('call-sub') ? gel('call-sub').value : '';
-  var feeder = gel('call-feeder') ? gel('call-feeder').value : '';
-  var tariff = gel('call-tariff') ? gel('call-tariff').value : '';
+  var sub = msSel('call','sub'), feed = msSel('call','feed'), supply = msSel('call','supply');
   var src = gel('call-source') ? gel('call-source').value : '';
+  var selLoads = getSelectedRangeX('call-load-dd');
+  var selOutRanges = getSelectedRangeX('call-outstanding-dd');
+  var selSm = getSelectedRangeX('call-sm-dd');
+  var selBasis = getSelectedRangeX('call-basis-dd');
+  var lpMonthF = gel('call-lp-month') ? gel('call-lp-month').value : '';
+  var sortDir = gel('call-sort') ? gel('call-sort').value : 'desc';
+  var now = new Date(), curM=now.getMonth(), curY=now.getFullYear();
+  var prevM = curM===0?11:curM-1, prevY = curM===0?curY-1:curY;
+
   CALL_FD = CALL_ALL.filter(function(r){
-    if(sub && r.SUBSTATION !== sub) return false;
-    if(feeder && r.FEEDER !== feeder) return false;
-    if(tariff && r.TARIFF !== tariff) return false;
+    if(sub.length && sub.indexOf(r.SUBSTATION)<0) return false;
+    if(feed.length && feed.indexOf(r.FEEDER)<0) return false;
+    if(supply.length && supply.indexOf(r.TARIFF)<0) return false;
     if(src && r._SRC !== src) return false;
+    if(selLoads.length){
+      var mL = selLoads.some(function(range){ var p=range.split('-'); return (r.LOAD||0)>=parseFloat(p[0]) && (r.LOAD||0)<=parseFloat(p[1]); });
+      if(!mL) return false;
+    }
+    if(selOutRanges.length){
+      var out = parseFloat(r.OUTSTANDING)||0;
+      var mO = selOutRanges.some(function(range){ var p=range.split('-'); return out>=parseFloat(p[0]) && out<=parseFloat(p[1]); });
+      if(!mO) return false;
+    }
+    if(selSm.length){
+      var mrSrc = String(r.MR_SOURCE_CD||'').trim().toUpperCase();
+      var serial = String(r.METER_NO||'').trim().toUpperCase();
+      var isSm = mrSrc==='SM' || serial.startsWith('GE');
+      var wantSm = selSm.indexOf('sm')>=0, wantNon = selSm.indexOf('nonsm')>=0;
+      if(wantSm && !wantNon && !isSm) return false;
+      if(wantNon && !wantSm && isSm) return false;
+    }
+    if(selBasis.length){
+      var rb = String(r.BILL_BASIS||'').trim().toUpperCase();
+      if(!rb || selBasis.indexOf(rb)<0) return false;
+    }
+    if(lpMonthF){
+      var lpD = (typeof parseDate==='function') ? parseDate(r.PAY_DATE||'') : null;
+      var lpM = lpD ? lpD.getMonth() : -1, lpY = lpD ? lpD.getFullYear() : -1;
+      if(lpMonthF==='cur' && !(lpM===curM && lpY===curY)) return false;
+      if(lpMonthF==='prev' && !(lpM===prevM && lpY===prevY)) return false;
+      if(lpMonthF==='prev2'){ var isPrevOrCur=(lpM===curM&&lpY===curY)||(lpM===prevM&&lpY===prevY); if(isPrevOrCur) return false; }
+    }
     if(q && !String(r.ACCT_ID).includes(q) && !(r.NAME && r.NAME.toLowerCase().includes(q)) && !(r.MOBILE && String(r.MOBILE).includes(q))) return false;
     return true;
   });
-  CALL_FD.sort(function(a,b){ return (parseFloat(b.OUTSTANDING)||0) - (parseFloat(a.OUTSTANDING)||0); });
+
+  CALL_FD.sort(function(a,b){
+    if(sortDir==='asc') return (parseFloat(a.OUTSTANDING)||0)-(parseFloat(b.OUTSTANDING)||0);
+    if(sortDir==='load_desc') return (b.LOAD||0)-(a.LOAD||0);
+    if(sortDir==='load_asc') return (a.LOAD||0)-(b.LOAD||0);
+    if(sortDir==='sm_first'){ var as=String(a.METER_NO||'').toUpperCase().startsWith('GE')?0:1, bs=String(b.METER_NO||'').toUpperCase().startsWith('GE')?0:1; return as-bs || (parseFloat(b.OUTSTANDING)||0)-(parseFloat(a.OUTSTANDING)||0); }
+    if(sortDir==='nonsm_first'){ var aSM=String(a.MR_SOURCE_CD||'').toUpperCase()==='SM', bSM=String(b.MR_SOURCE_CD||'').toUpperCase()==='SM'; return (aSM?1:0)-(bSM?1:0) || (parseFloat(b.OUTSTANDING)||0)-(parseFloat(a.OUTSTANDING)||0); }
+    if(sortDir==='tariff_asc') return String(a.TARIFF||'').localeCompare(String(b.TARIFF||''));
+    return (parseFloat(b.OUTSTANDING)||0) - (parseFloat(a.OUTSTANDING)||0);
+  });
   var ci = gel('call-count-info'); if(ci) ci.textContent = 'Showing '+CALL_FD.length+' of '+CALL_ALL.length+' records';
   renderCallTable(1);
 }
@@ -7548,6 +7835,7 @@ function renderCallTable(page){
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
       '<td><a href="javascript:void(0)" onclick="openCallingLogModal(\''+r.ACCT_ID+'\')" title="Open consumer detail / log Calling ATR" style="font-family:var(--fh);color:#4F46E5;font-weight:700;text-decoration:none;">'+r.ACCT_ID+'</a>'+manualTag+'</td>'+
       '<td style="font-weight:600;">'+(r.NAME||'-')+'</td>'+
+      '<td style="max-width:180px;white-space:normal;font-size:11px;color:var(--muted);">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.MOBILE ? '<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" title="Call (number copied)" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+'</a>' : '-')+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
       '<td>'+(r.TARIFF||'-')+'</td>'+
@@ -7556,12 +7844,29 @@ function renderCallTable(page){
       '<td>'+(r.PAY_AMT?'₹'+Math.round(r.PAY_AMT).toLocaleString():'-')+'</td>'+
       '<td style="white-space:nowrap;">'+callingActionIcons(r.ACCT_ID, r.MOBILE)+(r._SRC==='manual' ? ' <a href="javascript:void(0)" onclick="removeFromCalling(\''+r.ACCT_ID+'\')" title="Remove from Calling" style="margin-left:10px;text-decoration:none;font-size:15px;">🗑️</a>' : '')+'</td>'+
       '<td><span style="color:'+atrColor+';font-weight:700;font-size:11px;">'+atrLabel+'</span></td>'+
+      '<td style="max-width:160px;white-space:normal;font-size:11px;color:var(--muted);">'+(cl.REMARKS||'-')+'</td>'+
     '</tr>';
   }).join('');
   rp('call-pg', page, Math.ceil(CALL_FD.length/PS), renderCallTable);
 }
 
-function resetCall(){ if(gel('call-search')) gel('call-search').value=''; if(gel('call-sub')) gel('call-sub').value=''; if(gel('call-feeder')) gel('call-feeder').value=''; if(gel('call-tariff')) gel('call-tariff').value=''; if(gel('call-source')) gel('call-source').value=''; runCallFilter(); }
+function resetCall(){
+  if(gel('call-search')) gel('call-search').value='';
+  if(gel('call-source')) gel('call-source').value='';
+  if(gel('call-lp-month')) gel('call-lp-month').value='';
+  if(gel('call-sort')) gel('call-sort').value='desc';
+  _callSelSubs.length=0; _callSelFeeds.length=0; _callSelSupplies.length=0;
+  buildMsOptionsX('call','sub', getAllSubValuesX('call'));
+  buildMsOptionsX('call','feed', getAllFeedValuesX('call'));
+  buildMsOptionsX('call','supply', getAllSupplyValuesX('call'));
+  updateMsBtnX('call','sub'); updateMsBtnX('call','feed'); updateMsBtnX('call','supply');
+  ['call-load-dd','call-sm-dd','call-basis-dd','call-outstanding-dd'].forEach(function(id){ var dd=gel(id); if(dd) dd.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=false;}); });
+  if(gel('call-load-btn')) gel('call-load-btn').textContent='ALL LOAD';
+  if(gel('call-sm-btn')) gel('call-sm-btn').textContent='ALL METERS';
+  if(gel('call-basis-btn')) gel('call-basis-btn').textContent='ALL BASIS';
+  if(gel('call-outstanding-btn')) gel('call-outstanding-btn').textContent='ALL AMOUNTS';
+  runCallFilter();
+}
 
 function expCallX(){
   if(!CALL_FD.length) return alert('No data.');
@@ -7633,40 +7938,68 @@ function loadFieldVisitTab(){
   buildFieldVisitPanel();
 }
 
-function buildFieldVisitPanel(){
-  var subs = getAllSubValues();
-  var sel = gel('fvv-sub');
-  if(sel){ while(sel.options.length>1) sel.remove(1); subs.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; sel.appendChild(o); }); }
-  var fvBase = DEF_ALL.map(function(r){
+function fvBaseData(){
+  return DEF_ALL.map(function(r){
     var tariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
     return Object.assign({}, r, { TARIFF: tariff });
   }).filter(function(r){
     return (parseFloat(r.OUTSTANDING)||0) > FIELDVISIT_AUTO_THRESHOLD && AUTO_TARIFFS.indexOf(r.TARIFF) >= 0;
   });
-  var feeders = [].concat(Array.from(new Set(fvBase.map(function(r){ return r.FEEDER; }).filter(Boolean)))).sort();
-  var fsel = gel('fvv-feeder');
-  if(fsel){ while(fsel.options.length>1) fsel.remove(1); feeders.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; fsel.appendChild(o); }); }
-  var tariffs = [].concat(Array.from(new Set(fvBase.map(function(r){ return r.TARIFF; }).filter(Boolean)))).sort();
-  var tsel = gel('fvv-tariff');
-  if(tsel){ while(tsel.options.length>1) tsel.remove(1); tariffs.forEach(function(s){ var o=document.createElement('option'); o.value=o.textContent=s; tsel.appendChild(o); }); }
+}
+
+function buildFieldVisitPanel(){
+  window._fvBaseAll = fvBaseData();
+  buildMsOptionsX('fvv','sub', getAllSubValuesX('fvv'));
+  buildMsOptionsX('fvv','feed', getAllFeedValuesX('fvv'));
+  buildMsOptionsX('fvv','supply', getAllSupplyValuesX('fvv'));
   runFieldVisitFilter();
 }
 
 function runFieldVisitFilter(){
   var q = (gel('fvv-search') ? gel('fvv-search').value : '').toLowerCase();
-  var sub = gel('fvv-sub') ? gel('fvv-sub').value : '';
-  var feeder = gel('fvv-feeder') ? gel('fvv-feeder').value : '';
-  var tariff = gel('fvv-tariff') ? gel('fvv-tariff').value : '';
-  var fvBase = DEF_ALL.map(function(r){
-    var t = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
-    return Object.assign({}, r, { TARIFF: t });
-  }).filter(function(r){
-    return (parseFloat(r.OUTSTANDING)||0) > FIELDVISIT_AUTO_THRESHOLD && AUTO_TARIFFS.indexOf(r.TARIFF) >= 0;
-  });
+  var sub = msSel('fvv','sub'), feed = msSel('fvv','feed'), supply = msSel('fvv','supply');
+  var selLoads = getSelectedRangeX('fvv-load-dd');
+  var selOutRanges = getSelectedRangeX('fvv-outstanding-dd');
+  var selSm = getSelectedRangeX('fvv-sm-dd');
+  var selBasis = getSelectedRangeX('fvv-basis-dd');
+  var lpMonthF = gel('fvv-lp-month') ? gel('fvv-lp-month').value : '';
+  var sortDir = gel('fvv-sort') ? gel('fvv-sort').value : 'desc';
+  var now = new Date(), curM=now.getMonth(), curY=now.getFullYear();
+  var prevM = curM===0?11:curM-1, prevY = curM===0?curY-1:curY;
+  window._fvBaseAll = fvBaseData();
+  var fvBase = window._fvBaseAll;
   FV2_FD = fvBase.filter(function(r){
-    if(sub && r.SUBSTATION !== sub) return false;
-    if(feeder && r.FEEDER !== feeder) return false;
-    if(tariff && r.TARIFF !== tariff) return false;
+    if(sub.length && sub.indexOf(r.SUBSTATION)<0) return false;
+    if(feed.length && feed.indexOf(r.FEEDER)<0) return false;
+    if(supply.length && supply.indexOf(r.TARIFF)<0) return false;
+    if(selLoads.length){
+      var mL = selLoads.some(function(range){ var p=range.split('-'); return (r.LOAD||0)>=parseFloat(p[0]) && (r.LOAD||0)<=parseFloat(p[1]); });
+      if(!mL) return false;
+    }
+    if(selOutRanges.length){
+      var out = parseFloat(r.OUTSTANDING)||0;
+      var mO = selOutRanges.some(function(range){ var p=range.split('-'); return out>=parseFloat(p[0]) && out<=parseFloat(p[1]); });
+      if(!mO) return false;
+    }
+    if(selSm.length){
+      var mrSrc = String(r.MR_SOURCE_CD||'').trim().toUpperCase();
+      var serial = String(r.METER_NO||'').trim().toUpperCase();
+      var isSm = mrSrc==='SM' || serial.startsWith('GE');
+      var wantSm = selSm.indexOf('sm')>=0, wantNon = selSm.indexOf('nonsm')>=0;
+      if(wantSm && !wantNon && !isSm) return false;
+      if(wantNon && !wantSm && isSm) return false;
+    }
+    if(selBasis.length){
+      var rb = String(r.BILL_BASIS||'').trim().toUpperCase();
+      if(!rb || selBasis.indexOf(rb)<0) return false;
+    }
+    if(lpMonthF){
+      var lpD = (typeof parseDate==='function') ? parseDate(r.PAY_DATE||'') : null;
+      var lpM = lpD ? lpD.getMonth() : -1, lpY = lpD ? lpD.getFullYear() : -1;
+      if(lpMonthF==='cur' && !(lpM===curM && lpY===curY)) return false;
+      if(lpMonthF==='prev' && !(lpM===prevM && lpY===prevY)) return false;
+      if(lpMonthF==='prev2'){ var isPrevOrCur=(lpM===curM&&lpY===curY)||(lpM===prevM&&lpY===prevY); if(isPrevOrCur) return false; }
+    }
     if(q && !String(r.ACCT_ID).includes(q) && !(r.NAME && r.NAME.toLowerCase().includes(q)) && !(r.MOBILE && String(r.MOBILE).includes(q))) return false;
     return true;
   }).map(function(r){
@@ -7674,7 +8007,15 @@ function runFieldVisitFilter(){
     var status = sv.FIELD_VISIT_ATR || 'PENDING';
     return Object.assign({}, r, { _ATR: status, _REMARKS: sv.REMARKS||'' });
   });
-  FV2_FD.sort(function(a,b){ return (parseFloat(b.OUTSTANDING)||0) - (parseFloat(a.OUTSTANDING)||0); });
+  FV2_FD.sort(function(a,b){
+    if(sortDir==='asc') return (parseFloat(a.OUTSTANDING)||0)-(parseFloat(b.OUTSTANDING)||0);
+    if(sortDir==='load_desc') return (b.LOAD||0)-(a.LOAD||0);
+    if(sortDir==='load_asc') return (a.LOAD||0)-(b.LOAD||0);
+    if(sortDir==='sm_first'){ var as=String(a.METER_NO||'').toUpperCase().startsWith('GE')?0:1, bs=String(b.METER_NO||'').toUpperCase().startsWith('GE')?0:1; return as-bs || (parseFloat(b.OUTSTANDING)||0)-(parseFloat(a.OUTSTANDING)||0); }
+    if(sortDir==='nonsm_first'){ var aSM=String(a.MR_SOURCE_CD||'').toUpperCase()==='SM', bSM=String(b.MR_SOURCE_CD||'').toUpperCase()==='SM'; return (aSM?1:0)-(bSM?1:0) || (parseFloat(b.OUTSTANDING)||0)-(parseFloat(a.OUTSTANDING)||0); }
+    if(sortDir==='tariff_asc') return String(a.TARIFF||'').localeCompare(String(b.TARIFF||''));
+    return (parseFloat(b.OUTSTANDING)||0) - (parseFloat(a.OUTSTANDING)||0);
+  });
   var ci = gel('fvv-count-info'); if(ci) ci.textContent = 'Showing '+FV2_FD.length+' of '+fvBase.length+' records (OUTSTANDING > ₹'+FIELDVISIT_AUTO_THRESHOLD.toLocaleString()+')';
   renderFieldVisitTable(1);
 }
@@ -7692,6 +8033,7 @@ function renderFieldVisitTable(page){
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
       '<td><a href="javascript:void(0)" onclick="openSiteVisitLogModal(\''+r.ACCT_ID+'\')" title="Open consumer detail / log Field Visit ATR" style="font-family:var(--fh);color:#4F46E5;font-weight:700;text-decoration:none;">'+r.ACCT_ID+'</a></td>'+
       '<td style="font-weight:600;">'+(r.NAME||'-')+'</td>'+
+      '<td style="max-width:180px;white-space:normal;font-size:11px;color:var(--muted);">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.MOBILE ? '<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" title="Call (number copied)" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+'</a>' : '-')+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
       '<td>'+(r.TARIFF||'-')+'</td>'+
@@ -7702,12 +8044,28 @@ function renderFieldVisitTable(page){
         ' <a href="javascript:void(0)" onclick="pushToCalling(\''+r.ACCT_ID+'\')" title="Add to Calling list" style="margin-left:10px;text-decoration:none;font-size:15px;'+(isPushed?'opacity:0.35;pointer-events:none;':'')+'">📲</a>'+
       '</td>'+
       '<td><span style="color:'+col+';font-weight:700;font-size:11px;">'+atrLabel+'</span></td>'+
+      '<td style="max-width:160px;white-space:normal;font-size:11px;color:var(--muted);">'+(r._REMARKS||'-')+'</td>'+
     '</tr>';
   }).join('');
   rp('fvv-pg', page, Math.ceil(FV2_FD.length/PS), renderFieldVisitTable);
 }
 
-function resetFieldVisit(){ if(gel('fvv-search')) gel('fvv-search').value=''; if(gel('fvv-sub')) gel('fvv-sub').value=''; if(gel('fvv-feeder')) gel('fvv-feeder').value=''; if(gel('fvv-tariff')) gel('fvv-tariff').value=''; runFieldVisitFilter(); }
+function resetFieldVisit(){
+  if(gel('fvv-search')) gel('fvv-search').value='';
+  if(gel('fvv-lp-month')) gel('fvv-lp-month').value='';
+  if(gel('fvv-sort')) gel('fvv-sort').value='desc';
+  _fvvSelSubs.length=0; _fvvSelFeeds.length=0; _fvvSelSupplies.length=0;
+  buildMsOptionsX('fvv','sub', getAllSubValuesX('fvv'));
+  buildMsOptionsX('fvv','feed', getAllFeedValuesX('fvv'));
+  buildMsOptionsX('fvv','supply', getAllSupplyValuesX('fvv'));
+  updateMsBtnX('fvv','sub'); updateMsBtnX('fvv','feed'); updateMsBtnX('fvv','supply');
+  ['fvv-load-dd','fvv-sm-dd','fvv-basis-dd','fvv-outstanding-dd'].forEach(function(id){ var dd=gel(id); if(dd) dd.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=false;}); });
+  if(gel('fvv-load-btn')) gel('fvv-load-btn').textContent='ALL LOAD';
+  if(gel('fvv-sm-btn')) gel('fvv-sm-btn').textContent='ALL METERS';
+  if(gel('fvv-basis-btn')) gel('fvv-basis-btn').textContent='ALL BASIS';
+  if(gel('fvv-outstanding-btn')) gel('fvv-outstanding-btn').textContent='ALL AMOUNTS';
+  runFieldVisitFilter();
+}
 
 function expFieldVisitX(){
   if(!FV2_FD.length) return alert('No data.');
@@ -7722,9 +8080,9 @@ function expFieldVisitX(){
 // ---- CALLING ATR / FIELD VISIT ATR (writes to "UPPCL ATR Data" sheet: CALLING_ATR / SITE_VISIT_ATR tabs) ----
 var SITEVISIT_LATEST = {}, CALLING_LATEST = {}, _atrLogsLoaded = false;
 var LOG_ATR_OPTIONS = ['PENDING','PAID','PARTIAL','PROMISE','LOCK','DISPUTE','TD','OTHER'];
-var LOG_ATR_LABELS = { PENDING:'\u23F3 PENDING', PAID:'\u2705 PAID', PARTIAL:'\uD83D\uDCB0 PARTIAL PAYMENT', PROMISE:'\uD83E\uDD1D PROMISE TO PAY', LOCK:'\uD83D\uDD12 LOCK / AWAY', DISPUTE:'\u2696\uFE0F DISPUTE', TD:'\uD83D\uDD0C TEMP DISCONNECTED', OTHER:'\uD83D\uDCDD OTHER' };
+var LOG_ATR_LABELS = { PENDING:'\u23F3 PENDING / \u0932\u0902\u092C\u093F\u0924', PAID:'\u2705 PAID / \u092D\u0941\u0917\u0924\u093E\u0928 \u0939\u094B \u0917\u092F\u093E', PARTIAL:'\uD83D\uDCB0 PARTIAL PAYMENT / \u0906\u0902\u0936\u093F\u0915 \u092D\u0941\u0917\u0924\u093E\u0928', PROMISE:'\uD83E\uDD1D PROMISE TO PAY / \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u093E \u0935\u093E\u0926\u093E', LOCK:'\uD83D\uDD12 LOCK / AWAY / \u0918\u0930 \u092C\u0902\u0926', DISPUTE:'\u2696\uFE0F DISPUTE / \u0935\u093F\u0935\u093E\u0926', TD:'\uD83D\uDD0C TEMP DISCONNECTED / \u0905\u0938\u094D\u0925\u093E\u092F\u0940 \u0935\u093F\u091A\u094D\u091B\u0947\u0926\u0928', OTHER:'\uD83D\uDCDD OTHER / \u0905\u0928\u094D\u092F' };
 var CALL_OUTCOME_OPTIONS = ['NOT_PICKED','SWITCHED_OFF','WRONG_NUMBER','NOT_REACHABLE','PROMISE','PARTIAL','PAID','REFUSED','DISPUTE','CALLBACK','OTHER'];
-var CALL_OUTCOME_LABELS = { NOT_PICKED:'\uD83D\uDCF5 NOT PICKED / NO ANSWER', SWITCHED_OFF:'\uD83D\uDCF4 SWITCHED OFF', WRONG_NUMBER:'\u274C WRONG NUMBER', NOT_REACHABLE:'\uD83D\uDCF6 NOT REACHABLE', PROMISE:'\uD83E\uDD1D PROMISED TO PAY', PARTIAL:'\uD83D\uDCB0 PARTIAL PAYMENT DISCUSSED', PAID:'\u2705 ALREADY PAID', REFUSED:'\uD83D\uDEAB REFUSED TO PAY', DISPUTE:'\u2696\uFE0F DISPUTE / BILL ISSUE', CALLBACK:'\uD83D\uDD01 CALL BACK LATER', OTHER:'\uD83D\uDCDD OTHER' };
+var CALL_OUTCOME_LABELS = { NOT_PICKED:'\uD83D\uDCF5 NOT PICKED / \u092B\u094B\u0928 \u0928\u0939\u0940\u0902 \u0909\u0920\u093E\u092F\u093E', SWITCHED_OFF:'\uD83D\uDCF4 SWITCHED OFF / \u0938\u094D\u0935\u093F\u091A\u094D\u0921 \u0911\u092B', WRONG_NUMBER:'\u274C WRONG NUMBER / \u0917\u0932\u0924 \u0928\u0902\u092C\u0930', NOT_REACHABLE:'\uD83D\uDCF6 NOT REACHABLE / \u0928\u0947\u091F\u0935\u0930\u094D\u0915 \u0928\u0939\u0940\u0902', PROMISE:'\uD83E\uDD1D PROMISED TO PAY / \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u093E \u0935\u093E\u0926\u093E', PARTIAL:'\uD83D\uDCB0 PARTIAL PAYMENT / \u0906\u0902\u0936\u093F\u0915 \u092D\u0941\u0917\u0924\u093E\u0928', PAID:'\u2705 ALREADY PAID / \u092D\u0941\u0917\u0924\u093E\u0928 \u0939\u094B \u091A\u0941\u0915\u093E', REFUSED:'\uD83D\uDEAB REFUSED TO PAY / \u092D\u0941\u0917\u0924\u093E\u0928 \u0938\u0947 \u0907\u0928\u0915\u093E\u0930', DISPUTE:'\u2696\uFE0F DISPUTE / \u092C\u093F\u0932 \u0935\u093F\u0935\u093E\u0926', CALLBACK:'\uD83D\uDD01 CALL BACK LATER / \u092C\u093E\u0926 \u092E\u0947\u0902 \u0915\u0949\u0932 \u0915\u0930\u0947\u0902', OTHER:'\uD83D\uDCDD OTHER / \u0905\u0928\u094D\u092F' };
 
 // Calling-specific outcome options (used in the CALLING tab consumer card ATR dropdown)
 var CALL_OUTCOME_OPTIONS = ['NOT_PICKED','SWITCHED_OFF','NOT_REACHABLE','WRONG_NUMBER','PROMISED_TO_PAY','PARTIAL_PAYMENT','PAID','REFUSED','DISPUTE','CALL_BACK_LATER','WARNED_DISCONNECTION','OTHER'];
@@ -7767,7 +8125,7 @@ function closeLogModal(){ var m=gel('log-modal'); if(m) m.classList.remove('open
 
 function atrOptionsHtml(selected, opts, labels){
   opts = opts || LOG_ATR_OPTIONS; labels = labels || LOG_ATR_LABELS;
-  var ph = '<option value="" disabled'+(!selected?' selected':'')+'>-- SELECT (REQUIRED) --</option>';
+  var ph = '<option value="" disabled'+(!selected?' selected':'')+'>-- SELECT / चुनें (REQUIRED) --</option>';
   return ph + opts.map(function(s){ return '<option value="'+s+'"'+(selected===s?' selected':'')+'>'+labels[s]+'</option>'; }).join('');
 }
 
@@ -7787,9 +8145,9 @@ function openSiteVisitLogModal(acctId){
         (r.SUBSTATION||'-')+' / '+(r.FEEDER||'-')+' &bull; Meter: '+(r.METER_NO||'-')+'<br>'+
         'Outstanding: <b style="color:#F43F5E;">\u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</b>'+
       '</div>'+
-      '<div class="lbl">FIELD VISIT ATR (REQUIRED)</div>'+
+      '<div class="lbl">FIELD VISIT ATR / फील्ड विज़िट परिणाम (REQUIRED)</div>'+
       '<select id="log-sv-status" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;">'+atrOptionsHtml(prev.FIELD_VISIT_ATR)+'</select>'+
-      '<div class="lbl">REMARKS (OPTIONAL)</div>'+
+      '<div class="lbl">REMARKS / टिप्पणी (OPTIONAL)</div>'+
       '<textarea id="log-sv-remarks" rows="3" placeholder="Optional note\u2026" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:16px;box-sizing:border-box;">'+(prev.REMARKS||'')+'</textarea>'+
       '<button class="btn" style="background:#7C3AED;color:#fff;width:100%;" onclick="submitSiteVisitLog(\''+acctId+'\')">\u2705 SAVE</button>'+
     '</div>';
@@ -7834,9 +8192,9 @@ function openCallingLogModal(acctId){
         (r.SUBSTATION||'-')+' / '+(r.FEEDER||'-')+' &bull; Meter: '+(r.METER_NO||'-')+'<br>'+
         'Outstanding: <b style="color:#F43F5E;">\u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</b>'+
       '</div>'+
-      '<div class="lbl">CALL OUTCOME (REQUIRED)</div>'+
+      '<div class="lbl">CALL OUTCOME / कॉल का नतीजा (REQUIRED)</div>'+
       '<select id="log-cl-outcome" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;">'+atrOptionsHtml(prev.CALL_OUTCOME, CALL_OUTCOME_OPTIONS, CALL_OUTCOME_LABELS)+'</select>'+
-      '<div class="lbl">REMARKS (OPTIONAL)</div>'+
+      '<div class="lbl">REMARKS / टिप्पणी (OPTIONAL)</div>'+
       '<textarea id="log-cl-remarks" rows="3" placeholder="Optional note\u2026" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:16px;box-sizing:border-box;">'+(prev.REMARKS||'')+'</textarea>'+
       '<button class="btn" style="background:#0891B2;color:#fff;width:100%;" onclick="submitCallingLog(\''+acctId+'\')">\u2705 SAVE</button>'+
     '</div>';
