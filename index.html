@@ -6,7 +6,6 @@
 <title>UPPCL Consumer Data Tool</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css"/>
@@ -1399,6 +1398,15 @@ function autoSyncAtr(){
       try{ ls_def = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
       Object.keys(defAtr).forEach(function(k){ ls_def[k] = defAtr[k]; });
       localStorage.setItem('def_atr_data', JSON.stringify(ls_def));
+
+      // Pick up real Drive photo links the server saved into the sheet (replaces
+      // the local "pending" placeholder set right after upload — no login needed).
+      if(typeof mergePhotoLinkFromSync === 'function'){
+        var photoChanged = false;
+        Object.keys(smAtr).forEach(function(k){ if(mergePhotoLinkFromSync(k, smAtr[k] && smAtr[k].photo)) photoChanged = true; });
+        Object.keys(defAtr).forEach(function(k){ if(mergePhotoLinkFromSync(k, defAtr[k] && defAtr[k].photo)) photoChanged = true; });
+        if(photoChanged && typeof savePhotoLinks === 'function') savePhotoLinks();
+      }
 
       // Apply to DC if already loaded
       DC.forEach(function(r){
@@ -4299,11 +4307,10 @@ function buildSettingsPanel(){
         '</div>'+
       '</div>'+
 
-      /* GOOGLE DRIVE PHOTO SETUP CARD */
+      /* GOOGLE DRIVE PHOTO — NO LOGIN NEEDED */
       '<div class="settings-card" style="background:#EFF6FF;border-color:#BFDBFE;">'+
-        '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:12px;color:#1D4ED8;display:flex;align-items:center;gap:8px;">📷 GOOGLE DRIVE PHOTO SETUP</div>'+
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:15px;line-height:1.5;">Powers the 📷 photo button on CALLING and FIELD VISIT tabs. Paste your Google OAuth Client ID (Google Cloud Console → Google Auth Platform → Clients). Photos upload to your own Google Drive.</div>'+
-        '<input type="text" id="drive-client-id" placeholder="xxxxxxxxxx.apps.googleusercontent.com" value="'+getDriveClientId()+'" style="width:100%;border:1.5px solid #BFDBFE;border-radius:10px;padding:10px 14px;font-size:12px;font-family:var(--fb);outline:none;box-sizing:border-box;" oninput="localStorage.setItem(&#39;drive_client_id&#39;,this.value)"/>'+
+        '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:12px;color:#1D4ED8;display:flex;align-items:center;gap:8px;">📷 GOOGLE DRIVE PHOTO UPLOAD</div>'+
+        '<div style="font-size:12px;color:var(--muted);line-height:1.5;">Photo button on CALLING and FIELD VISIT tabs works automatically — no Google sign-in required. Photos upload straight to the admin\'s Google Drive, just like ATR sync.</div>'+
       '</div>'+
 
       /* CALLING PUSH LIST UPLOAD CARD */
@@ -4749,19 +4756,27 @@ function syncAtrFromSheet(){
       try{ local_def = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
       Object.keys(defAtr).forEach(function(acct){ local_def[acct] = defAtr[acct]; });
       localStorage.setItem('def_atr_data', JSON.stringify(local_def));
-      
+
+      // Pick up real Drive photo links the server saved into the sheet.
+      if(typeof mergePhotoLinkFromSync === 'function'){
+        var photoChanged2 = false;
+        Object.keys(smAtr).forEach(function(k){ if(mergePhotoLinkFromSync(k, smAtr[k] && smAtr[k].photo)) photoChanged2 = true; });
+        Object.keys(defAtr).forEach(function(k){ if(mergePhotoLinkFromSync(k, defAtr[k] && defAtr[k].photo)) photoChanged2 = true; });
+        if(photoChanged2 && typeof savePhotoLinks === 'function') savePhotoLinks();
+      }
+
       // Apply to DC array
       DC.forEach(function(r){
         var e = local_sm[String(r.ACCT_ID)];
         if(e){ r.ATR_STATUS = typeof e==='object'?(e.atr||r.ATR_STATUS):e; r.ATR_COMMENT = typeof e==='object'?(e.comment||''):''; }
       });
-      
+
       // Apply to DEF_ALL
       DEF_ALL.forEach(function(r){
         var e = local_def[String(r.ACCT_ID)];
         if(e){ r.ATR_STATUS = typeof e==='object'?(e.atr||r.ATR_STATUS):e; r.ATR_COMMENT = typeof e==='object'?(e.comment||''):''; }
       });
-      
+
       var total = Object.keys(smAtr).length + Object.keys(defAtr).length;
       btn.textContent = '✅ SYNCED ('+total+')';
       btn.disabled = false;
@@ -7533,38 +7548,19 @@ function loadPhotoLinks(cb){
     .then(function(data){ PHOTO_LINKS = (data && typeof data==='object') ? data : {}; _photoLinksLoaded = true; if(cb) cb(); })
     .catch(function(){ PHOTO_LINKS = {}; _photoLinksLoaded = true; if(cb) cb(); });
 }
-const DEFAULT_DRIVE_CLIENT_ID = '374533575118-hjfqjkvr29epd88pm4pqu4hnp2bddfc0.apps.googleusercontent.com';
-function getDriveClientId(){ return localStorage.getItem('drive_client_id') || DEFAULT_DRIVE_CLIENT_ID; }
-
-var _driveAccessToken = null, _driveTokenExpiry = 0, _driveTokenClient = null;
-function getDriveToken(){
-  return new Promise(function(resolve, reject){
-    var cid = getDriveClientId();
-    if(!cid){ reject(new Error('Google Drive Client ID not set. Add it in SETTINGS → GOOGLE DRIVE PHOTO SETUP.')); return; }
-    if(_driveAccessToken && Date.now() < _driveTokenExpiry){ resolve(_driveAccessToken); return; }
-    if(typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2){
-      reject(new Error('Google sign-in script not ready yet — wait a moment and try again.')); return;
-    }
-    try{
-      _driveTokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: cid,
-        scope: 'https://www.googleapis.com/auth/drive.file',
-        callback: function(resp){
-          if(resp.error){ reject(new Error(resp.error)); return; }
-          _driveAccessToken = resp.access_token;
-          _driveTokenExpiry = Date.now() + ((resp.expires_in||3000)*1000) - 30000;
-          resolve(_driveAccessToken);
-        },
-        error_callback: function(err){ reject(new Error((err && err.type) ? err.type : 'Google Drive sign-in failed')); }
-      });
-      _driveTokenClient.requestAccessToken({ prompt: '' });
-    }catch(e){ reject(e); }
-  });
-}
+// Photo uploads go straight to the Apps Script backend (same one ATR sync uses),
+// which runs "Execute as: Me" — so it saves to the admin's Drive with ZERO
+// Google sign-in needed from the field user. Just like ATR, anyone can use it.
+var PHOTO_SYNCED = 'SYNCED_'; // link is a real https URL once synced back from the sheet
 
 function openPhotoUpload(acctId){
-  if(PHOTO_LINKS[String(acctId)]){
-    window.open(PHOTO_LINKS[String(acctId)], '_blank');
+  var existing = PHOTO_LINKS[String(acctId)];
+  if(existing && /^https?:\/\//.test(existing)){
+    window.open(existing, '_blank');
+    return;
+  }
+  if(existing){
+    alert('📷 Photo uploaded! Drive link syncs automatically within a few minutes.\nTap again later to view it.');
     return;
   }
   var inp = document.createElement('input');
@@ -7580,52 +7576,62 @@ function uploadPhotoForConsumer(acctId, file){
   var modalBtn = gel('photo-modal-btn-'+acctId);
   if(btn) btn.textContent = '⏳';
   if(modalBtn){ modalBtn.disabled = true; modalBtn.textContent = '⏳ UPLOADING… / अपलोड हो रहा है…'; }
-  getDriveToken().then(function(token){
-    return new Promise(function(resolve, reject){
-      var reader = new FileReader();
-      reader.onload = function(){
-        var boundary = '-------uppclphoto'+Date.now();
-        var metadata = { name: 'defaulter_'+acctId+'_'+Date.now()+'.jpg', mimeType: file.type || 'image/jpeg' };
-        var base64Data = String(reader.result).split(',')[1];
-        var multipartBody =
-          '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+'\r\n'+
-          '--'+boundary+'\r\nContent-Type: '+(file.type||'image/jpeg')+'\r\nContent-Transfer-Encoding: base64\r\n\r\n'+base64Data+'\r\n'+
-          '--'+boundary+'--';
-        fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer '+token, 'Content-Type': 'multipart/related; boundary='+boundary },
-          body: multipartBody
-        }).then(function(r){ return r.json(); }).then(function(data){
-          if(!data || !data.id){ reject(new Error('Upload failed')); return; }
-          // best-effort: make link viewable by anyone with the link (fire and forget)
-          fetch('https://www.googleapis.com/drive/v3/files/'+data.id+'/permissions', {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer '+token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ role: 'reader', type: 'anyone' })
-          }).catch(function(){});
-          resolve(data.id);
-        }).catch(reject);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }).then(function(fileId){
-    var link = 'https://drive.google.com/file/d/'+fileId+'/view';
-    PHOTO_LINKS[String(acctId)] = link;
-    if(btn){ btn.textContent = '✅'; btn.setAttribute('onclick', "openPhotoUpload('"+acctId+"')"); }
-    if(modalBtn){
-      modalBtn.disabled = false;
-      modalBtn.style.border = '1.5px dashed #16A34A';
-      modalBtn.style.background = '#F0FDF4';
-      modalBtn.style.color = '#16A34A';
-      modalBtn.textContent = '✅ PHOTO UPLOADED — TAP TO VIEW / फोटो अपलोड हो गई';
-    }
-    savePhotoLinks();
-  }).catch(function(e){
+  var url = getScriptUrl();
+  if(!url){
     if(btn) btn.textContent = '📷';
     if(modalBtn){ modalBtn.disabled = false; modalBtn.textContent = '📷 TAKE / UPLOAD PHOTO / फोटो लें (REQUIRED)'; }
-    alert('Photo upload failed: '+e.message);
-  });
+    alert('Photo upload failed: sync URL not configured.');
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function(){
+    var base64Data = String(reader.result).split(',')[1];
+    fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({
+        type: 'photo_upload',
+        acct: acctId,
+        data: base64Data,
+        mimeType: file.type || 'image/jpeg',
+        filename: 'photo_'+acctId+'_'+Date.now()+'.jpg'
+      })
+    }).then(function(){
+      // no-cors: we can't read the response, so we can't get the real Drive link back
+      // right now. Mark it uploaded; the periodic ATR sheet sync will pick up the
+      // real link (server writes it into the sheet's PHOTO column) within ~5 min.
+      PHOTO_LINKS[String(acctId)] = 'PENDING_DRIVE_LINK_'+Date.now();
+      if(btn){ btn.textContent = '✅'; btn.setAttribute('onclick', "openPhotoUpload('"+acctId+"')"); }
+      if(modalBtn){
+        modalBtn.disabled = false;
+        modalBtn.style.border = '1.5px dashed #16A34A';
+        modalBtn.style.background = '#F0FDF4';
+        modalBtn.style.color = '#16A34A';
+        modalBtn.textContent = '✅ PHOTO UPLOADED — फोटो अपलोड हो गई';
+      }
+      savePhotoLinks();
+    }).catch(function(e){
+      if(btn) btn.textContent = '📷';
+      if(modalBtn){ modalBtn.disabled = false; modalBtn.textContent = '📷 TAKE / UPLOAD PHOTO / फोटो लें (REQUIRED)'; }
+      alert('Photo upload failed: '+e.message);
+    });
+  };
+  reader.onerror = function(){
+    if(btn) btn.textContent = '📷';
+    if(modalBtn){ modalBtn.disabled = false; modalBtn.textContent = '📷 TAKE / UPLOAD PHOTO / फोटो लें (REQUIRED)'; }
+    alert('Photo upload failed: could not read file.');
+  };
+  reader.readAsDataURL(file);
+}
+
+// Called from the ATR-sheet sync functions once the sheet returns a real photo link
+// for an account, replacing the local pending placeholder.
+function mergePhotoLinkFromSync(acctId, photoUrl){
+  if(!photoUrl || !/^https?:\/\//.test(photoUrl)) return false;
+  var key = String(acctId);
+  if(PHOTO_LINKS[key] === photoUrl) return false;
+  PHOTO_LINKS[key] = photoUrl;
+  return true;
 }
 
 function savePhotoLinks(){
