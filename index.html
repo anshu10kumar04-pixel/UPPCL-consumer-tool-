@@ -471,8 +471,8 @@ select option{background:#fff;color:#1E1B4B;}
   <div class="panel" id="panel-fieldatr">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
       <div>
-        <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#0369A1;">🧾 FIELD ATR (from AppSheet)</div>
-        <div style="font-size:12px;color:var(--muted);">Read-only — ATR submitted by field staff via the "Defaulter Revenue Recovery" AppSheet app (Log Site Visit / Log Calling). Shown as two separate sheets, exactly as stored.</div>
+        <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#0369A1;">🧾 FIELD ATR (all submitted ATRs)</div>
+        <div style="font-size:12px;color:var(--muted);">Read-only — every Field Visit / Calling ATR submitted from this tool's FIELD VISIT and CALLING tabs. Shown as two separate sheets. (AppSheet app is discontinued; all submissions now come from this tool.)</div>
       </div>
       <button class="btn btn-acc" onclick="loadFieldAtr(true)">🔄 REFRESH BOTH</button>
     </div>
@@ -493,13 +493,12 @@ select option{background:#fff;color:#1E1B4B;}
         <thead><tr>
           <th style="width:55px">S.NO</th>
           <th style="width:110px">ACCT ID</th>
-          <th style="width:80px">LOAD</th>
+          <th style="min-width:130px">NAME</th>
           <th style="min-width:110px">SUBSTATION</th>
-          <th style="min-width:150px">ADDRESS</th>
+          <th style="min-width:110px">FEEDER</th>
           <th style="width:110px">OUTSTANDING</th>
-          <th style="width:95px">LP DATE</th>
-          <th style="width:95px">LP AMT</th>
-          <th style="min-width:130px">FIELD VISIT ATR</th>
+          <th style="width:130px">TIMESTAMP</th>
+          <th style="min-width:130px">VISIT STATUS</th>
           <th style="min-width:150px">REMARKS</th>
         </tr></thead>
         <tbody id="svatr-tbody"></tbody>
@@ -523,13 +522,12 @@ select option{background:#fff;color:#1E1B4B;}
         <thead><tr>
           <th style="width:55px">S.NO</th>
           <th style="width:110px">ACCT ID</th>
-          <th style="width:80px">LOAD</th>
+          <th style="min-width:130px">NAME</th>
+          <th style="width:110px">MOBILE</th>
           <th style="min-width:110px">SUBSTATION</th>
-          <th style="min-width:150px">ADDRESS</th>
           <th style="width:110px">OUTSTANDING</th>
-          <th style="width:95px">LP DATE</th>
-          <th style="width:95px">LP AMT</th>
           <th style="min-width:130px">CALL OUTCOME</th>
+          <th style="width:110px">PROMISE DATE</th>
           <th style="min-width:150px">REMARKS</th>
         </tr></thead>
         <tbody id="clatr-tbody"></tbody>
@@ -8197,9 +8195,9 @@ function submitSiteVisitLog(acctId){
   var url = getScriptUrl();
   if(!url){ alert('Pehle SETTINGS \u2192 ATR GOOGLE SHEET SYNC mein Apps Script URL set karo.'); return; }
   var payload = {
-    type: 'sitevisit_atr', acct: acctId, load: r.LOAD||0, substation: r.SUBSTATION||'', address: r.ADDRESS||'',
+    type: 'sitevisit_atr', acct: acctId, name: r.NAME||'', load: r.LOAD||0, substation: r.SUBSTATION||'', feeder: r.FEEDER||'', address: r.ADDRESS||'',
     outstanding: r.OUTSTANDING||0, lp_date: r.PAY_DATE||'', lp_amt: r.PAY_AMT||0,
-    visit_status: status, remarks: remarks
+    visit_status: status, remarks: remarks, photo: PHOTO_LINKS[String(acctId)]||''
   };
   fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
     .then(function(){
@@ -8244,7 +8242,7 @@ function submitCallingLog(acctId){
   var url = getScriptUrl();
   if(!url){ alert('Pehle SETTINGS \u2192 ATR GOOGLE SHEET SYNC mein Apps Script URL set karo.'); return; }
   var payload = {
-    type: 'calling_atr', acct: acctId, load: r.LOAD||0, substation: r.SUBSTATION||'', address: r.ADDRESS||'',
+    type: 'calling_atr', acct: acctId, name: r.NAME||'', mobile: r.MOBILE||'', load: r.LOAD||0, substation: r.SUBSTATION||'', feeder: r.FEEDER||'', address: r.ADDRESS||'',
     outstanding: r.OUTSTANDING||0, lp_date: r.PAY_DATE||'', lp_amt: r.PAY_AMT||0,
     call_outcome: outcome, remarks: remarks
   };
@@ -8596,12 +8594,12 @@ function loadFieldAtr(force){
       SVATR_ALL = [];
     } else {
       SVATR_ALL = (svRows||[]).filter(function(r){
-        return String(r.ACCT_ID||'').trim();
+        return String(r.ACCT_ID||'').trim() && String(r.ATR_ID||'')!=='EXAMPLE_ROW';
       }).map(function(r){
         return {
-          ACCT_ID: String(r.ACCT_ID||''), LOAD: r.LOAD||'', SUBSTATION: r.SUBSTATION||'', ADDRESS: r.ADDRESS||'',
-          OUTSTANDING: r.OUTSTANDING||'', LP_DATE: r.LP_DATE||'', LP_AMT: r.LP_AMT||'',
-          FIELD_VISIT_ATR: r.FIELD_VISIT_ATR||'', REMARKS: r.REMARKS||''
+          ACCT_ID: String(r.ACCT_ID||''), NAME: r.NAME||'', SUBSTATION: r.SUBSTATION||'', FEEDER: r.FEEDER||'',
+          OUTSTANDING: r.OUTSTANDING||'', TIMESTAMP: r.TIMESTAMP||'',
+          VISIT_STATUS: r.VISIT_STATUS||'', REMARKS: r.REMARKS||''
         };
       });
       SVATR_FD = SVATR_ALL.slice();
@@ -8613,12 +8611,11 @@ function loadFieldAtr(force){
       CLATR_ALL = [];
     } else {
       CLATR_ALL = (clRows||[]).filter(function(r){
-        return String(r.ACCT_ID||'').trim();
+        return String(r.ACCT_ID||'').trim() && String(r.ATR_ID||'')!=='EXAMPLE_ROW';
       }).map(function(r){
         return {
-          ACCT_ID: String(r.ACCT_ID||''), LOAD: r.LOAD||'', SUBSTATION: r.SUBSTATION||'', ADDRESS: r.ADDRESS||'',
-          OUTSTANDING: r.OUTSTANDING||'', LP_DATE: r.LP_DATE||'', LP_AMT: r.LP_AMT||'',
-          CALL_OUTCOME: r.CALL_OUTCOME||'', REMARKS: r.REMARKS||''
+          ACCT_ID: String(r.ACCT_ID||''), NAME: r.NAME||'', MOBILE: r.MOBILE||'', SUBSTATION: r.SUBSTATION||'',
+          OUTSTANDING: r.OUTSTANDING||'', CALL_OUTCOME: r.CALL_OUTCOME||'', PROMISE_DATE: r.PROMISE_DATE||'', REMARKS: r.REMARKS||''
         };
       });
       CLATR_FD = CLATR_ALL.slice();
@@ -8631,7 +8628,7 @@ function runSvAtrFilter(){
   var q = (gel('svatr-search')?gel('svatr-search').value:'').toLowerCase();
   SVATR_FD = SVATR_ALL.filter(function(r){
     if(!q) return true;
-    return (r.ACCT_ID+' '+r.SUBSTATION+' '+r.ADDRESS+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
+    return (r.ACCT_ID+' '+r.NAME+' '+r.SUBSTATION+' '+r.FEEDER+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
   });
   var ci = gel('svatr-count-info');
   if(ci) ci.textContent = 'Showing '+SVATR_FD.length.toLocaleString()+' of '+SVATR_ALL.length.toLocaleString()+' site visit ATR records';
@@ -8652,13 +8649,12 @@ function renderSvAtrTable(page){
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
       '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
-      '<td>'+(r.LOAD||'-')+'</td>'+
+      '<td style="font-size:12px;">'+(r.NAME||'-')+'</td>'+
       '<td>'+(r.SUBSTATION||'-')+'</td>'+
-      '<td style="font-size:12px;">'+(r.ADDRESS||'-')+'</td>'+
+      '<td>'+(r.FEEDER||'-')+'</td>'+
       '<td>'+(r.OUTSTANDING||'-')+'</td>'+
-      '<td style="font-size:11px;">'+(r.LP_DATE||'-')+'</td>'+
-      '<td>'+(r.LP_AMT||'-')+'</td>'+
-      '<td style="font-weight:600;">'+(r.FIELD_VISIT_ATR||'-')+'</td>'+
+      '<td style="font-size:11px;">'+(r.TIMESTAMP||'-')+'</td>'+
+      '<td style="font-weight:600;">'+(r.VISIT_STATUS||'-')+'</td>'+
       '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
     '</tr>';
   }).join('');
@@ -8669,7 +8665,7 @@ function runClAtrFilter(){
   var q = (gel('clatr-search')?gel('clatr-search').value:'').toLowerCase();
   CLATR_FD = CLATR_ALL.filter(function(r){
     if(!q) return true;
-    return (r.ACCT_ID+' '+r.SUBSTATION+' '+r.ADDRESS+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
+    return (r.ACCT_ID+' '+r.NAME+' '+r.MOBILE+' '+r.SUBSTATION+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
   });
   var ci = gel('clatr-count-info');
   if(ci) ci.textContent = 'Showing '+CLATR_FD.length.toLocaleString()+' of '+CLATR_ALL.length.toLocaleString()+' calling ATR records';
@@ -8690,13 +8686,12 @@ function renderClAtrTable(page){
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
       '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
-      '<td>'+(r.LOAD||'-')+'</td>'+
+      '<td style="font-size:12px;">'+(r.NAME||'-')+'</td>'+
+      '<td>'+(r.MOBILE||'-')+'</td>'+
       '<td>'+(r.SUBSTATION||'-')+'</td>'+
-      '<td style="font-size:12px;">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.OUTSTANDING||'-')+'</td>'+
-      '<td style="font-size:11px;">'+(r.LP_DATE||'-')+'</td>'+
-      '<td>'+(r.LP_AMT||'-')+'</td>'+
       '<td style="font-weight:600;">'+(r.CALL_OUTCOME||'-')+'</td>'+
+      '<td style="font-size:11px;">'+(r.PROMISE_DATE||'-')+'</td>'+
       '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
     '</tr>';
   }).join('');
