@@ -491,15 +491,18 @@ select option{background:#fff;color:#1E1B4B;}
       </div>
       <div class="tw" style="overflow-x:auto;"><table>
         <thead><tr>
-          <th style="width:55px">S.NO</th>
-          <th style="width:110px">ACCT ID</th>
-          <th style="min-width:130px">NAME</th>
+          <th style="width:70px">LOAD</th>
           <th style="min-width:110px">SUBSTATION</th>
-          <th style="min-width:110px">FEEDER</th>
+          <th style="min-width:150px">ADDRESS</th>
           <th style="width:110px">OUTSTANDING</th>
-          <th style="width:130px">TIMESTAMP</th>
+          <th style="width:95px">LP DATE</th>
+          <th style="width:95px">LP AMT</th>
           <th style="min-width:130px">VISIT STATUS</th>
           <th style="min-width:150px">REMARKS</th>
+          <th style="width:70px">PHOTO</th>
+        </tr></thead>
+        <tbody id="svatr-tbody"></tbody>
+      </table></div>
         </tr></thead>
         <tbody id="svatr-tbody"></tbody>
       </table></div>
@@ -7573,7 +7576,7 @@ function uploadPhotoForConsumer(acctId, file){
   var btn = gel('photo-btn-'+acctId);
   var modalBtn = gel('photo-modal-btn-'+acctId);
   if(btn) btn.textContent = '⏳';
-  if(modalBtn){ modalBtn.disabled = true; modalBtn.textContent = '⏳ UPLOADING… / अपलोड हो रहा है…'; }
+  if(modalBtn){ modalBtn.disabled = true; modalBtn.textContent = '⏳ COMPRESSING… / फोटो छोटी की जा रही है…'; }
   var url = getScriptUrl();
   if(!url){
     if(btn) btn.textContent = '📷';
@@ -7581,9 +7584,14 @@ function uploadPhotoForConsumer(acctId, file){
     alert('Photo upload failed: sync URL not configured.');
     return;
   }
-  var reader = new FileReader();
-  reader.onload = function(){
-    var base64Data = String(reader.result).split(',')[1];
+  compressImageFile(file, function(base64Data, mimeType){
+    if(!base64Data){
+      if(btn) btn.textContent = '📷';
+      if(modalBtn){ modalBtn.disabled = false; modalBtn.textContent = '📷 TAKE / UPLOAD PHOTO / फोटो लें (REQUIRED)'; }
+      alert('Photo upload failed: could not read file.');
+      return;
+    }
+    if(modalBtn) modalBtn.textContent = '⏳ UPLOADING… / अपलोड हो रहा है…';
     fetch(url, {
       method: 'POST',
       mode: 'no-cors',
@@ -7591,7 +7599,7 @@ function uploadPhotoForConsumer(acctId, file){
         type: 'photo_upload',
         acct: acctId,
         data: base64Data,
-        mimeType: file.type || 'image/jpeg',
+        mimeType: mimeType || 'image/jpeg',
         filename: 'photo_'+acctId+'_'+Date.now()+'.jpg'
       })
     }).then(function(){
@@ -7613,13 +7621,7 @@ function uploadPhotoForConsumer(acctId, file){
       if(modalBtn){ modalBtn.disabled = false; modalBtn.textContent = '📷 TAKE / UPLOAD PHOTO / फोटो लें (REQUIRED)'; }
       alert('Photo upload failed: '+e.message);
     });
-  };
-  reader.onerror = function(){
-    if(btn) btn.textContent = '📷';
-    if(modalBtn){ modalBtn.disabled = false; modalBtn.textContent = '📷 TAKE / UPLOAD PHOTO / फोटो लें (REQUIRED)'; }
-    alert('Photo upload failed: could not read file.');
-  };
-  reader.readAsDataURL(file);
+  });
 }
 
 // Called from the ATR-sheet sync functions once the sheet returns a real photo link
@@ -8579,7 +8581,7 @@ function fetchCsvAsRows(url){
 function loadFieldAtr(force){
   if(_fieldAtrLoaded && !force){ runSvAtrFilter(); runClAtrFilter(); return; }
   var svBody = gel('svatr-tbody'), clBody = gel('clatr-tbody');
-  if(svBody) svBody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Site Visit ATR…</td></tr>';
+  if(svBody) svBody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Site Visit ATR…</td></tr>';
   if(clBody) clBody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Calling ATR…</td></tr>';
 
   Promise.all([
@@ -8590,16 +8592,17 @@ function loadFieldAtr(force){
     _fieldAtrLoaded = true;
 
     if(svRows && svRows.__err){
-      if(svBody) svBody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:#F43F5E;">⚠ Failed to load Site Visit ATR: '+svRows.__err+'</td></tr>';
+      if(svBody) svBody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:#F43F5E;">⚠ Failed to load Site Visit ATR: '+svRows.__err+'</td></tr>';
       SVATR_ALL = [];
     } else {
       SVATR_ALL = (svRows||[]).filter(function(r){
         return String(r.ACCT_ID||'').trim() && String(r.ATR_ID||'')!=='EXAMPLE_ROW';
       }).map(function(r){
         return {
-          ACCT_ID: String(r.ACCT_ID||''), NAME: r.NAME||'', SUBSTATION: r.SUBSTATION||'', FEEDER: r.FEEDER||'',
-          OUTSTANDING: r.OUTSTANDING||'', TIMESTAMP: r.TIMESTAMP||'',
-          VISIT_STATUS: r.VISIT_STATUS||'', REMARKS: r.REMARKS||''
+          ACCT_ID: String(r.ACCT_ID||''), NAME: r.NAME||'', LOAD: r.LOAD||'', SUBSTATION: r.SUBSTATION||'', FEEDER: r.FEEDER||'',
+          ADDRESS: r.ADDRESS||'', OUTSTANDING: r.OUTSTANDING||'', TIMESTAMP: r.TIMESTAMP||'',
+          LP_DATE: r.LP_DATE||'', LP_AMT: r.LP_AMT||'',
+          VISIT_STATUS: r.VISIT_STATUS||'', REMARKS: r.REMARKS||'', PHOTO: r.PHOTO||''
         };
       });
       SVATR_FD = SVATR_ALL.slice();
@@ -8628,7 +8631,7 @@ function runSvAtrFilter(){
   var q = (gel('svatr-search')?gel('svatr-search').value:'').toLowerCase();
   SVATR_FD = SVATR_ALL.filter(function(r){
     if(!q) return true;
-    return (r.ACCT_ID+' '+r.NAME+' '+r.SUBSTATION+' '+r.FEEDER+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
+    return (r.ACCT_ID+' '+r.NAME+' '+r.SUBSTATION+' '+r.FEEDER+' '+r.ADDRESS+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
   });
   var ci = gel('svatr-count-info');
   if(ci) ci.textContent = 'Showing '+SVATR_FD.length.toLocaleString()+' of '+SVATR_ALL.length.toLocaleString()+' site visit ATR records';
@@ -8639,23 +8642,28 @@ function renderSvAtrTable(page){
   svAtrPage = page;
   var tbody = gel('svatr-tbody'); if(!tbody) return;
   if(!SVATR_FD.length){
-    tbody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);">No Field Visit ATR yet — log one from the FIELD VISIT tab (📝 icon).</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:var(--muted);">No Field Visit ATR yet — log one from the FIELD VISIT tab (📝 icon).</td></tr>';
     var pgEl = gel('svatr-pg'); if(pgEl) pgEl.innerHTML='';
     return;
   }
   var slice = SVATR_FD.slice((page-1)*PS, page*PS);
   tbody.innerHTML = slice.map(function(r,i){
     var rank = (page-1)*PS+i+1;
+    var photoUrl = String(r.PHOTO||'');
+    var photoCell = /^https?:\/\//.test(photoUrl) ? '<a href="'+photoUrl+'" target="_blank" title="View Photo">📷</a>' : '<span style="opacity:0.3;">—</span>';
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
       '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
       '<td style="font-size:12px;">'+(r.NAME||'-')+'</td>'+
+      '<td style="font-size:12px;">'+(r.LOAD||'-')+'</td>'+
       '<td>'+(r.SUBSTATION||'-')+'</td>'+
-      '<td>'+(r.FEEDER||'-')+'</td>'+
+      '<td style="font-size:11px;">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.OUTSTANDING||'-')+'</td>'+
-      '<td style="font-size:11px;">'+(r.TIMESTAMP||'-')+'</td>'+
+      '<td style="font-size:11px;">'+(r.LP_DATE||'-')+'</td>'+
+      '<td style="font-size:11px;">'+(r.LP_AMT||'-')+'</td>'+
       '<td style="font-weight:600;">'+(r.VISIT_STATUS||'-')+'</td>'+
       '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
+      '<td style="text-align:center;">'+photoCell+'</td>'+
     '</tr>';
   }).join('');
   rp('svatr-pg', page, Math.ceil(SVATR_FD.length/PS), renderSvAtrTable);
