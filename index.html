@@ -3064,6 +3064,10 @@ function buildDashboard(){
   }
   _dashRetry = 0; _dashDefRetry = 0;
 
+  // Keep DEF_ALL's OUTSTANDING in sync with the live D data so a consumer who has
+  // paid off (outstanding dropped to 0) is reflected correctly everywhere downstream.
+  syncLiveOutstanding();
+
   // Ensure Calling ATR / Field Visit ATR data is loaded for the SS-wise summary below
   if(!_fieldAtrLoaded){
     loadFieldAtr();
@@ -3495,137 +3499,32 @@ function buildDashboard(){
   });
   html += '</div></div></div>';
 
-  // ── ATR PROGRESS (SS-wise, day-wise) ─────────────────────────────────
-  var atrDef = {}; try{ atrDef = JSON.parse(localStorage.getItem('def_atr_data')||'{}'); }catch(e){}
-  var atrSm  = {}; try{ atrSm  = JSON.parse(localStorage.getItem('atr_data')||'{}');     }catch(e){}
-
-  if(Object.keys(atrDef).length || Object.keys(atrSm).length){
-    // Build SS-wise, day-wise ATR summary
-    var atrSsDay = {}; // {SS: {day: {PAID:0,LOCK:0,THEFT:0,OTHER:0}}}
-    var atrDays  = new Set();
-    var atrStatuses = ['PAID','LOCK','THEFT','DISPUTE','PROMISE','TD','OTHER'];
-    var atrLabels = {PAID:'Paid',LOCK:'Lock',THEFT:'Theft',DISPUTE:'Dispute',PROMISE:'Promise',TD:'T.Disc',OTHER:'Other'};
-
-    function processAtrEntry(acct, e, lookup){
-      var status = (typeof e==='object'?e.atr:e)||'PENDING';
-      if(status==='PENDING') return;
-      var ts = typeof e==='object'?e.ts:'';
-      var day = 'Unknown';
-      if(ts){
-        try{
-          var d = new Date(ts);
-          if(!isNaN(d)) day = d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
-        }catch(ex){}
-      }
-      var defRec = DEF_ALL.find(function(r){return String(r.ACCT_ID)===String(acct);});
-      var ss = defRec ? defRec.SUBSTATION : (lookup&&lookup[acct]?lookup[acct]:'Unknown');
-      if(!ss) ss = 'Unknown';
-      if(!atrSsDay[ss]) atrSsDay[ss]={};
-      if(!atrSsDay[ss][day]) atrSsDay[ss][day]={PAID:0,LOCK:0,THEFT:0,DISPUTE:0,PROMISE:0,OTHER:0,total:0};
-      atrSsDay[ss][day][status] = (atrSsDay[ss][day][status]||0)+1;
-      atrSsDay[ss][day].total++;
-      atrDays.add(day);
-    }
-
-    // Build SS lookup from D for SM ATR entries
-    var _ssLookup={};
-    D.forEach(function(r){_ssLookup[String(r.ACCT_ID)]=r.SUBSTATION;});
-    Object.keys(atrDef).forEach(function(a){processAtrEntry(a,atrDef[a],_ssLookup);});
-    Object.keys(atrSm).forEach(function(a){processAtrEntry(a,atrSm[a],_ssLookup);});
-
-    var sortedDays = Array.from(atrDays).filter(function(d){return d!=='Unknown';}).sort(function(a,b){
-      return new Date(a)-new Date(b);
-    });
-    if(atrDays.has('Unknown')) sortedDays.push('Unknown');
-    var atrSsList = Object.keys(atrSsDay).sort();
-    var totalActioned = Object.values(atrDef).filter(function(e){return (typeof e==='object'?e.atr:e)!=='PENDING';}).length
-                      + Object.values(atrSm).filter(function(e){return (typeof e==='object'?e.atr:e)!=='PENDING';}).length;
-
-    html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-    html += '<div style="background:#1E40AF;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-atr-body\')">';
-    html += '<span>📋 ATR PROGRESS — SS-WISE DAY-WISE</span>';
-    html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">'+totalActioned+' actioned &nbsp;&#9654;</span>';
-    html += '</div>';
-    html += '<div id="dash-atr-body" style="display:none;">';
-  html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-atr-body\',\'ATR_Progress\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-atr-body\',\'ATR Progress\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
-
-    if(sortedDays.length===0){
-      html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No ATR entries recorded yet. Field staff should mark ATR status in Defaulter tab.</div>';
-    } else {
-      html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
-      html += '<thead><tr style="background:#EFF6FF;">';
-      html += '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;min-width:140px;position:sticky;left:0;background:#EFF6FF;z-index:2;box-shadow:2px 0 4px rgba(0,0,0,0.08);">SUBSTATION</th>';
-      sortedDays.forEach(function(day){
-        html += '<th colspan="2" style="padding:7px 8px;text-align:center;font-family:var(--fh);font-size:10px;color:#1D4ED8;border-bottom:1px solid #BFDBFE;border-left:1px solid #BFDBFE;white-space:nowrap;">'+day+'</th>';
-      });
-      html += '<th colspan="2" style="padding:7px 8px;text-align:center;font-family:var(--fh);font-size:10px;color:#065F46;border-bottom:1px solid #BFDBFE;border-left:1px solid #BFDBFE;">TOTAL</th>';
-      html += '</tr>';
-      html += '<tr style="background:#F8FAFC;">';
-      html += '<th style="padding:5px 10px;font-family:var(--fh);font-size:9px;color:#9CA3AF;border-bottom:1px solid #E5E7EB;position:sticky;left:0;background:#F8FAFC;z-index:2;box-shadow:2px 0 4px rgba(0,0,0,0.08);"></th>';
-      sortedDays.forEach(function(){
-        html += '<th style="padding:5px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#059669;border-bottom:1px solid #E5E7EB;border-left:1px solid #E5E7EB;">Count</th>';
-        html += '<th style="padding:5px 6px;text-align:left;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #E5E7EB;min-width:130px;max-width:200px;white-space:normal;">Status Breakdown</th>';
-      });
-      html += '<th style="padding:5px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#059669;border-bottom:1px solid #E5E7EB;border-left:1px solid #E5E7EB;">Count</th>';
-      html += '<th style="padding:5px 6px;text-align:left;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #E5E7EB;min-width:130px;max-width:200px;white-space:normal;">Status Breakdown</th>';
-      html += '</tr></thead><tbody>';
-
-      var statusColors = {PAID:'#059669',LOCK:'#7C3AED',THEFT:'#DC2626',DISPUTE:'#D97706',PROMISE:'#0EA5E9',TD:'#0891B2',OTHER:'#6B7280'};
-
-      atrSsList.forEach(function(ss,i){
-        var grand=0, grandBreak={};
-        var rowBg = i%2?'#F9FAFB':'#fff';
-        html += '<tr style="background:'+rowBg+'">';
-        html += '<td style="padding:7px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;position:sticky;left:0;background:'+rowBg+';z-index:1;box-shadow:2px 0 4px rgba(0,0,0,0.06);">'+ss+'</td>';
-        sortedDays.forEach(function(day){
-          var d = atrSsDay[ss]&&atrSsDay[ss][day];
-          html += '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#1D4ED8;border-left:1px solid #F0F0F0;">'+(d?d.total:'-')+'</td>';
-          html += '<td style="padding:6px 8px;font-size:10px;white-space:normal;word-break:break-word;min-width:130px;max-width:200px;">';
-          if(d){
-            atrStatuses.forEach(function(s){
-              if(d[s]>0){ html+='<span style="color:'+statusColors[s]+';font-weight:600;margin-right:4px;">'+atrLabels[s]+':'+d[s]+'</span>'; }
-            });
-            grand+=d.total; atrStatuses.forEach(function(s){grandBreak[s]=(grandBreak[s]||0)+(d[s]||0);});
-          }
-          html += '</td>';
-        });
-        html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #BBF7D0;">'+(grand||'-')+'</td>';
-        html += '<td style="padding:6px 8px;font-size:10px;white-space:normal;word-break:break-word;min-width:130px;max-width:200px;">';
-        atrStatuses.forEach(function(s){
-          if(grandBreak[s]>0){ html+='<span style="color:'+statusColors[s]+';font-weight:600;margin-right:4px;">'+atrLabels[s]+':'+grandBreak[s]+'</span>'; }
-        });
-        html += '</td></tr>';
-      });
-      // Grand total row
-      var gt=0, gtb={};
-      html += '<tr style="background:#EFF6FF;border-top:2px solid #BFDBFE;">';
-      html += '<td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#1E40AF;position:sticky;left:0;background:#EFF6FF;z-index:1;box-shadow:2px 0 4px rgba(0,0,0,0.06);">TOTAL</td>';
-      sortedDays.forEach(function(day){
-        var dayTotal=0,dayBreak={};
-        atrSsList.forEach(function(ss){var d=atrSsDay[ss]&&atrSsDay[ss][day];if(d){dayTotal+=d.total;atrStatuses.forEach(function(s){dayBreak[s]=(dayBreak[s]||0)+(d[s]||0);});}});
-        html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#1D4ED8;border-left:1px solid #BFDBFE;">'+(dayTotal||'-')+'</td>';
-        html += '<td style="padding:6px 8px;font-size:10px;white-space:normal;word-break:break-word;min-width:130px;max-width:200px;">';
-        atrStatuses.forEach(function(s){
-          if(dayBreak[s]>0){ html+='<span style="color:'+statusColors[s]+';font-weight:700;margin-right:4px;">'+atrLabels[s]+':'+dayBreak[s]+'</span>'; }
-        });
-        gt+=dayTotal; atrStatuses.forEach(function(s){gtb[s]=(gtb[s]||0)+(dayBreak[s]||0);});
-        html += '</td>';
-      });
-      html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #BBF7D0;">'+gt+'</td>';
-      html += '<td style="padding:6px 8px;font-size:10px;white-space:normal;word-break:break-word;min-width:130px;max-width:200px;">';
-      atrStatuses.forEach(function(s){
-        if(gtb[s]>0){ html+='<span style="color:'+statusColors[s]+';font-weight:700;margin-right:4px;">'+atrLabels[s]+':<b>'+gtb[s]+'</b></span>'; }
-      });
-      html += '</td></tr>';
-      html += '</tbody></table></div>';
-    }
-    html += '</div></div>'; // close dash-atr-body + card
-  }
-
-  // ── CALLING ATR + FIELD VISIT ATR — SS-WISE SUMMARY (server-synced ATR data) ──
+  // ── ATR SUMMARY (server-synced Calling ATR + Field Visit ATR, each a separate expandable report) ──
   (function(){
+    // De-dupe by ACCT_ID defensively (upsert in Code.gs already guarantees one row
+    // per consumer, but this is a safety net so a consumer's ATR is counted only
+    // once even if a stray duplicate row ever ends up in the sheet).
+    function dedupeByAcct(arr){
+      var byId = {};
+      arr.forEach(function(r){
+        var id = String(r.ACCT_ID);
+        var prev = byId[id];
+        if(!prev){ byId[id] = r; return; }
+        var tsNew = Date.parse(r.TIMESTAMP)||0, tsOld = Date.parse(prev.TIMESTAMP)||0;
+        if(tsNew >= tsOld) byId[id] = r;
+      });
+      return Object.keys(byId).map(function(k){ return byId[k]; });
+    }
+    var clRows = dedupeByAcct(CLATR_ALL);
+    var svRows = dedupeByAcct(SVATR_ALL);
+
+    // Total Defaulters — always the live, current defaulter count (consumers who
+    // have since paid off are excluded by syncLiveOutstanding() above; a consumer
+    // who still owes money is always counted here, even if their ATR was never
+    // actioned yet).
     var ssDefCount = {};
     DEF_ALL.forEach(function(r){
+      if((parseFloat(r.OUTSTANDING)||0) < 2000) return; // paid off / below defaulter floor
       var ss = r.SUBSTATION || 'Unknown';
       ssDefCount[ss] = (ssDefCount[ss]||0) + 1;
     });
@@ -3633,7 +3532,7 @@ function buildDashboard(){
     DEF_ALL.forEach(function(r){ ssLookup2[String(r.ACCT_ID)] = r.SUBSTATION || 'Unknown'; });
 
     var clBySS = {}, clStatusBySS = {};
-    CLATR_ALL.forEach(function(r){
+    clRows.forEach(function(r){
       var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
       clBySS[ss] = (clBySS[ss]||0)+1;
       if(!clStatusBySS[ss]) clStatusBySS[ss] = {};
@@ -3642,7 +3541,7 @@ function buildDashboard(){
     });
 
     var svBySS = {}, svStatusBySS = {};
-    SVATR_ALL.forEach(function(r){
+    svRows.forEach(function(r){
       var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
       svBySS[ss] = (svBySS[ss]||0)+1;
       if(!svStatusBySS[ss]) svStatusBySS[ss] = {};
@@ -3656,31 +3555,32 @@ function buildDashboard(){
     Object.keys(svBySS).forEach(function(s){allSsSet[s]=1;});
     var allSsList = Object.keys(allSsSet).sort();
 
-    var totalCl = CLATR_ALL.length, totalSv = SVATR_ALL.length;
+    var totalCl = clRows.length, totalSv = svRows.length;
 
+    // ════════════════════════════════════════════════════════════════════
+    // CARD 1 — ATR SUMMARY (coverage: defaulters vs calling/visit done)
+    // ════════════════════════════════════════════════════════════════════
     html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-    html += '<div style="background:#0E7490;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-clsv-body\')">';
-    html += '<span>📞 CALLING ATR + 🧭 FIELD VISIT ATR — SS-WISE SUMMARY</span>';
+    html += '<div style="background:#1E3A5F;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-atrsum-body\')">';
+    html += '<span>📊 ATR SUMMARY — SS-WISE COVERAGE</span>';
     html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">Calling: '+totalCl+' &nbsp;|&nbsp; Field Visit: '+totalSv+' &nbsp;&#9654;</span>';
     html += '</div>';
-    html += '<div id="dash-clsv-body" style="display:none;">';
-    html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-clsv-body\',\'Calling_FieldVisit_ATR_Summary\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-clsv-body\',\'Calling + Field Visit ATR Summary\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
+    html += '<div id="dash-atrsum-body" style="display:none;">';
+    html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-atrsum-body\',\'ATR_Summary\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-atrsum-body\',\'ATR Summary\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
 
     if(allSsList.length===0){
       html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No Calling ATR / Field Visit ATR data yet.</div>';
     } else {
-      // ---- Coverage table ----
-      html += '<div style="padding:10px 16px 4px;font-family:var(--fh);font-size:11px;font-weight:700;color:#0E7490;">COVERAGE</div>';
-      html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
-      html += '<thead><tr style="background:#ECFEFF;">'+
-        '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">SUBSTATION</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">TOTAL DEFAULTERS</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#0891B2;border-bottom:1px solid #A5F3FC;border-left:1px solid #A5F3FC;">CALLING DONE</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#DC2626;border-bottom:1px solid #A5F3FC;">CALLING PENDING</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#059669;border-bottom:1px solid #A5F3FC;">CALLING %</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#0891B2;border-bottom:1px solid #A5F3FC;border-left:1px solid #A5F3FC;">VISIT DONE</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#DC2626;border-bottom:1px solid #A5F3FC;">VISIT PENDING</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#059669;border-bottom:1px solid #A5F3FC;">VISIT %</th>'+
+      html += '<div style="overflow-x:auto;max-width:100%;padding-bottom:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+      html += '<thead><tr style="background:#EFF6FF;">'+
+        '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">SUBSTATION</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">TOTAL DEFAULTERS</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#0891B2;border-bottom:1px solid #BFDBFE;border-left:1px solid #BFDBFE;">CALLING DONE</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#DC2626;border-bottom:1px solid #BFDBFE;">CALLING PENDING</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#059669;border-bottom:1px solid #BFDBFE;">CALLING %</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#0891B2;border-bottom:1px solid #BFDBFE;border-left:1px solid #BFDBFE;">VISIT DONE</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#DC2626;border-bottom:1px solid #BFDBFE;">VISIT PENDING</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#059669;border-bottom:1px solid #BFDBFE;">VISIT %</th>'+
         '</tr></thead><tbody>';
 
       var gTotalDef=0, gClDone=0, gSvDone=0;
@@ -3707,21 +3607,35 @@ function buildDashboard(){
       });
       var gClPend=Math.max(gTotalDef-gClDone,0), gSvPend=Math.max(gTotalDef-gSvDone,0);
       var gClPct = gTotalDef>0?Math.round(gClDone/gTotalDef*100):0, gSvPct = gTotalDef>0?Math.round(gSvDone/gTotalDef*100):0;
-      html += '<tr style="background:#ECFEFF;border-top:2px solid #A5F3FC;">'+
-        '<td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#0E7490;">TOTAL</td>'+
+      html += '<tr style="background:#EFF6FF;border-top:2px solid #BFDBFE;">'+
+        '<td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#1E3A5F;">TOTAL</td>'+
         '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#374151;">'+gTotalDef+'</td>'+
-        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#0891B2;border-left:1px solid #A5F3FC;">'+gClDone+'</td>'+
+        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#0891B2;border-left:1px solid #BFDBFE;">'+gClDone+'</td>'+
         '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#DC2626;">'+gClPend+'</td>'+
         '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#059669;">'+gClPct+'%</td>'+
-        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#0891B2;border-left:1px solid #A5F3FC;">'+gSvDone+'</td>'+
+        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#0891B2;border-left:1px solid #BFDBFE;">'+gSvDone+'</td>'+
         '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#DC2626;">'+gSvPend+'</td>'+
         '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#059669;">'+gSvPct+'%</td>'+
         '</tr>';
       html += '</tbody></table></div>';
+    }
+    html += '</div></div>'; // close dash-atrsum-body + card
 
-      // ---- Calling ATR status breakdown ----
-      html += '<div style="padding:14px 16px 4px;font-family:var(--fh);font-size:11px;font-weight:700;color:#0E7490;">📞 CALLING ATR — STATUS BREAKDOWN</div>';
-      html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+    // ════════════════════════════════════════════════════════════════════
+    // CARD 2 — CALLING ATR status breakdown
+    // ════════════════════════════════════════════════════════════════════
+    html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
+    html += '<div style="background:#0E7490;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-clstatus-body\')">';
+    html += '<span>📞 CALLING ATR — SS-WISE STATUS BREAKDOWN</span>';
+    html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">'+totalCl+' submitted &nbsp;&#9654;</span>';
+    html += '</div>';
+    html += '<div id="dash-clstatus-body" style="display:none;">';
+    html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-clstatus-body\',\'Calling_ATR_Status\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-clstatus-body\',\'Calling ATR Status Breakdown\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
+
+    if(allSsList.length===0 || totalCl===0){
+      html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No Calling ATR data yet.</div>';
+    } else {
+      html += '<div style="overflow-x:auto;max-width:100%;padding-bottom:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
       html += '<thead><tr style="background:#ECFEFF;"><th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">SUBSTATION</th>';
       CALL_OUTCOME_OPTIONS.forEach(function(k){
         html += '<th style="padding:7px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #A5F3FC;white-space:nowrap;">'+k.replace(/_/g,' ')+'</th>';
@@ -3744,9 +3658,23 @@ function buildDashboard(){
       CALL_OUTCOME_OPTIONS.forEach(function(k){ var v=clGrand[k]||0; clGt+=v; html += '<td style="padding:7px 6px;text-align:right;font-weight:800;color:#1D4ED8;">'+(v||'-')+'</td>'; });
       html += '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #A5F3FC;">'+clGt+'</td></tr>';
       html += '</tbody></table></div>';
+    }
+    html += '</div></div>'; // close dash-clstatus-body + card
 
-      // ---- Field Visit ATR status breakdown ----
-      html += '<div style="padding:14px 16px 4px;font-family:var(--fh);font-size:11px;font-weight:700;color:#0E7490;">🧭 FIELD VISIT ATR — STATUS BREAKDOWN</div>';
+    // ════════════════════════════════════════════════════════════════════
+    // CARD 3 — FIELD VISIT ATR status breakdown
+    // ════════════════════════════════════════════════════════════════════
+    html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
+    html += '<div style="background:#0E7490;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-svstatus-body\')">';
+    html += '<span>🧭 FIELD VISIT ATR — SS-WISE STATUS BREAKDOWN</span>';
+    html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">'+totalSv+' submitted &nbsp;&#9654;</span>';
+    html += '</div>';
+    html += '<div id="dash-svstatus-body" style="display:none;">';
+    html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-svstatus-body\',\'FieldVisit_ATR_Status\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-svstatus-body\',\'Field Visit ATR Status Breakdown\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
+
+    if(allSsList.length===0 || totalSv===0){
+      html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No Field Visit ATR data yet.</div>';
+    } else {
       html += '<div style="overflow-x:auto;max-width:100%;padding-bottom:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
       html += '<thead><tr style="background:#ECFEFF;"><th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">SUBSTATION</th>';
       LOG_ATR_OPTIONS.forEach(function(k){
@@ -3771,8 +3699,7 @@ function buildDashboard(){
       html += '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #A5F3FC;">'+svGt+'</td></tr>';
       html += '</tbody></table></div>';
     }
-
-    html += '</div></div>'; // close dash-clsv-body + card
+    html += '</div></div>'; // close dash-svstatus-body + card
   })();
 
 
@@ -6769,12 +6696,24 @@ function buildDefAllFromD() {
 }
 
 
+// Rebuilds the live-outstanding map fresh from D (the current billed/unbilled dataset)
+// and syncs every DEF_ALL record's OUTSTANDING to that live value whenever one exists —
+// WITHOUT gating on ">0", so a consumer whose live outstanding has genuinely dropped to 0
+// (i.e. they paid off) is correctly reflected as 0 rather than silently falling back to a
+// stale pre-payment snapshot value.
+function syncLiveOutstanding(){
+  if(!D || !D.length) return;
+  window._dOutMap = {};
+  D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)] = parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
+  DEF_ALL.forEach(function(r){
+    var dOut = window._dOutMap[String(r.ACCT_ID)];
+    if(dOut !== undefined) r.OUTSTANDING = dOut;
+  });
+}
+
 function runDefaulterFilter(){
-  // Build live outstanding map if not exists
-  if(!window._dOutMap){
-    window._dOutMap={};
-    D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
-  }
+  // Keep the live outstanding map + DEF_ALL.OUTSTANDING in sync (paid-off consumers → 0)
+  syncLiveOutstanding();
   if(!gel('def-tbody')){buildDefaulterPanel();return;}
   if(!DEF_ALL.length) buildDefAll();
 
@@ -6820,12 +6759,9 @@ function runDefaulterFilter(){
 
   // Fast filter on pre-built array
   var all = DEF_ALL.filter(function(r){
-    // Use live outstanding from D array if available, fallback to DEF_ALL value
-    var dOut = window._dOutMap ? window._dOutMap[String(r.ACCT_ID)] : undefined;
-    var defOut = parseFloat(r.OUTSTANDING)||0;
-    var liveOut = (dOut !== undefined && dOut > 0) ? dOut : defOut;
-    r.OUTSTANDING = liveOut; // always sync display value
-    if(liveOut < 2000) return false;   // baseline defaulter floor (matches backend MIN_DEFAULTER_OUTSTANDING)
+    // OUTSTANDING is already synced to the live D value by syncLiveOutstanding() above
+    var liveOut = parseFloat(r.OUTSTANDING)||0;
+    if(liveOut < 2000) return false;   // baseline defaulter floor (matches backend MIN_DEFAULTER_OUTSTANDING) — also drops paid-off (0) consumers
     if(selOutRanges.length){
       var outMatched=selOutRanges.some(function(range){
         var parts=range.split('-');
@@ -6983,20 +6919,13 @@ function renderDefaulters(page){
   var tbody=gel('def-tbody'); if(!tbody)return;
   var slice=DEF_DATA.slice((page-1)*PS,page*PS);
 
-  // Build live outstanding lookup from D array
-  if(!window._dOutMap){
-    window._dOutMap={};
-    D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
-  }
-
   var html='';
   var globalRank=(page-1)*PS;
   slice.forEach(function(r){
     globalRank++;
     var rIcon=globalRank===1?'🥇':globalRank===2?'🥈':globalRank===3?'🥉':globalRank;
-    var dOut2 = window._dOutMap ? window._dOutMap[String(r.ACCT_ID)] : undefined;
-    var defOut2 = parseFloat(r.OUTSTANDING)||0;
-    var out=Math.round((dOut2 !== undefined && dOut2 > 0) ? dOut2 : defOut2);
+    // r.OUTSTANDING is already synced to the live D value by syncLiveOutstanding()
+    var out=Math.round(parseFloat(r.OUTSTANDING)||0);
     var outColor=out>100000?'#F43F5E':out>25000?'#EA580C':'#F59E0B';
     var paid=Math.round(r.PAY_AMT||0);
     var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
@@ -7224,7 +7153,7 @@ function openFromDefRow(el){
       D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)]=parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
     }
     var liveOut = window._dOutMap[String(data.ACCT_ID)];
-    if(liveOut !== undefined && liveOut > 0) data.OUTSTANDING = liveOut;
+    if(liveOut !== undefined) data.OUTSTANDING = liveOut;
     openDefaulterModalDirect(data);
   } catch(e){
     openFromDefaulter(el.dataset.id);
@@ -8116,12 +8045,15 @@ function isTop16SS(ss, top16List){
 }
 
 function buildCallAll(){
+  syncLiveOutstanding(); // keep DEF_ALL.OUTSTANDING live so paid-off consumers drop out below
   var top16 = getTop16SSList();
   var byId = {};
   DEF_ALL.forEach(function(r){
     if(!isTop16SS(r.SUBSTATION, top16)) return; // only top-16-SS consumers go into Calling list
+    var liveOut = parseFloat(r.OUTSTANDING)||0;
+    if(liveOut <= 0) return; // paid off — never show, even if manually pushed earlier
     var tariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
-    var isAuto = (parseFloat(r.OUTSTANDING)||0) > CALLING_AUTO_THRESHOLD && AUTO_TARIFFS.indexOf(tariff) >= 0;
+    var isAuto = liveOut > CALLING_AUTO_THRESHOLD && AUTO_TARIFFS.indexOf(tariff) >= 0;
     var isManual = !!CALL_PUSH_IDS[String(r.ACCT_ID)];
     if(isAuto || isManual){
       byId[r.ACCT_ID] = Object.assign({}, r, { TARIFF: tariff, _SRC: isManual ? 'manual' : 'auto' });
@@ -8329,13 +8261,16 @@ function loadFieldVisitTab(){
 }
 
 function fvBaseData(){
+  syncLiveOutstanding(); // keep DEF_ALL.OUTSTANDING live so paid-off consumers drop out below
   var top16 = getTop16SSList();
   return DEF_ALL.map(function(r){
     var tariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
     return Object.assign({}, r, { TARIFF: tariff });
   }).filter(function(r){
     if(!isTop16SS(r.SUBSTATION, top16)) return false; // only top-16-SS consumers go into Field Visit list
-    return (parseFloat(r.OUTSTANDING)||0) > FIELDVISIT_AUTO_THRESHOLD && AUTO_TARIFFS.indexOf(r.TARIFF) >= 0;
+    var liveOut = parseFloat(r.OUTSTANDING)||0;
+    if(liveOut <= 0) return false; // paid off — never show
+    return liveOut > FIELDVISIT_AUTO_THRESHOLD && AUTO_TARIFFS.indexOf(r.TARIFF) >= 0;
   });
 }
 
