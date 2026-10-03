@@ -533,6 +533,7 @@ select option{background:#fff;color:#1E1B4B;}
           <th style="min-width:130px">CALL OUTCOME</th>
           <th style="width:110px">PROMISE DATE</th>
           <th style="min-width:150px">REMARKS</th>
+          <th style="width:95px">SUBMITTED</th>
         </tr></thead>
         <tbody id="clatr-tbody"></tbody>
       </table></div>
@@ -6009,7 +6010,7 @@ function saveModalAtr(){
     var callUrl = getScriptUrl();
     if(!callUrl){ alert('Pehle SETTINGS → ATR GOOGLE SHEET SYNC mein Apps Script URL set karo.'); return; }
     var callPayload = {
-      type: 'calling_atr', acct: modalCurrentAcct, load: callRec.LOAD||0, substation: callRec.SUBSTATION||'', address: callRec.ADDRESS||'',
+      type: 'calling_atr', acct: modalCurrentAcct, name: callRec.NAME||'', mobile: callRec.MOBILE||'', load: callRec.LOAD||0, substation: callRec.SUBSTATION||'', address: callRec.ADDRESS||'',
       outstanding: callRec.OUTSTANDING||0, lp_date: callRec.PAY_DATE||'', lp_amt: callRec.PAY_AMT||0,
       call_outcome: callOutcome, remarks: callRemarks
     };
@@ -8731,6 +8732,25 @@ var _fieldAtrLoaded=false;
 var SVATR_CSV_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQu3FvhV4wFpr_af3B8MS3n98FG3XXprj_9hcjRiztpGFksIoJuaJQqnjoTVVH_g25BjIzvbZ1k6unl/pub?gid=1799386541&single=true&output=csv';
 var CLATR_CSV_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQu3FvhV4wFpr_af3B8MS3n98FG3XXprj_9hcjRiztpGFksIoJuaJQqnjoTVVH_g25BjIzvbZ1k6unl/pub?gid=1447803757&single=true&output=csv';
 
+// Shared TIMESTAMP → "SUBMITTED" column formatter for both the Site Visit
+// and Calling ATR tables (the published sheet can hand this back either as
+// a real ISO datetime string, or as a raw Excel date/time serial number —
+// feeding that raw serial into new Date() directly misreads it as
+// milliseconds and lands on 01 Jan 1970, so detect and convert it properly).
+function atrSubmittedCell(ts){
+  if(ts===undefined || ts===null || ts==='') return '-';
+  var tsNum = parseFloat(ts);
+  if(!isNaN(tsNum) && tsNum>30000 && tsNum<60000){
+    var sd2 = new Date((tsNum - 25569) * 86400 * 1000);
+    return sd2.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
+  }
+  try{
+    var sd = new Date(ts);
+    if(!isNaN(sd) && sd.getFullYear()>1971) return sd.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
+  }catch(ex){}
+  return '-';
+}
+
 function fetchCsvAsRows(url){
   return fetch(url, {cache:'no-store'}).then(function(r){
     if(!r.ok) throw new Error('HTTP '+r.status);
@@ -8766,7 +8786,9 @@ function loadFieldAtr(force){
           ACCT_ID: String(r.ACCT_ID||''), NAME: r.NAME||'', LOAD: r.LOAD||'', SUBSTATION: r.SUBSTATION||'', FEEDER: r.FEEDER||'',
           ADDRESS: r.ADDRESS||'', OUTSTANDING: r.OUTSTANDING||'', TIMESTAMP: r.TIMESTAMP||'',
           LP_DATE: r.LP_DATE||'', LP_AMT: r.LP_AMT||'',
-          VISIT_STATUS: r.VISIT_STATUS||'', REMARKS: r.REMARKS||'', PHOTO: r.PHOTO||''
+          // The sheet's actual column (written by Code.gs) is named FIELD_VISIT_ATR,
+          // not VISIT_STATUS — reading the wrong key meant this was always blank.
+          VISIT_STATUS: r.FIELD_VISIT_ATR||r.VISIT_STATUS||'', REMARKS: r.REMARKS||'', PHOTO: r.PHOTO||''
         };
       });
       SVATR_FD = SVATR_ALL.slice();
@@ -8782,7 +8804,8 @@ function loadFieldAtr(force){
       }).map(function(r){
         return {
           ACCT_ID: String(r.ACCT_ID||''), NAME: r.NAME||'', MOBILE: r.MOBILE||'', SUBSTATION: r.SUBSTATION||'',
-          OUTSTANDING: r.OUTSTANDING||'', CALL_OUTCOME: r.CALL_OUTCOME||'', PROMISE_DATE: r.PROMISE_DATE||'', REMARKS: r.REMARKS||''
+          OUTSTANDING: r.OUTSTANDING||'', CALL_OUTCOME: r.CALL_OUTCOME||'', PROMISE_DATE: r.PROMISE_DATE||'', REMARKS: r.REMARKS||'',
+          TIMESTAMP: r.TIMESTAMP||''
         };
       });
       CLATR_FD = CLATR_ALL.slice();
@@ -8815,22 +8838,7 @@ function renderSvAtrTable(page){
     var rank = (page-1)*PS+i+1;
     var photoUrl = String(r.PHOTO||'');
     var photoCell = /^https?:\/\//.test(photoUrl) ? '<span onclick="viewEncryptedPhoto(\''+photoUrl+'\')" style="cursor:pointer;" title="View Photo">📷</span>' : '<span style="opacity:0.3;">—</span>';
-    var submittedCell = '-';
-    if(r.TIMESTAMP!==undefined && r.TIMESTAMP!==null && r.TIMESTAMP!==''){
-      var tsNum = parseFloat(r.TIMESTAMP);
-      if(!isNaN(tsNum) && tsNum>30000 && tsNum<60000){
-        // TIMESTAMP came through as a raw Excel date/time serial (days since 1899-12-30) —
-        // convert properly instead of feeding the raw number into new Date(), which
-        // misreads it as milliseconds and lands on 01 Jan 1970.
-        var sd2 = new Date((tsNum - 25569) * 86400 * 1000);
-        submittedCell = sd2.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
-      } else {
-        try{
-          var sd = new Date(r.TIMESTAMP);
-          if(!isNaN(sd) && sd.getFullYear()>1971) submittedCell = sd.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
-        }catch(ex){}
-      }
-    }
+    var submittedCell = atrSubmittedCell(r.TIMESTAMP);
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
       '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
@@ -8882,6 +8890,7 @@ function renderClAtrTable(page){
       '<td style="font-weight:600;">'+(r.CALL_OUTCOME||'-')+'</td>'+
       '<td style="font-size:11px;">'+(r.PROMISE_DATE||'-')+'</td>'+
       '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
+      '<td style="font-size:11px;">'+atrSubmittedCell(r.TIMESTAMP)+'</td>'+
     '</tr>';
   }).join('');
   rp('clatr-pg', page, Math.ceil(CLATR_FD.length/PS), renderClAtrTable);
