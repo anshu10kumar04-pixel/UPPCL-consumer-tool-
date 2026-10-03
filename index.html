@@ -7555,16 +7555,25 @@ function loadPhotoLinks(cb){
 // Google sign-in needed from the field user. Just like ATR, anyone can use it.
 var PHOTO_SYNCED = 'SYNCED_'; // link is a real https URL once synced back from the sheet
 
+// 'none'   — nothing uploaded yet
+// 'pending'— upload was sent but we couldn't confirm the real Drive link back
+//            (rare — only when the browser blocks reading the response)
+// 'done'   — real Drive link confirmed, safe to view/submit
+function photoStatus(acctId){
+  var v = PHOTO_LINKS[String(acctId)]||'';
+  if(!v) return 'none';
+  if(/^PENDING_DRIVE_LINK_/.test(v)) return 'pending';
+  return 'done';
+}
+
 function openPhotoUpload(acctId){
   var existing = PHOTO_LINKS[String(acctId)];
   if(existing && /^https?:\/\//.test(existing)){
     viewEncryptedPhoto(existing);
     return;
   }
-  if(existing){
-    alert('📷 Photo uploaded! Drive link syncs automatically within a few minutes.\nTap again later to view it.');
-    return;
-  }
+  // Nothing uploaded yet, or the last upload's link never got confirmed —
+  // either way, (re)open the file picker so the user can upload / retry.
   var inp = document.createElement('input');
   inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
   inp.onchange = function(){
@@ -7659,9 +7668,17 @@ function uploadPhotoForConsumer(acctId, file){
       return;
     }
     if(modalBtn) modalBtn.textContent = '⏳ UPLOADING… / अपलोड हो रहा है…';
+    // Content-Type must be 'text/plain' (not 'application/json') so this stays a
+    // CORS "simple request" — Apps Script web apps don't handle the preflight
+    // OPTIONS request that 'application/json' would trigger. The body is still
+    // the JSON string; Code.gs's JSON.parse(e.postData.contents) doesn't care
+    // what Content-Type was declared. This lets us use mode:'cors' and actually
+    // read the response — so we get the REAL Drive link back immediately,
+    // instead of guessing with a placeholder.
     fetch(url, {
       method: 'POST',
-      mode: 'no-cors',
+      mode: 'cors',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({
         type: 'photo_upload',
         acct: acctId,
@@ -7669,25 +7686,39 @@ function uploadPhotoForConsumer(acctId, file){
         mimeType: mimeType || 'image/jpeg',
         filename: 'photo_'+acctId+'_'+Date.now()+'.jpg'
       })
-    }).then(function(){
-      // no-cors: we can't read the response, so we can't get the real Drive link back
-      // right now. Mark it uploaded; the periodic ATR sheet sync will pick up the
-      // real link (server writes it into the sheet's PHOTO column) within ~5 min.
-      PHOTO_LINKS[String(acctId)] = 'PENDING_DRIVE_LINK_'+Date.now();
-      if(btn){ btn.textContent = '✅'; btn.setAttribute('onclick', "openPhotoUpload('"+acctId+"')"); }
-      if(modalBtn){
-        modalBtn.disabled = false;
-        modalBtn.style.border = '1.5px dashed #16A34A';
-        modalBtn.style.background = '#F0FDF4';
-        modalBtn.style.color = '#16A34A';
-        modalBtn.textContent = '✅ PHOTO UPLOADED — फोटो अपलोड हो गई';
-      }
-      savePhotoLinks();
-    }).catch(function(e){
-      if(btn) btn.textContent = '📷';
-      if(modalBtn){ modalBtn.disabled = false; modalBtn.textContent = '📷 TAKE / UPLOAD PHOTO / फोटो लें (REQUIRED)'; }
-      alert('Photo upload failed: '+e.message);
-    });
+    }).then(function(resp){ return resp.json(); })
+      .then(function(data){
+        if(!data || data.status !== 'ok' || !data.link) throw new Error('bad response');
+        // Real, confirmed Drive link — upload + server-side encryption are both
+        // fully done. Only now do we show "done".
+        PHOTO_LINKS[String(acctId)] = data.link;
+        if(btn){ btn.textContent = '✅'; btn.setAttribute('onclick', "openPhotoUpload('"+acctId+"')"); }
+        if(modalBtn){
+          modalBtn.disabled = false;
+          modalBtn.style.border = '1.5px dashed #16A34A';
+          modalBtn.style.background = '#F0FDF4';
+          modalBtn.style.color = '#16A34A';
+          modalBtn.textContent = '✅ PHOTO UPLOADED — फोटो अपलोड हो गई';
+        }
+        savePhotoLinks();
+      })
+      .catch(function(){
+        // The upload itself very likely still completed server-side (encryption +
+        // Drive write happen before Code.gs even sends its response) — we just
+        // couldn't read that response back (occasional browser/network quirk).
+        // Don't claim "done", and don't silently retry (would create a duplicate
+        // Drive file) — mark it unconfirmed and let the user explicitly retry.
+        PHOTO_LINKS[String(acctId)] = 'PENDING_DRIVE_LINK_'+Date.now();
+        if(btn){ btn.textContent = '⏳'; btn.setAttribute('onclick', "openPhotoUpload('"+acctId+"')"); }
+        if(modalBtn){
+          modalBtn.disabled = false;
+          modalBtn.style.border = '1.5px dashed #D97706';
+          modalBtn.style.background = '#FFFBEB';
+          modalBtn.style.color = '#B45309';
+          modalBtn.textContent = '⏳ UPLOAD NOT CONFIRMED — TAP TO RETRY / दोबारा कोशिश करें';
+        }
+        savePhotoLinks();
+      });
   });
 }
 
@@ -7725,8 +7756,10 @@ function rowActionButtons(acctId, mobile, mode){
   var telNum = String(mobile||'').replace(/\D/g,'');
   var telBtn = telNum ? '<a href="tel:'+telNum+'" title="Call" style="margin-right:6px;text-decoration:none;">\U0001F4DE</a>' : '<span style="opacity:0.3;margin-right:6px;">\U0001F4DE</span>';
   var waBtn = telNum ? '<a href="javascript:void(0)" onclick="waConsumer(\''+acctId+'\',\''+telNum+'\')" title="WhatsApp" style="margin-right:6px;text-decoration:none;">\U0001F4AC</a>' : '<span style="opacity:0.3;margin-right:6px;">\U0001F4AC</span>';
-  var hasPhoto = !!PHOTO_LINKS[String(acctId)];
-  var photoBtn = '<a href="javascript:void(0)" id="photo-btn-'+acctId+'" onclick="openPhotoUpload(\''+acctId+'\')" title="'+(hasPhoto?'View Photo':'Take/Upload Photo')+'" style="margin-right:6px;text-decoration:none;">'+(hasPhoto?'✅':'\U0001F4F7')+'</a>';
+  var pStatus = photoStatus(acctId);
+  var photoIcon = pStatus==='done' ? '✅' : (pStatus==='pending' ? '⏳' : '\U0001F4F7');
+  var photoTitle = pStatus==='done' ? 'View Photo' : (pStatus==='pending' ? 'Upload not confirmed – tap to retry' : 'Take/Upload Photo');
+  var photoBtn = '<a href="javascript:void(0)" id="photo-btn-'+acctId+'" onclick="openPhotoUpload(\''+acctId+'\')" title="'+photoTitle+'" style="margin-right:6px;text-decoration:none;">'+photoIcon+'</a>';
   var atrBtn;
   if(mode==='calling'){
     atrBtn = '<a href="javascript:void(0)" onclick="openCallingLogModal(\''+acctId+'\')" title="Log Calling ATR" style="text-decoration:none;">\U0001F4DD</a>';
@@ -7764,11 +7797,13 @@ function fieldVisitActionIcons(acctId, mobile){
 
 // Photo button shown inside the Field Visit ATR modal (below Remarks) — photo is compulsory before ATR submit
 function svPhotoSectionHtml(acctId){
-  var hasPhoto = !!PHOTO_LINKS[String(acctId)];
-  var border = hasPhoto ? '#16A34A' : '#C7D2FE';
-  var bg = hasPhoto ? '#F0FDF4' : '#FAFAFF';
-  var color = hasPhoto ? '#16A34A' : '#4B5563';
-  var label = hasPhoto ? '✅ PHOTO UPLOADED — TAP TO VIEW / फोटो अपलोड हो गई' : '📷 TAKE / UPLOAD PHOTO / फोटो लें (REQUIRED)';
+  var pStatus = photoStatus(acctId);
+  var border = pStatus==='done' ? '#16A34A' : (pStatus==='pending' ? '#D97706' : '#C7D2FE');
+  var bg = pStatus==='done' ? '#F0FDF4' : (pStatus==='pending' ? '#FFFBEB' : '#FAFAFF');
+  var color = pStatus==='done' ? '#16A34A' : (pStatus==='pending' ? '#B45309' : '#4B5563');
+  var label = pStatus==='done' ? '✅ PHOTO UPLOADED — TAP TO VIEW / फोटो अपलोड हो गई'
+            : pStatus==='pending' ? '⏳ UPLOAD NOT CONFIRMED — TAP TO RETRY / दोबारा कोशिश करें'
+            : '📷 TAKE / UPLOAD PHOTO / फोटो लें (REQUIRED)';
   return '<button type="button" id="photo-modal-btn-'+acctId+'" onclick="openPhotoUpload(\''+acctId+'\')" style="width:100%;padding:10px;border:1.5px dashed '+border+';border-radius:8px;background:'+bg+';color:'+color+';font-size:13px;font-weight:600;cursor:pointer;">'+label+'</button>';
 }
 
@@ -8269,29 +8304,14 @@ function submitSiteVisitLog(acctId){
   var url = getScriptUrl();
   if(!url){ alert('Pehle SETTINGS \u2192 ATR GOOGLE SHEET SYNC mein Apps Script URL set karo.'); return; }
 
-  // Photo upload is a no-cors POST, so right after upload PHOTO_LINKS holds an
-  // optimistic 'PENDING_DRIVE_LINK_...' placeholder until the periodic sheet sync
-  // backfills the real Drive URL. If SAVE is clicked before that happens, do one
-  // quick live check against the sheet now \u2014 otherwise the placeholder gets written
-  // into this ATR row permanently and its PHOTO column shows "\u2014" forever.
+  // Photo upload now confirms the real Drive link immediately (see
+  // uploadPhotoForConsumer), so by the time the PHOTO button shows "done",
+  // photoVal is already the real link \u2014 nothing to wait for here. The only
+  // way we still see a 'PENDING_DRIVE_LINK_...' placeholder is if that
+  // confirmation read failed (rare browser/network quirk); there is no
+  // background sync that will resolve it on its own, so just ask for a retry.
   if(/^PENDING_DRIVE_LINK_/.test(photoVal)){
-    fetch(url + '?action=get', { mode:'cors' })
-      .then(function(resp){ return resp.json(); })
-      .then(function(data){
-        var smAtr = data['SM_ATR'] || {};
-        var defAtr = data['Defaulter_ATR'] || {};
-        var rec = smAtr[String(acctId)] || defAtr[String(acctId)];
-        if(rec && rec.photo) mergePhotoLinkFromSync(acctId, rec.photo);
-        var resolved = PHOTO_LINKS[String(acctId)]||'';
-        if(/^PENDING_DRIVE_LINK_/.test(resolved)){
-          alert('\u23F3 Photo abhi Drive se sync ho raha hai. 10-15 second ruk kar dobara SAVE dabayein.');
-          return;
-        }
-        doSubmitSiteVisitLog(acctId, r, status, remarks, url, resolved);
-      })
-      .catch(function(){
-        alert('\u23F3 Photo link abhi confirm nahi ho paaya. Kuch second ruk kar dobara SAVE dabayein.');
-      });
+    alert('\u23F3 Photo upload confirm nahi ho paaya. Kripya PHOTO button dobara dabayein aur upload repeat karein, phir SAVE karein.');
     return;
   }
 
