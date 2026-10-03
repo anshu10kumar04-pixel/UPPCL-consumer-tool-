@@ -8082,9 +8082,44 @@ function loadCallPushList(cb){
     }).catch(function(){ _callPushLoaded = true; if(cb) cb(); });
 }
 
+// ---- TOP 16 SS (same methodology/ranking as Progress Report: top SS by billable
+// consumers, plus PINNED_SS) — used to restrict Calling ATR / Field Visit ATR
+// lists to only the consumer's actual jurisdiction substations, so field staff
+// don't get consumers from stray / low-volume / out-of-scope SS mixed in. ----
+function getTop16SSList(){
+  if(!D.length) return [];
+  var cnt = {};
+  D.forEach(function(r){
+    var isBilled = r.SOURCE==='billed';
+    var isUnbilled = r.SOURCE==='unbilled' || r.SOURCE==='master';
+    if(!isBilled && !isUnbilled) return;
+    var ss = r.SUBSTATION||'Unknown';
+    if(ss && ss.indexOf('132 KV HASARI')>=0) ss='132 KV HASARI';
+    cnt[ss] = (cnt[ss]||0)+1;
+  });
+  var all = Object.keys(cnt).filter(function(s){ return s && s!=='Unknown' && s!=='N' && s!=='NA'; });
+  var nonPinned = all.filter(function(s){ return PINNED_SS.indexOf(s)===-1; });
+  nonPinned.sort(function(a,b){ return cnt[b]-cnt[a]; });
+  var top16 = nonPinned.slice(0,16);
+  PINNED_SS.forEach(function(s){ if(cnt[s] && top16.indexOf(s)===-1) top16.push(s); });
+  return top16;
+}
+function normSS(ss){
+  ss = ss||'';
+  if(ss.indexOf('132 KV HASARI')>=0) return '132 KV HASARI';
+  return ss;
+}
+function isTop16SS(ss, top16List){
+  var list = top16List || getTop16SSList();
+  if(!list.length) return true; // data not ready yet — don't filter everything out
+  return list.indexOf(normSS(ss))>=0;
+}
+
 function buildCallAll(){
+  var top16 = getTop16SSList();
   var byId = {};
   DEF_ALL.forEach(function(r){
+    if(!isTop16SS(r.SUBSTATION, top16)) return; // only top-16-SS consumers go into Calling list
     var tariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
     var isAuto = (parseFloat(r.OUTSTANDING)||0) > CALLING_AUTO_THRESHOLD && AUTO_TARIFFS.indexOf(tariff) >= 0;
     var isManual = !!CALL_PUSH_IDS[String(r.ACCT_ID)];
@@ -8294,10 +8329,12 @@ function loadFieldVisitTab(){
 }
 
 function fvBaseData(){
+  var top16 = getTop16SSList();
   return DEF_ALL.map(function(r){
     var tariff = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
     return Object.assign({}, r, { TARIFF: tariff });
   }).filter(function(r){
+    if(!isTop16SS(r.SUBSTATION, top16)) return false; // only top-16-SS consumers go into Field Visit list
     return (parseFloat(r.OUTSTANDING)||0) > FIELDVISIT_AUTO_THRESHOLD && AUTO_TARIFFS.indexOf(r.TARIFF) >= 0;
   });
 }
