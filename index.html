@@ -7558,7 +7558,7 @@ var PHOTO_SYNCED = 'SYNCED_'; // link is a real https URL once synced back from 
 function openPhotoUpload(acctId){
   var existing = PHOTO_LINKS[String(acctId)];
   if(existing && /^https?:\/\//.test(existing)){
-    window.open(existing, '_blank');
+    viewEncryptedPhoto(existing);
     return;
   }
   if(existing){
@@ -7571,6 +7571,42 @@ function openPhotoUpload(acctId){
     if(inp.files && inp.files[0]) uploadPhotoForConsumer(acctId, inp.files[0]);
   };
   inp.click();
+}
+
+// Photos are stored encrypted in Drive (server-side key, never shipped to this
+// public tool) — opening the Drive link directly shows unreadable bytes, so
+// viewing always goes through the Apps Script's ?action=getPhoto endpoint,
+// which decrypts and hands back the real image for display here.
+function viewEncryptedPhoto(driveUrl){
+  var m = /\/d\/([a-zA-Z0-9_-]+)/.exec(driveUrl);
+  var fileId = m ? m[1] : null;
+  if(!fileId){ alert('Photo link format not recognized.'); return; }
+  var url = getScriptUrl();
+  if(!url){ alert('Pehle SETTINGS → ATR GOOGLE SHEET SYNC mein Apps Script URL set karo.'); return; }
+  // Open the tab synchronously (inside the click handler) so popup blockers
+  // don't block it once the async fetch below resolves.
+  var win = window.open('', '_blank');
+  if(win && win.document){ win.document.write('Decrypting photo…'); }
+  fetch(url + '?action=getPhoto&fileId=' + encodeURIComponent(fileId), { mode:'cors' })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!data || data.status !== 'ok' || !data.data){
+        if(win) win.close();
+        alert('Could not load photo: ' + (data && data.message ? data.message : 'unknown error'));
+        return;
+      }
+      var byteChars = atob(data.data);
+      var byteNumbers = new Array(byteChars.length);
+      for(var i=0; i<byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+      var blob = new Blob([new Uint8Array(byteNumbers)], {type: data.mimeType || 'image/jpeg'});
+      var objUrl = URL.createObjectURL(blob);
+      if(win && !win.closed) win.location.href = objUrl;
+      else window.open(objUrl, '_blank');
+    })
+    .catch(function(e){
+      if(win) win.close();
+      alert('Could not load photo: ' + e.message);
+    });
 }
 
 // Resizes+re-compresses an image file client-side (max 1280px longest side, JPEG q=0.6)
@@ -8717,7 +8753,7 @@ function renderSvAtrTable(page){
   tbody.innerHTML = slice.map(function(r,i){
     var rank = (page-1)*PS+i+1;
     var photoUrl = String(r.PHOTO||'');
-    var photoCell = /^https?:\/\//.test(photoUrl) ? '<a href="'+photoUrl+'" target="_blank" title="View Photo">📷</a>' : '<span style="opacity:0.3;">—</span>';
+    var photoCell = /^https?:\/\//.test(photoUrl) ? '<span onclick="viewEncryptedPhoto(\''+photoUrl+'\')" style="cursor:pointer;" title="View Photo">📷</span>' : '<span style="opacity:0.3;">—</span>';
     var submittedCell = '-';
     if(r.TIMESTAMP){
       try{
