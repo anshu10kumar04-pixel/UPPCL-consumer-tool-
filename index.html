@@ -552,7 +552,7 @@ select option{background:#fff;color:#1E1B4B;}
     <div id="call-gate-box"></div>
     <div id="call-main-content" style="display:none;">
     <div class="fg" style="margin-bottom:12px;flex-wrap:wrap;">
-      <div><div class="lbl">SUBSTATION</div>
+      <div id="call-sub-filter-group"><div class="lbl">SUBSTATION</div>
         <div class="ms-wrap" id="call-sub-wrap">
           <button class="ms-btn" id="call-sub-btn" onclick="toggleMs('call-sub-dd')">ALL SUBSTATIONS</button>
           <div class="ms-dropdown" id="call-sub-dd">
@@ -8019,20 +8019,22 @@ var AUTO_TARIFFS = ['LMV1','LMV2','LMV6','HV2'];
 // ---- STAFF ROSTER (per-substation JE / TG / lineman, from uploaded staff list) ----
 // Gates the Calling tab: SS must be picked, then a staff name, before the list works.
 // The chosen staff name is then saved on every Calling ATR submitted in this session.
+// Division-level officers who oversee every SS — prepended to every substation's roster.
+var STAFF_COMMON = ["EE RAVINDRA KUMAR","AE ANSHUMAN","AE NEERAJ"];
 var STAFF_DATA = {
-  "JAIL CHAURAHA": ["JE AJAY PRATAP SINGH","TG KHUSBOO","NISHAR","KAPIL","SATYA PRAKASH"],
-  "HYDEL": ["JE AJAY PRATAP SINGH","TG KHUSBOO","GAURAV","VIVEK","RAHUL"],
-  "RANIMAHAL": ["JE AJAY PRATAP SINGH","TG DEEPTI RAJPOOT","MANSHARAM","NITIN","VIKAS"],
-  "HASARI": ["JE AJAY PRATAP SINGH","TG NANDINI","BHAGWAT","AABHISHEK","BHOOPENDRA"],
-  "BIJOLI": ["JE AJAY PRATAP SINGH","TG NANDINI","UMANG","LALIT","JEETU"],
-  "MUNNALAL POWER HOUSE": ["JE L N VERMA","TG SHAMIM","VIVEK RAWAT","KAILASH","GOVIND DAS"],
-  "SUTIMILL": ["JE L N VERMA","TG RIAZ UL HAQ","SANTOSH","ASHISH","RAJENDRA"],
-  "SHIPRI": ["JE L N VERMA","TG SHARAD","TAHIR","KULDEEP","SANJAY"],
-  "MEDIACL": ["JE RAMESH CHANDRA","TG DEEPIKA","VIMAL","VIKAS","JAIHININD"],
-  "GALLA MANDI": ["JE RAMESH CHANDRA","TG JAMUNA PRASAD","KARAN","SURESH","AZAD","MANOJ","RAVI","AMIT"],
-  "UNNAO GATE": ["JE RAMESH CHANDRA","TG KALKA","BRIJESH","KARAN","AMIR"],
-  "NAGRA": ["JE SUMAN","TG MANISH","HARISHANKAR","NEELESH","SYED WAZAHAT ALI"],
-  "NANDANPURA": ["JE SUMAN","TG TULSI","ASHWANI","HARISH","AMIT PAL"]
+  "JAIL CHAURAHA": STAFF_COMMON.concat(["JE AJAY PRATAP SINGH","TG KHUSBOO","NISHAR","KAPIL","SATYA PRAKASH"]),
+  "HYDEL": STAFF_COMMON.concat(["JE AJAY PRATAP SINGH","TG KHUSBOO","GAURAV","VIVEK","RAHUL"]),
+  "RANIMAHAL": STAFF_COMMON.concat(["JE AJAY PRATAP SINGH","TG DEEPTI RAJPOOT","MANSHARAM","NITIN","VIKAS"]),
+  "HASARI": STAFF_COMMON.concat(["JE AJAY PRATAP SINGH","TG NANDINI","BHAGWAT","AABHISHEK","BHOOPENDRA"]),
+  "BIJOLI": STAFF_COMMON.concat(["JE AJAY PRATAP SINGH","TG NANDINI","UMANG","LALIT","JEETU"]),
+  "MUNNALAL POWER HOUSE": STAFF_COMMON.concat(["JE L N VERMA","TG SHAMIM","VIVEK RAWAT","KAILASH","GOVIND DAS"]),
+  "SUTIMILL": STAFF_COMMON.concat(["JE L N VERMA","TG RIAZ UL HAQ","SANTOSH","ASHISH","RAJENDRA"]),
+  "SHIPRI": STAFF_COMMON.concat(["JE L N VERMA","TG SHARAD","TAHIR","KULDEEP","SANJAY"]),
+  "MEDIACL": STAFF_COMMON.concat(["JE RAMESH CHANDRA","TG DEEPIKA","VIMAL","VIKAS","JAIHININD"]),
+  "GALLA MANDI": STAFF_COMMON.concat(["JE RAMESH CHANDRA","TG JAMUNA PRASAD","KARAN","SURESH","AZAD","MANOJ","RAVI","AMIT"]),
+  "UNNAO GATE": STAFF_COMMON.concat(["JE RAMESH CHANDRA","TG KALKA","BRIJESH","KARAN","AMIR"]),
+  "NAGRA": STAFF_COMMON.concat(["JE SUMAN","TG MANISH","HARISHANKAR","NEELESH","SYED WAZAHAT ALI"]),
+  "NANDANPURA": STAFF_COMMON.concat(["JE SUMAN","TG TULSI","ASHWANI","HARISH","AMIT PAL"])
 };
 // Finds the STAFF_DATA key (short SS name) contained in a live/full substation name,
 // e.g. "132 KV HASARI" → "HASARI". Picks the longest matching key if more than one matches.
@@ -8048,7 +8050,7 @@ function findStaffKeyForSS(fullSS){
 }
 function staffListForSS(fullSS){
   var key = findStaffKeyForSS(fullSS);
-  return key ? STAFF_DATA[key] : [];
+  return key ? STAFF_DATA[key] : STAFF_COMMON.slice();
 }
 
 // ---- Calling tab gate: compulsory SS → Staff Name selection before the list works ----
@@ -8187,15 +8189,21 @@ function loadCallingTab(){
 
 function buildCallingPanel(){
   buildMsOptionsX('call','sub', getAllSubValuesX('call'));
-  // Pre-scope the SUBSTATION filter to the gate's selected SS for this working session
+  // Lock the list to the gate's selected SS for this working session — the SUBSTATION
+  // filter is redundant once a single SS is already chosen, so hide it entirely.
+  var subGroup = gel('call-sub-filter-group');
   if(_callGateSS){
     var allSubs = getAllSubValuesX('call');
     var gateUp = _callGateSS.toUpperCase();
     var matchSS = allSubs.indexOf(_callGateSS)>=0 ? _callGateSS :
       allSubs.filter(function(s){ return s.toUpperCase().indexOf(gateUp)>=0 || gateUp.indexOf(s.toUpperCase())>=0; })[0];
-    if(matchSS && _callSelSubs.indexOf(matchSS)<0){ _callSelSubs.length=0; _callSelSubs.push(matchSS); }
+    _callSelSubs.length=0;
+    if(matchSS) _callSelSubs.push(matchSS);
     buildMsOptionsX('call','sub', allSubs);
     updateMsBtnX('call','sub');
+    if(subGroup) subGroup.style.display = 'none';
+  } else if(subGroup){
+    subGroup.style.display = '';
   }
   buildMsOptionsX('call','feed', getAllFeedValuesX('call'));
   buildMsOptionsX('call','supply', getAllSupplyValuesX('call'));
@@ -8301,6 +8309,15 @@ function resetCall(){
   if(gel('call-lp-month')) gel('call-lp-month').value='';
   if(gel('call-sort')) gel('call-sort').value='desc';
   _callSelSubs.length=0; _callSelFeeds.length=0; _callSelSupplies.length=0;
+  // Re-apply the gate's SS lock (the SUBSTATION filter is hidden while a gate SS is active,
+  // so there's no UI for the user to re-pick it — RESET must not silently drop the lock).
+  if(_callGateSS){
+    var allSubs0 = getAllSubValuesX('call');
+    var gateUp0 = _callGateSS.toUpperCase();
+    var matchSS0 = allSubs0.indexOf(_callGateSS)>=0 ? _callGateSS :
+      allSubs0.filter(function(s){ return s.toUpperCase().indexOf(gateUp0)>=0 || gateUp0.indexOf(s.toUpperCase())>=0; })[0];
+    if(matchSS0) _callSelSubs.push(matchSS0);
+  }
   buildMsOptionsX('call','sub', getAllSubValuesX('call'));
   buildMsOptionsX('call','feed', getAllFeedValuesX('call'));
   buildMsOptionsX('call','supply', getAllSupplyValuesX('call'));
