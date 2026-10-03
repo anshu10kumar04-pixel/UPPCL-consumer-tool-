@@ -4,13 +4,26 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
 <title>UPPCL Consumer Data Tool</title>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css"/>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<!-- PERF: preconnect to the origins we actually fetch from, so DNS/TLS for them
+     overlaps with everything else instead of starting only once each is first used. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin>
+<!-- PERF: load the font stylesheet without blocking first paint (same file, just
+     fetched at low priority and swapped in once ready); noscript keeps it working
+     with JS off. -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/></noscript>
+<!-- PERF: XLSX is only ever called from export buttons the user clicks after the
+     page is already up, so `defer` lets the browser parse the rest of the page
+     (including the ~1.6MB app script below) in parallel with downloading this,
+     instead of pausing HTML parsing to fetch+run it first. -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- PERF: Leaflet / Leaflet.markercluster were removed here — nothing in this
+     page calls the Leaflet API (the map feature opens as its own separate page),
+     so these were ~150KB of render-blocking JS/CSS fetched on every load for a
+     feature this page doesn't use. -->
 <style>
 :root{
   --bg:#E0F2FE;
@@ -5423,17 +5436,14 @@ function autoFetch(){
 function startDownloads(){
   var allTexts=new Array(FILES.length), fetched=0, total=FILES.length;
 
-  // Fetch defaulter.csv in parallel
-  fetch(DEFAULTER_FILE)
-    .then(function(r){ return r.ok?r.text():''; })
-    .then(function(t){ if(t) parseDefaulterText(t); })
-    .catch(function(){});
-
-  // Fetch METERNO.csv in parallel
-  fetch(METERNO_FILE)
-    .then(function(r){ return r.ok?r.text():''; })
-    .then(function(t){ if(t) parseMeterData(t); })
-    .catch(function(){});
+  // PERF: DEFAULTER_FILE and METERNO_FILE used to point at a separate "uppcl-data"
+  // repo that no longer exists, so these two fetches have been silently 404ing on
+  // every single page load (caught below, so nothing broke) while still costing a
+  // full round-trip each. DEF_ALL/METER_DATA are already populated from FILES via
+  // the real, working manifest-driven load below, with METER_DATA lookups already
+  // falling back to each record's own METER_NO everywhere they're used — so these
+  // never contributed anything. Removed rather than fixed, since nothing depends
+  // on them actually succeeding.
 
   function fetchOne(url, attempt){
     var ctrl = typeof AbortController!=='undefined' ? new AbortController() : null;
