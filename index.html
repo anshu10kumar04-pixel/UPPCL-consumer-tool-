@@ -3064,6 +3064,19 @@ function buildDashboard(){
   }
   _dashRetry = 0; _dashDefRetry = 0;
 
+  // Ensure Calling ATR / Field Visit ATR data is loaded for the SS-wise summary below
+  if(!_fieldAtrLoaded){
+    loadFieldAtr();
+    _dashAtrRetry = (_dashAtrRetry||0) + 1;
+    if(_dashAtrRetry <= 15){
+      el.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⏳ Loading ATR summary data…</div>';
+      setTimeout(buildDashboard, 1000);
+      return;
+    }
+    // proceed anyway after retries exhausted
+  }
+  _dashAtrRetry = 0;
+
   var updInfo = '';
   try{ var m=JSON.parse(localStorage.getItem('uppcl_manifest')||'{}'); updInfo=m.updated||''; }catch(e){}
 
@@ -3608,6 +3621,159 @@ function buildDashboard(){
     }
     html += '</div></div>'; // close dash-atr-body + card
   }
+
+  // ── CALLING ATR + FIELD VISIT ATR — SS-WISE SUMMARY (server-synced ATR data) ──
+  (function(){
+    var ssDefCount = {};
+    DEF_ALL.forEach(function(r){
+      var ss = r.SUBSTATION || 'Unknown';
+      ssDefCount[ss] = (ssDefCount[ss]||0) + 1;
+    });
+    var ssLookup2 = {};
+    DEF_ALL.forEach(function(r){ ssLookup2[String(r.ACCT_ID)] = r.SUBSTATION || 'Unknown'; });
+
+    var clBySS = {}, clStatusBySS = {};
+    CLATR_ALL.forEach(function(r){
+      var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
+      clBySS[ss] = (clBySS[ss]||0)+1;
+      if(!clStatusBySS[ss]) clStatusBySS[ss] = {};
+      var st = r.CALL_OUTCOME || 'OTHER';
+      clStatusBySS[ss][st] = (clStatusBySS[ss][st]||0)+1;
+    });
+
+    var svBySS = {}, svStatusBySS = {};
+    SVATR_ALL.forEach(function(r){
+      var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
+      svBySS[ss] = (svBySS[ss]||0)+1;
+      if(!svStatusBySS[ss]) svStatusBySS[ss] = {};
+      var st = r.VISIT_STATUS || 'PENDING';
+      svStatusBySS[ss][st] = (svStatusBySS[ss][st]||0)+1;
+    });
+
+    var allSsSet = {};
+    Object.keys(ssDefCount).forEach(function(s){allSsSet[s]=1;});
+    Object.keys(clBySS).forEach(function(s){allSsSet[s]=1;});
+    Object.keys(svBySS).forEach(function(s){allSsSet[s]=1;});
+    var allSsList = Object.keys(allSsSet).sort();
+
+    var totalCl = CLATR_ALL.length, totalSv = SVATR_ALL.length;
+
+    html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
+    html += '<div style="background:#0E7490;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-clsv-body\')">';
+    html += '<span>📞 CALLING ATR + 🧭 FIELD VISIT ATR — SS-WISE SUMMARY</span>';
+    html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">Calling: '+totalCl+' &nbsp;|&nbsp; Field Visit: '+totalSv+' &nbsp;&#9654;</span>';
+    html += '</div>';
+    html += '<div id="dash-clsv-body" style="display:none;">';
+    html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-clsv-body\',\'Calling_FieldVisit_ATR_Summary\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-clsv-body\',\'Calling + Field Visit ATR Summary\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
+
+    if(allSsList.length===0){
+      html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No Calling ATR / Field Visit ATR data yet.</div>';
+    } else {
+      // ---- Coverage table ----
+      html += '<div style="padding:10px 16px 4px;font-family:var(--fh);font-size:11px;font-weight:700;color:#0E7490;">COVERAGE</div>';
+      html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+      html += '<thead><tr style="background:#ECFEFF;">'+
+        '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">SUBSTATION</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">TOTAL DEFAULTERS</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#0891B2;border-bottom:1px solid #A5F3FC;border-left:1px solid #A5F3FC;">CALLING DONE</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#DC2626;border-bottom:1px solid #A5F3FC;">CALLING PENDING</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#059669;border-bottom:1px solid #A5F3FC;">CALLING %</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#0891B2;border-bottom:1px solid #A5F3FC;border-left:1px solid #A5F3FC;">VISIT DONE</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#DC2626;border-bottom:1px solid #A5F3FC;">VISIT PENDING</th>'+
+        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#059669;border-bottom:1px solid #A5F3FC;">VISIT %</th>'+
+        '</tr></thead><tbody>';
+
+      var gTotalDef=0, gClDone=0, gSvDone=0;
+      allSsList.forEach(function(ss,i){
+        var totDef = ssDefCount[ss]||0;
+        var clDone = clBySS[ss]||0;
+        var svDone = svBySS[ss]||0;
+        var clPend = Math.max(totDef-clDone,0);
+        var svPend = Math.max(totDef-svDone,0);
+        var clPct = totDef>0 ? Math.round(clDone/totDef*100) : 0;
+        var svPct = totDef>0 ? Math.round(svDone/totDef*100) : 0;
+        gTotalDef+=totDef; gClDone+=clDone; gSvDone+=svDone;
+        var rowBg = i%2?'#F9FAFB':'#fff';
+        html += '<tr style="background:'+rowBg+'">'+
+          '<td style="padding:6px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+ss+'</td>'+
+          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#374151;">'+totDef+'</td>'+
+          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#0891B2;border-left:1px solid #F0F0F0;">'+clDone+'</td>'+
+          '<td style="padding:6px 8px;text-align:right;color:#DC2626;">'+clPend+'</td>'+
+          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:'+(clPct>=75?'#059669':clPct>=40?'#D97706':'#DC2626')+';">'+clPct+'%</td>'+
+          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#0891B2;border-left:1px solid #F0F0F0;">'+svDone+'</td>'+
+          '<td style="padding:6px 8px;text-align:right;color:#DC2626;">'+svPend+'</td>'+
+          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:'+(svPct>=75?'#059669':svPct>=40?'#D97706':'#DC2626')+';">'+svPct+'%</td>'+
+          '</tr>';
+      });
+      var gClPend=Math.max(gTotalDef-gClDone,0), gSvPend=Math.max(gTotalDef-gSvDone,0);
+      var gClPct = gTotalDef>0?Math.round(gClDone/gTotalDef*100):0, gSvPct = gTotalDef>0?Math.round(gSvDone/gTotalDef*100):0;
+      html += '<tr style="background:#ECFEFF;border-top:2px solid #A5F3FC;">'+
+        '<td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#0E7490;">TOTAL</td>'+
+        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#374151;">'+gTotalDef+'</td>'+
+        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#0891B2;border-left:1px solid #A5F3FC;">'+gClDone+'</td>'+
+        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#DC2626;">'+gClPend+'</td>'+
+        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#059669;">'+gClPct+'%</td>'+
+        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#0891B2;border-left:1px solid #A5F3FC;">'+gSvDone+'</td>'+
+        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#DC2626;">'+gSvPend+'</td>'+
+        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#059669;">'+gSvPct+'%</td>'+
+        '</tr>';
+      html += '</tbody></table></div>';
+
+      // ---- Calling ATR status breakdown ----
+      html += '<div style="padding:14px 16px 4px;font-family:var(--fh);font-size:11px;font-weight:700;color:#0E7490;">📞 CALLING ATR — STATUS BREAKDOWN</div>';
+      html += '<div style="overflow-x:auto;max-width:100%;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+      html += '<thead><tr style="background:#ECFEFF;"><th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">SUBSTATION</th>';
+      CALL_OUTCOME_OPTIONS.forEach(function(k){
+        html += '<th style="padding:7px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #A5F3FC;white-space:nowrap;">'+k.replace(/_/g,' ')+'</th>';
+      });
+      html += '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#065F46;border-bottom:1px solid #A5F3FC;border-left:1px solid #A5F3FC;">TOTAL</th></tr></thead><tbody>';
+      var clGrand={};
+      allSsList.forEach(function(ss,i){
+        var row = clStatusBySS[ss]||{};
+        var rowBg = i%2?'#F9FAFB':'#fff';
+        html += '<tr style="background:'+rowBg+'"><td style="padding:6px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+ss+'</td>';
+        var rt=0;
+        CALL_OUTCOME_OPTIONS.forEach(function(k){
+          var v = row[k]||0; rt+=v; clGrand[k]=(clGrand[k]||0)+v;
+          html += '<td style="padding:6px 6px;text-align:right;color:'+(v>0?'#1D4ED8':'#D1D5DB')+';font-weight:'+(v>0?'700':'400')+';">'+(v||'-')+'</td>';
+        });
+        html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #F0F0F0;">'+(rt||'-')+'</td></tr>';
+      });
+      html += '<tr style="background:#ECFEFF;border-top:2px solid #A5F3FC;"><td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#0E7490;">TOTAL</td>';
+      var clGt=0;
+      CALL_OUTCOME_OPTIONS.forEach(function(k){ var v=clGrand[k]||0; clGt+=v; html += '<td style="padding:7px 6px;text-align:right;font-weight:800;color:#1D4ED8;">'+(v||'-')+'</td>'; });
+      html += '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #A5F3FC;">'+clGt+'</td></tr>';
+      html += '</tbody></table></div>';
+
+      // ---- Field Visit ATR status breakdown ----
+      html += '<div style="padding:14px 16px 4px;font-family:var(--fh);font-size:11px;font-weight:700;color:#0E7490;">🧭 FIELD VISIT ATR — STATUS BREAKDOWN</div>';
+      html += '<div style="overflow-x:auto;max-width:100%;padding-bottom:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+      html += '<thead><tr style="background:#ECFEFF;"><th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">SUBSTATION</th>';
+      LOG_ATR_OPTIONS.forEach(function(k){
+        html += '<th style="padding:7px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #A5F3FC;white-space:nowrap;">'+k+'</th>';
+      });
+      html += '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#065F46;border-bottom:1px solid #A5F3FC;border-left:1px solid #A5F3FC;">TOTAL</th></tr></thead><tbody>';
+      var svGrand={};
+      allSsList.forEach(function(ss,i){
+        var row = svStatusBySS[ss]||{};
+        var rowBg = i%2?'#F9FAFB':'#fff';
+        html += '<tr style="background:'+rowBg+'"><td style="padding:6px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+ss+'</td>';
+        var rt=0;
+        LOG_ATR_OPTIONS.forEach(function(k){
+          var v = row[k]||0; rt+=v; svGrand[k]=(svGrand[k]||0)+v;
+          html += '<td style="padding:6px 6px;text-align:right;color:'+(v>0?'#1D4ED8':'#D1D5DB')+';font-weight:'+(v>0?'700':'400')+';">'+(v||'-')+'</td>';
+        });
+        html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #F0F0F0;">'+(rt||'-')+'</td></tr>';
+      });
+      html += '<tr style="background:#ECFEFF;border-top:2px solid #A5F3FC;"><td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#0E7490;">TOTAL</td>';
+      var svGt=0;
+      LOG_ATR_OPTIONS.forEach(function(k){ var v=svGrand[k]||0; svGt+=v; html += '<td style="padding:7px 6px;text-align:right;font-weight:800;color:#1D4ED8;">'+(v||'-')+'</td>'; });
+      html += '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #A5F3FC;">'+svGt+'</td></tr>';
+      html += '</tbody></table></div>';
+    }
+
+    html += '</div></div>'; // close dash-clsv-body + card
+  })();
 
 
   html += '</div>'; // end container
@@ -6945,7 +7111,7 @@ function openDefaulterModal(acctId, mode){
 
   // ATR section
   var atrSec = gel('modal-atr-section');
-  atrSec.style.display = 'block';
+  atrSec.style.display = (mode === 'calling') ? 'block' : 'none';
   if(mode === 'calling'){
     atrSec.querySelector('div:first-child').textContent = '📞 CALLING ATR — COMPULSORY';
     var prevCl = CALLING_LATEST[String(acctId)] || {};
@@ -7088,10 +7254,9 @@ function openDefaulterModalDirect(d){
     '<div><div style="font-size:9px;color:#6B7280;font-family:var(--fh);">OUTSTANDING</div>'+
     '<div style="font-size:14px;font-weight:700;color:'+(d.OUTSTANDING>0?'#F43F5E':'#059669')+';">₹'+Math.round(d.OUTSTANDING||0).toLocaleString()+'</div></div>';
 
-  // ATR section
+  // ATR section — removed from Defaulter-tab account-ID click modal
   var atrSec=gel('modal-atr-section');
-  atrSec.style.display='block';
-  atrSec.querySelector('div:first-child').textContent='📋 ATR STATUS — DEFAULTER ACTION REPORT';
+  atrSec.style.display='none';
   var sel=gel('modal-atr-sel');
   sel.innerHTML='<option value="PENDING">⏳ PENDING</option><option value="PAID">✅ PAID</option><option value="PARTIAL">💰 PARTIAL PAYMENT</option><option value="PROMISE">🤝 PROMISE TO PAY</option><option value="LOCK">🔒 LOCK / AWAY</option><option value="DISPUTE">⚖️ DISPUTE</option><option value="TD">🔌 TEMP DISCONNECTED</option><option value="OTHER">📝 OTHER</option>';
   var currentAtr=d.ATR_STATUS||'PENDING';
