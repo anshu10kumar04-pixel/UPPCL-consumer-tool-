@@ -7665,7 +7665,11 @@ function mergePhotoLinkFromSync(acctId, photoUrl){
 }
 
 function savePhotoLinks(){
-  if(!getGhPat()){ alert('Photo uploaded to Drive, but GitHub PAT is not set in SETTINGS, so the link could not be saved in the tool for next time. Set the PAT once to enable this.'); return; }
+  // Photo + its Drive link are already written server-side by the Apps Script
+  // into the ATR sheet's PHOTO column (periodic sync picks it up within ~5 min),
+  // so this local GitHub cache is a same-session convenience only, not required
+  // for correctness. Skip quietly — no PAT on this device is fine.
+  if(!getGhPat()){ return; }
   ghPutFile('photo_links.json', JSON.stringify(PHOTO_LINKS), 'Update photo links').catch(function(e){ console.error('Failed to save photo link', e); });
 }
 
