@@ -7745,20 +7745,45 @@ function savePhotoLinks(){
 function findDefRec(acctId){
   return DEF_ALL.find(function(x){ return String(x.ACCT_ID)===String(acctId); });
 }
+function waCategoryLabel(supplyType){
+  var s = String(supplyType||'').trim().toUpperCase();
+  if(s==='LMV1') return 'गृहेलु';
+  if(s==='LMV2') return 'वाणिज्यिक';
+  if(s==='LMV6' || s==='HV2') return 'औद्योगिक';
+  return '';
+}
 function waConsumer(acctId, mobile){
   var r = findDefRec(acctId) || {};
   var src = String(r.SOURCE||r.DATA_SOURCE||'').trim().toLowerCase();
-  if(src !== 'billed'){
-    alert('WhatsApp reminder sirf BILLED consumers ko bheja ja sakta hai.\nYeh consumer "'+(src||'unknown')+'" category mein hai.');
-    return;
-  }
+  var out = Math.round(r.OUTSTANDING||0);
   var mob = String(mobile||'').replace(/\D/g,'');
   if(mob.length===10) mob = '91'+mob;
-  var dueDate = (r.DUE_DATE && r.DUE_DATE!=='-') ? r.DUE_DATE : 'yathashighra';
-  var msg = 'नमस्ते '+(r.NAME||'उपभोक्ता')+' जी,\n\n'+
-    'दक्षिणांचल विद्युत वितरण निगम लिमिटेड (DVVNL) की ओर से सूचित किया जाता है कि आपके उपभोक्ता खाता संख्या '+(r.ACCT_ID||acctId)+' पर वर्तमान में ₹'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+' की राशि बकाया है, जिसके भुगतान की देय तिथि '+dueDate+' है।\n\n'+
-    'कृपया देय तिथि तक भुगतान सुनिश्चित करें। निर्धारित अवधि में भुगतान न किए जाने की स्थिति में नियमानुसार विद्युत आपूर्ति विच्छेदित (Disconnect) की जा सकती है।\n\n'+
-    'सहयोग हेतु धन्यवाद।\n— DVVNL उपभोक्ता सेवा';
+  var acct = r.ACCT_ID||acctId;
+  var outFmt = out.toLocaleString('en-IN');
+  var cat = waCategoryLabel(r.SUPPLY_TYPE);
+  var catTag = cat ? ' (श्रेणी: '+cat+')' : '';
+  var greet = 'प्रिय उपभोक्ता '+(r.NAME||'')+' जी,\n\n';
+  var msg;
+
+  if(src === 'billed'){
+    var dueDate = (r.DUE_DATE && r.DUE_DATE!=='-') ? r.DUE_DATE : 'yathashighra';
+    msg = greet+
+      'दक्षिणांचल विद्युत वितरण निगम लिमिटेड (DVVNL) की ओर से सूचित किया जाता है कि आपके उपभोक्ता खाता संख्या '+acct+catTag+' पर वर्तमान में ₹'+outFmt+' की राशि बकाया है, जिसके भुगतान की देय तिथि '+dueDate+' है।\n\n'+
+      'कृपया देय तिथि तक भुगतान सुनिश्चित करें। निर्धारित अवधि में भुगतान न किए जाने की स्थिति में नियमानुसार विद्युत आपूर्ति विच्छेदित (Disconnect) की जा सकती है।\n\n'+
+      'सहयोग हेतु धन्यवाद।\n— DVVNL उपभोक्ता सेवा';
+  } else if(src === 'unbilled'){
+    if(out <= 0){
+      alert('Is unbilled consumer ka outstanding nahi hai — reminder bhejne ki zaroorat nahi.');
+      return;
+    }
+    msg = greet+
+      'दक्षिणांचल विद्युत वितरण निगम लिमिटेड (DVVNL) की ओर से सूचित किया जाता है कि आपके उपभोक्ता खाता संख्या '+acct+catTag+' पर गत माह तक का पूर्व बकाया (Previous Outstanding) ₹'+outFmt+' है।\n\n'+
+      'कृपया उक्त राशि का शीघ्र भुगतान सुनिश्चित करें।\n\n'+
+      'सहयोग हेतु धन्यवाद।\n— DVVNL उपभोक्ता सेवा';
+  } else {
+    alert('WhatsApp reminder sirf BILLED ya UNBILLED (outstanding wale) consumers ko bheja ja sakta hai.\nYeh consumer "'+(src||'unknown')+'" category mein hai.');
+    return;
+  }
   window.open('https://wa.me/'+mob+'?text='+encodeURIComponent(msg), '_blank');
 }
 function rowActionButtons(acctId, mobile, mode){
