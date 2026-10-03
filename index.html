@@ -491,6 +491,9 @@ select option{background:#fff;color:#1E1B4B;}
       </div>
       <div class="tw" style="overflow-x:auto;"><table>
         <thead><tr>
+          <th style="width:55px">S.NO</th>
+          <th style="width:110px">ACCT ID</th>
+          <th style="min-width:130px">NAME</th>
           <th style="width:70px">LOAD</th>
           <th style="min-width:110px">SUBSTATION</th>
           <th style="min-width:150px">ADDRESS</th>
@@ -500,9 +503,6 @@ select option{background:#fff;color:#1E1B4B;}
           <th style="min-width:130px">VISIT STATUS</th>
           <th style="min-width:150px">REMARKS</th>
           <th style="width:70px">PHOTO</th>
-        </tr></thead>
-        <tbody id="svatr-tbody"></tbody>
-      </table></div>
         </tr></thead>
         <tbody id="svatr-tbody"></tbody>
       </table></div>
@@ -7570,6 +7570,36 @@ function openPhotoUpload(acctId){
     if(inp.files && inp.files[0]) uploadPhotoForConsumer(acctId, inp.files[0]);
   };
   inp.click();
+}
+
+// Resizes+re-compresses an image file client-side (max 1280px longest side, JPEG q=0.6)
+// before it ever gets base64-encoded, so uploads over slow field-network stay small & fast.
+function compressImageFile(file, cb){
+  var maxDim = 1280, quality = 0.6;
+  var imgUrl = URL.createObjectURL(file);
+  var img = new Image();
+  img.onload = function(){
+    var w = img.width, h = img.height;
+    if(w > maxDim || h > maxDim){
+      if(w >= h){ h = Math.round(h * (maxDim/w)); w = maxDim; }
+      else { w = Math.round(w * (maxDim/h)); h = maxDim; }
+    }
+    var canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(imgUrl);
+    var dataUrl = canvas.toDataURL('image/jpeg', quality);
+    cb(dataUrl.split(',')[1], 'image/jpeg');
+  };
+  img.onerror = function(){
+    URL.revokeObjectURL(imgUrl);
+    // fallback: couldn't decode as image, upload original as-is
+    var reader = new FileReader();
+    reader.onload = function(){ cb(String(reader.result).split(',')[1], file.type||'image/jpeg'); };
+    reader.onerror = function(){ cb(null); };
+    reader.readAsDataURL(file);
+  };
+  img.src = imgUrl;
 }
 
 function uploadPhotoForConsumer(acctId, file){
