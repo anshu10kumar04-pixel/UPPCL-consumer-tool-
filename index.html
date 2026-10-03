@@ -8809,11 +8809,20 @@ function renderSvAtrTable(page){
     var photoUrl = String(r.PHOTO||'');
     var photoCell = /^https?:\/\//.test(photoUrl) ? '<span onclick="viewEncryptedPhoto(\''+photoUrl+'\')" style="cursor:pointer;" title="View Photo">📷</span>' : '<span style="opacity:0.3;">—</span>';
     var submittedCell = '-';
-    if(r.TIMESTAMP){
-      try{
-        var sd = new Date(r.TIMESTAMP);
-        if(!isNaN(sd)) submittedCell = sd.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
-      }catch(ex){}
+    if(r.TIMESTAMP!==undefined && r.TIMESTAMP!==null && r.TIMESTAMP!==''){
+      var tsNum = parseFloat(r.TIMESTAMP);
+      if(!isNaN(tsNum) && tsNum>30000 && tsNum<60000){
+        // TIMESTAMP came through as a raw Excel date/time serial (days since 1899-12-30) —
+        // convert properly instead of feeding the raw number into new Date(), which
+        // misreads it as milliseconds and lands on 01 Jan 1970.
+        var sd2 = new Date((tsNum - 25569) * 86400 * 1000);
+        submittedCell = sd2.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
+      } else {
+        try{
+          var sd = new Date(r.TIMESTAMP);
+          if(!isNaN(sd) && sd.getFullYear()>1971) submittedCell = sd.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
+        }catch(ex){}
+      }
     }
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
@@ -8823,7 +8832,7 @@ function renderSvAtrTable(page){
       '<td>'+(r.SUBSTATION||'-')+'</td>'+
       '<td style="font-size:11px;">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.OUTSTANDING||'-')+'</td>'+
-      '<td style="font-size:11px;">'+(r.LP_DATE||'-')+'</td>'+
+      '<td style="font-size:11px;">'+excelDateToStr(r.LP_DATE)+'</td>'+
       '<td style="font-size:11px;">'+(r.LP_AMT||'-')+'</td>'+
       '<td style="font-weight:600;">'+(r.VISIT_STATUS||'-')+'</td>'+
       '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
