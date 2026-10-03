@@ -528,11 +528,14 @@ select option{background:#fff;color:#1E1B4B;}
           <th style="width:110px">ACCT ID</th>
           <th style="min-width:130px">NAME</th>
           <th style="width:110px">MOBILE</th>
+          <th style="width:70px">LOAD</th>
           <th style="min-width:110px">SUBSTATION</th>
           <th style="width:110px">OUTSTANDING</th>
+          <th style="width:95px">LP DATE</th>
+          <th style="width:95px">LP AMT</th>
           <th style="min-width:130px">CALL OUTCOME</th>
-          <th style="width:110px">PROMISE DATE</th>
           <th style="min-width:150px">REMARKS</th>
+          <th style="min-width:140px">STAFF NAME</th>
           <th style="width:95px">SUBMITTED</th>
         </tr></thead>
         <tbody id="clatr-tbody"></tbody>
@@ -664,11 +667,12 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="min-width:130px">NAME</th>
         <th style="min-width:160px">ADDRESS</th>
         <th style="width:105px">MOBILE</th>
+        <th style="width:70px">LOAD</th>
         <th style="width:110px">OUTSTANDING</th>
-        <th style="width:70px">TARIFF</th>
-        <th style="width:110px">METER NO</th>
         <th style="width:95px">LP DATE</th>
         <th style="width:95px">LP AMT</th>
+        <th style="width:70px">TARIFF</th>
+        <th style="width:110px">METER NO</th>
         <th style="width:90px">ACTIONS</th>
         <th style="width:150px">ATR STATUS</th>
         <th style="min-width:140px">REMARKS</th>
@@ -799,11 +803,12 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="min-width:130px">NAME</th>
         <th style="min-width:160px">ADDRESS</th>
         <th style="width:105px">MOBILE</th>
+        <th style="width:70px">LOAD</th>
         <th style="width:110px">OUTSTANDING</th>
-        <th style="width:70px">TARIFF</th>
-        <th style="width:110px">METER NO</th>
         <th style="width:95px">LP DATE</th>
         <th style="width:95px">LP AMT</th>
+        <th style="width:70px">TARIFF</th>
+        <th style="width:110px">METER NO</th>
         <th style="width:120px">ACTIONS</th>
         <th style="width:150px">ATR STATUS</th>
         <th style="min-width:140px">ATR REMARK</th>
@@ -8039,12 +8044,18 @@ var STAFF_DATA = {
 // Finds the STAFF_DATA key (short SS name) contained in a live/full substation name,
 // e.g. "132 KV HASARI" → "HASARI". Picks the longest matching key if more than one matches.
 function findStaffKeyForSS(fullSS){
-  var norm = String(fullSS||'').toUpperCase().replace(/\s+/g,' ').trim();
+  // Live substation names can come as "132 KV HASARI", "HASARI_20059",
+  // "JAIL_CHAURAHA_20061" etc. — normalize underscores/hyphens to spaces and strip
+  // trailing numeric codes so multi-word SS names (e.g. "JAIL CHAURAHA", "MUNNALAL
+  // POWER HOUSE") still match the roster instead of silently falling back to just
+  // the common EE/AE names.
+  var norm = String(fullSS||'').toUpperCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
   if(!norm) return null;
   if(STAFF_DATA[norm]) return norm;
+  var normNoCode = norm.replace(/\s*\d+\s*$/,'').trim();
   var bestKey = null, bestLen = 0;
   Object.keys(STAFF_DATA).forEach(function(key){
-    if(norm.indexOf(key)>=0 && key.length>bestLen){ bestKey = key; bestLen = key.length; }
+    if((norm.indexOf(key)>=0 || normNoCode.indexOf(key)>=0) && key.length>bestLen){ bestKey = key; bestLen = key.length; }
   });
   return bestKey;
 }
@@ -8079,7 +8090,7 @@ function renderCallGate(){
             '<option value="">-- SELECT SUBSTATION --</option>'+
             ssOpts.map(function(s){ return '<option value="'+String(s).replace(/"/g,'&quot;')+'">'+s+'</option>'; }).join('')+
           '</select></div></div>'+
-          '<div><div class="lbl">STAFF NAME (REQUIRED)</div><div class="sw"><select id="call-gate-staff" style="min-width:220px;"><option value="">-- SELECT SUBSTATION FIRST --</option></select></div></div>'+
+          '<div><div class="lbl">STAFF NAME (REQUIRED)</div><div class="sw"><select id="call-gate-staff" style="min-width:280px;max-width:100%;"><option value="">-- SELECT SUBSTATION FIRST --</option></select></div></div>'+
           '<div><button class="btn" style="background:#0891B2;color:#fff;" onclick="confirmCallGate()">✅ START</button></div>'+
         '</div>'+
       '</div>';
@@ -8290,11 +8301,12 @@ function renderCallTable(page){
       '<td style="font-weight:600;">'+(r.NAME||'-')+'</td>'+
       '<td style="max-width:180px;white-space:normal;font-size:11px;color:var(--muted);">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.MOBILE ? '<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" title="Call (number copied)" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+'</a>' : '-')+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD?r.LOAD+' kW':'-')+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
-      '<td>'+(r.TARIFF||'-')+'</td>'+
-      '<td>'+(r.METER_NO||'-')+'</td>'+
       '<td>'+(r.PAY_DATE||'-')+'</td>'+
       '<td>'+(r.PAY_AMT?'₹'+Math.round(r.PAY_AMT).toLocaleString():'-')+'</td>'+
+      '<td>'+(r.TARIFF||'-')+'</td>'+
+      '<td>'+(r.METER_NO||'-')+'</td>'+
       '<td style="white-space:nowrap;">'+callingActionIcons(r.ACCT_ID, r.MOBILE)+(r._SRC==='manual' ? ' <a href="javascript:void(0)" onclick="removeFromCalling(\''+r.ACCT_ID+'\')" title="Remove from Calling" style="margin-left:10px;text-decoration:none;font-size:15px;">🗑️</a>' : '')+'</td>'+
       '<td><span style="color:'+atrColor+';font-weight:700;font-size:11px;">'+atrLabel+'</span></td>'+
       '<td style="max-width:160px;white-space:normal;font-size:11px;color:var(--muted);">'+(cl.REMARKS||'-')+'</td>'+
@@ -8502,11 +8514,12 @@ function renderFieldVisitTable(page){
       '<td style="font-weight:600;">'+(r.NAME||'-')+'</td>'+
       '<td style="max-width:180px;white-space:normal;font-size:11px;color:var(--muted);">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.MOBILE ? '<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" title="Call (number copied)" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+'</a>' : '-')+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD?r.LOAD+' kW':'-')+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
-      '<td>'+(r.TARIFF||'-')+'</td>'+
-      '<td>'+(r.METER_NO||'-')+'</td>'+
       '<td>'+(r.PAY_DATE||'-')+'</td>'+
       '<td>'+(r.PAY_AMT?'₹'+Math.round(r.PAY_AMT).toLocaleString():'-')+'</td>'+
+      '<td>'+(r.TARIFF||'-')+'</td>'+
+      '<td>'+(r.METER_NO||'-')+'</td>'+
       '<td style="white-space:nowrap;">'+fieldVisitActionIcons(r.ACCT_ID, r.MOBILE)+
         ' <a href="javascript:void(0)" onclick="pushToCalling(\''+r.ACCT_ID+'\')" title="Add to Calling list" style="margin-left:10px;text-decoration:none;font-size:15px;'+(isPushed?'opacity:0.35;pointer-events:none;':'')+'">📲</a>'+
       '</td>'+
@@ -9044,7 +9057,7 @@ function loadFieldAtr(force){
   if(_fieldAtrLoaded && !force){ runSvAtrFilter(); runClAtrFilter(); return; }
   var svBody = gel('svatr-tbody'), clBody = gel('clatr-tbody');
   if(svBody) svBody.innerHTML = '<tr><td colspan="13" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Site Visit ATR…</td></tr>';
-  if(clBody) clBody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Calling ATR…</td></tr>';
+  if(clBody) clBody.innerHTML = '<tr><td colspan="13" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Calling ATR…</td></tr>';
 
   Promise.all([
     fetchCsvAsRows(SVATR_CSV_URL).catch(function(e){ return {__err:e}; }),
@@ -9074,15 +9087,20 @@ function loadFieldAtr(force){
     }
 
     if(clRows && clRows.__err){
-      if(clBody) clBody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:#F43F5E;">⚠ Failed to load Calling ATR: '+clRows.__err+'</td></tr>';
+      if(clBody) clBody.innerHTML = '<tr><td colspan="13" style="padding:40px;text-align:center;color:#F43F5E;">⚠ Failed to load Calling ATR: '+clRows.__err+'</td></tr>';
       CLATR_ALL = [];
     } else {
       CLATR_ALL = (clRows||[]).filter(function(r){
         return String(r.ACCT_ID||'').trim() && String(r.ATR_ID||'')!=='EXAMPLE_ROW';
       }).map(function(r){
         return {
-          ACCT_ID: String(r.ACCT_ID||''), NAME: r.NAME||'', MOBILE: r.MOBILE||'', SUBSTATION: r.SUBSTATION||'',
-          OUTSTANDING: r.OUTSTANDING||'', CALL_OUTCOME: r.CALL_OUTCOME||'', PROMISE_DATE: r.PROMISE_DATE||'', REMARKS: r.REMARKS||'',
+          ACCT_ID: String(r.ACCT_ID||''), NAME: r.NAME||'', MOBILE: r.MOBILE||'', LOAD: r.LOAD||'', SUBSTATION: r.SUBSTATION||'',
+          OUTSTANDING: r.OUTSTANDING||'', LP_DATE: r.LP_DATE||'', LP_AMT: r.LP_AMT||'',
+          // The sheet's actual column is LP_DATE (Code.gs never writes a PROMISE_DATE
+          // column) — kept as a fallback in case an older row happens to have one.
+          PROMISE_DATE: r.LP_DATE||r.PROMISE_DATE||'',
+          CALL_OUTCOME: r.CALL_OUTCOME||'', REMARKS: r.REMARKS||'',
+          STAFF_NAME: r.STAFF_NAME||'', WORKING_SS: r.WORKING_SS||'',
           TIMESTAMP: r.TIMESTAMP||''
         };
       });
@@ -9140,18 +9158,28 @@ function runClAtrFilter(){
   var q = (gel('clatr-search')?gel('clatr-search').value:'').toLowerCase();
   CLATR_FD = CLATR_ALL.filter(function(r){
     if(!q) return true;
-    return (r.ACCT_ID+' '+r.NAME+' '+r.MOBILE+' '+r.SUBSTATION+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
+    return (r.ACCT_ID+' '+r.NAME+' '+r.MOBILE+' '+r.SUBSTATION+' '+r.REMARKS+' '+r.STAFF_NAME).toLowerCase().indexOf(q)>-1;
   });
   var ci = gel('clatr-count-info');
   if(ci) ci.textContent = 'Showing '+CLATR_FD.length.toLocaleString()+' of '+CLATR_ALL.length.toLocaleString()+' calling ATR records';
   renderClAtrTable(1);
 }
 
+// CALL_OUTCOME cell: map the raw enum to its readable label, and when the outcome is
+// literally OTHER, append the REMARKS text inline so the actual reason is visible
+// without cross-referencing the REMARKS column separately.
+function clOutcomeCell(outcome, remarks){
+  if(!outcome) return '-';
+  var label = CALL_OUTCOME_LABELS[outcome] || outcome;
+  if(outcome==='OTHER' && remarks) label += ' — ' + remarks;
+  return label;
+}
+
 function renderClAtrTable(page){
   clAtrPage = page;
   var tbody = gel('clatr-tbody'); if(!tbody) return;
   if(!CLATR_FD.length){
-    tbody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);">No Calling ATR yet — log one from the CALLING tab (📝 icon).</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="padding:40px;text-align:center;color:var(--muted);">No Calling ATR yet — log one from the CALLING tab (📝 icon).</td></tr>';
     var pgEl = gel('clatr-pg'); if(pgEl) pgEl.innerHTML='';
     return;
   }
@@ -9163,11 +9191,14 @@ function renderClAtrTable(page){
       '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
       '<td style="font-size:12px;">'+(r.NAME||'-')+'</td>'+
       '<td>'+(r.MOBILE||'-')+'</td>'+
+      '<td style="font-size:12px;">'+(r.LOAD||'-')+'</td>'+
       '<td>'+(r.SUBSTATION||'-')+'</td>'+
       '<td>'+(r.OUTSTANDING||'-')+'</td>'+
-      '<td style="font-weight:600;">'+(r.CALL_OUTCOME||'-')+'</td>'+
-      '<td style="font-size:11px;">'+(r.PROMISE_DATE||'-')+'</td>'+
+      '<td style="font-size:11px;">'+excelDateToStr(r.LP_DATE)+'</td>'+
+      '<td style="font-size:11px;">'+(r.LP_AMT||'-')+'</td>'+
+      '<td style="font-weight:600;font-size:12px;">'+clOutcomeCell(r.CALL_OUTCOME, r.REMARKS)+'</td>'+
       '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
+      '<td style="font-size:12px;">'+(r.STAFF_NAME||'-')+'</td>'+
       '<td style="font-size:11px;">'+atrSubmittedCell(r.TIMESTAMP)+'</td>'+
     '</tr>';
   }).join('');
