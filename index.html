@@ -549,6 +549,8 @@ select option{background:#fff;color:#1E1B4B;}
         <div style="font-size:12px;color:var(--muted);">Defaulters above ₹2000 (LMV1/2/6, HV2) + consumers manually pushed for calling. Click ACCT ID to open consumer detail &amp; log Calling ATR.</div>
       </div>
     </div>
+    <div id="call-gate-box"></div>
+    <div id="call-main-content" style="display:none;">
     <div class="fg" style="margin-bottom:12px;flex-wrap:wrap;">
       <div><div class="lbl">SUBSTATION</div>
         <div class="ms-wrap" id="call-sub-wrap">
@@ -674,6 +676,7 @@ select option{background:#fff;color:#1E1B4B;}
       <tbody id="call-tbody"></tbody>
     </table></div>
     <div class="pg" id="call-pg"></div>
+    </div><!-- /call-main-content -->
   </div>
 
   <!-- FIELD VISIT PANEL -->
@@ -8013,6 +8016,101 @@ var CALLING_AUTO_THRESHOLD = 2000;
 var FIELDVISIT_AUTO_THRESHOLD = 5000;
 var AUTO_TARIFFS = ['LMV1','LMV2','LMV6','HV2'];
 
+// ---- STAFF ROSTER (per-substation JE / TG / lineman, from uploaded staff list) ----
+// Gates the Calling tab: SS must be picked, then a staff name, before the list works.
+// The chosen staff name is then saved on every Calling ATR submitted in this session.
+var STAFF_DATA = {
+  "JAIL CHAURAHA": ["JE AJAY PRATAP SINGH","TG KHUSBOO","NISHAR","KAPIL","SATYA PRAKASH"],
+  "HYDEL": ["JE AJAY PRATAP SINGH","TG KHUSBOO","GAURAV","VIVEK","RAHUL"],
+  "RANIMAHAL": ["JE AJAY PRATAP SINGH","TG DEEPTI RAJPOOT","MANSHARAM","NITIN","VIKAS"],
+  "HASARI": ["JE AJAY PRATAP SINGH","TG NANDINI","BHAGWAT","AABHISHEK","BHOOPENDRA"],
+  "BIJOLI": ["JE AJAY PRATAP SINGH","TG NANDINI","UMANG","LALIT","JEETU"],
+  "MUNNALAL POWER HOUSE": ["JE L N VERMA","TG SHAMIM","VIVEK RAWAT","KAILASH","GOVIND DAS"],
+  "SUTIMILL": ["JE L N VERMA","TG RIAZ UL HAQ","SANTOSH","ASHISH","RAJENDRA"],
+  "SHIPRI": ["JE L N VERMA","TG SHARAD","TAHIR","KULDEEP","SANJAY"],
+  "MEDIACL": ["JE RAMESH CHANDRA","TG DEEPIKA","VIMAL","VIKAS","JAIHININD"],
+  "GALLA MANDI": ["JE RAMESH CHANDRA","TG JAMUNA PRASAD","KARAN","SURESH","AZAD","MANOJ","RAVI","AMIT"],
+  "UNNAO GATE": ["JE RAMESH CHANDRA","TG KALKA","BRIJESH","KARAN","AMIR"],
+  "NAGRA": ["JE SUMAN","TG MANISH","HARISHANKAR","NEELESH","SYED WAZAHAT ALI"],
+  "NANDANPURA": ["JE SUMAN","TG TULSI","ASHWANI","HARISH","AMIT PAL"]
+};
+// Finds the STAFF_DATA key (short SS name) contained in a live/full substation name,
+// e.g. "132 KV HASARI" → "HASARI". Picks the longest matching key if more than one matches.
+function findStaffKeyForSS(fullSS){
+  var norm = String(fullSS||'').toUpperCase().replace(/\s+/g,' ').trim();
+  if(!norm) return null;
+  if(STAFF_DATA[norm]) return norm;
+  var bestKey = null, bestLen = 0;
+  Object.keys(STAFF_DATA).forEach(function(key){
+    if(norm.indexOf(key)>=0 && key.length>bestLen){ bestKey = key; bestLen = key.length; }
+  });
+  return bestKey;
+}
+function staffListForSS(fullSS){
+  var key = findStaffKeyForSS(fullSS);
+  return key ? STAFF_DATA[key] : [];
+}
+
+// ---- Calling tab gate: compulsory SS → Staff Name selection before the list works ----
+var _callGateSS = (function(){ try{ return localStorage.getItem('calling_gate_ss')||''; }catch(e){ return ''; } })();
+var _callGateStaff = (function(){ try{ return localStorage.getItem('calling_gate_staff')||''; }catch(e){ return ''; } })();
+
+function renderCallGate(){
+  var box = gel('call-gate-box'); if(!box) return;
+  var main = gel('call-main-content');
+  if(_callGateSS && _callGateStaff){
+    box.innerHTML =
+      '<div style="background:#ECFDF5;border:1.5px solid #6EE7B7;border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'+
+        '<div style="font-family:var(--fh);font-size:13px;color:#065F46;"><b>WORKING AS:</b> '+_callGateStaff+' &nbsp;&bull;&nbsp; <b>SS:</b> '+_callGateSS+'</div>'+
+        '<button class="btn" style="background:#fff;border:1.5px solid #6EE7B7;color:#065F46;padding:6px 14px;font-size:12px;" onclick="resetCallGate()">↺ CHANGE SS / STAFF</button>'+
+      '</div>';
+    if(main) main.style.display = '';
+  } else {
+    if(main) main.style.display = 'none';
+    var top16 = getTop16SSList();
+    var ssOpts = top16.length ? top16 : Object.keys(STAFF_DATA);
+    box.innerHTML =
+      '<div style="background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:10px;padding:18px;margin-bottom:14px;">'+
+        '<div style="font-family:var(--fh);font-size:14px;font-weight:700;color:#92400E;margin-bottom:10px;">⚠ SELECT SUBSTATION &amp; STAFF NAME TO START CALLING</div>'+
+        '<div class="fg" style="flex-wrap:wrap;align-items:flex-end;">'+
+          '<div><div class="lbl">SUBSTATION (REQUIRED)</div><div class="sw"><select id="call-gate-ss" onchange="onCallGateSSChange()" style="min-width:220px;">'+
+            '<option value="">-- SELECT SUBSTATION --</option>'+
+            ssOpts.map(function(s){ return '<option value="'+String(s).replace(/"/g,'&quot;')+'">'+s+'</option>'; }).join('')+
+          '</select></div></div>'+
+          '<div><div class="lbl">STAFF NAME (REQUIRED)</div><div class="sw"><select id="call-gate-staff" style="min-width:220px;"><option value="">-- SELECT SUBSTATION FIRST --</option></select></div></div>'+
+          '<div><button class="btn" style="background:#0891B2;color:#fff;" onclick="confirmCallGate()">✅ START</button></div>'+
+        '</div>'+
+      '</div>';
+  }
+}
+function onCallGateSSChange(){
+  var ss = gel('call-gate-ss') ? gel('call-gate-ss').value : '';
+  var staffSel = gel('call-gate-staff'); if(!staffSel) return;
+  if(!ss){ staffSel.innerHTML = '<option value="">-- SELECT SUBSTATION FIRST --</option>'; return; }
+  var staff = staffListForSS(ss);
+  if(staff.length){
+    staffSel.innerHTML = '<option value="">-- SELECT STAFF NAME --</option>' + staff.map(function(n){ return '<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'</option>'; }).join('') + '<option value="__other__">+ OTHER (TYPE NAME)</option>';
+  } else {
+    staffSel.innerHTML = '<option value="">-- NO STAFF LIST FOR THIS SS --</option><option value="__other__">+ ENTER STAFF NAME</option>';
+  }
+}
+function confirmCallGate(){
+  var ss = gel('call-gate-ss') ? gel('call-gate-ss').value : '';
+  if(!ss){ alert('Pehle SUBSTATION select karein (yeh compulsory hai).'); return; }
+  var staffSel = gel('call-gate-staff');
+  var staffVal = staffSel ? staffSel.value : '';
+  if(staffVal==='__other__'){ staffVal = (prompt('Staff ka naam likhein:')||'').trim(); }
+  if(!staffVal){ alert('Kripya STAFF NAME select/type karein (yeh compulsory hai).'); return; }
+  _callGateSS = ss; _callGateStaff = staffVal;
+  try{ localStorage.setItem('calling_gate_ss', ss); localStorage.setItem('calling_gate_staff', staffVal); }catch(e){}
+  loadCallingTab();
+}
+function resetCallGate(){
+  _callGateSS=''; _callGateStaff='';
+  try{ localStorage.removeItem('calling_gate_ss'); localStorage.removeItem('calling_gate_staff'); }catch(e){}
+  renderCallGate();
+}
+
 function loadCallPushList(cb){
   fetch(RAW_BASE+'calling_push.json?_='+Date.now())
     .then(function(r){ return r.ok ? r.json() : []; })
@@ -8080,6 +8178,8 @@ function loadCallingTab(){
   if(!_callPushLoaded){ loadCallPushList(loadCallingTab); return; }
   if(!_photoLinksLoaded){ loadPhotoLinks(loadCallingTab); return; }
   if(!_atrLogsLoaded){ loadAtrLogs(loadCallingTab); return; }
+  renderCallGate();
+  if(!_callGateSS || !_callGateStaff) return; // compulsory SS + staff name gate — list stays hidden until both are set
   buildCallAll();
   _callLoaded = true;
   buildCallingPanel();
@@ -8087,6 +8187,16 @@ function loadCallingTab(){
 
 function buildCallingPanel(){
   buildMsOptionsX('call','sub', getAllSubValuesX('call'));
+  // Pre-scope the SUBSTATION filter to the gate's selected SS for this working session
+  if(_callGateSS){
+    var allSubs = getAllSubValuesX('call');
+    var gateUp = _callGateSS.toUpperCase();
+    var matchSS = allSubs.indexOf(_callGateSS)>=0 ? _callGateSS :
+      allSubs.filter(function(s){ return s.toUpperCase().indexOf(gateUp)>=0 || gateUp.indexOf(s.toUpperCase())>=0; })[0];
+    if(matchSS && _callSelSubs.indexOf(matchSS)<0){ _callSelSubs.length=0; _callSelSubs.push(matchSS); }
+    buildMsOptionsX('call','sub', allSubs);
+    updateMsBtnX('call','sub');
+  }
   buildMsOptionsX('call','feed', getAllFeedValuesX('call'));
   buildMsOptionsX('call','supply', getAllSupplyValuesX('call'));
   runCallFilter();
@@ -8555,13 +8665,14 @@ function submitCallingLog(acctId){
   var r = findDefRec(acctId) || {};
   var outcome = gel('log-cl-outcome').value;
   if(!outcome){ alert('Kripya CALL OUTCOME select karein (yeh compulsory hai).'); return; }
+  if(!_callGateSS || !_callGateStaff){ alert('Pehle SUBSTATION aur STAFF NAME select karein (Calling tab ke top par).'); return; }
   var remarks = gel('log-cl-remarks').value.trim();
   var url = getScriptUrl();
   if(!url){ alert('Pehle SETTINGS \u2192 ATR GOOGLE SHEET SYNC mein Apps Script URL set karo.'); return; }
   var payload = {
     type: 'calling_atr', acct: acctId, name: r.NAME||'', mobile: r.MOBILE||'', load: r.LOAD||0, substation: r.SUBSTATION||'', feeder: r.FEEDER||'', address: r.ADDRESS||'',
     outstanding: r.OUTSTANDING||0, lp_date: r.PAY_DATE||'', lp_amt: r.PAY_AMT||0,
-    call_outcome: outcome, remarks: remarks
+    call_outcome: outcome, remarks: remarks, staff_name: _callGateStaff, working_ss: _callGateSS
   };
   fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
     .then(function(){
