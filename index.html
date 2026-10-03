@@ -3515,8 +3515,22 @@ function buildDashboard(){
       });
       return Object.keys(byId).map(function(k){ return byId[k]; });
     }
-    var clRows = dedupeByAcct(CLATR_ALL);
-    var svRows = dedupeByAcct(SVATR_ALL);
+    // Restrict the whole ATR summary to the same top-16-SS used by the Calling ATR /
+    // Field Visit ATR candidate lists, so the Dashboard never shows SS outside that set
+    // (an ATR submitted while its SS was in the top-16 can otherwise linger here after
+    // the ranking shifts).
+    var dashTop16 = getTop16SSList();
+    var ssLookup2 = {};
+    DEF_ALL.forEach(function(r){ ssLookup2[String(r.ACCT_ID)] = r.SUBSTATION || 'Unknown'; });
+
+    var clRows = dedupeByAcct(CLATR_ALL).filter(function(r){
+      var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
+      return isTop16SS(ss, dashTop16);
+    });
+    var svRows = dedupeByAcct(SVATR_ALL).filter(function(r){
+      var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
+      return isTop16SS(ss, dashTop16);
+    });
 
     // Total Defaulters — always the live, current defaulter count (consumers who
     // have since paid off are excluded by syncLiveOutstanding() above; a consumer
@@ -3526,10 +3540,9 @@ function buildDashboard(){
     DEF_ALL.forEach(function(r){
       if((parseFloat(r.OUTSTANDING)||0) < 2000) return; // paid off / below defaulter floor
       var ss = r.SUBSTATION || 'Unknown';
+      if(!isTop16SS(ss, dashTop16)) return;
       ssDefCount[ss] = (ssDefCount[ss]||0) + 1;
     });
-    var ssLookup2 = {};
-    DEF_ALL.forEach(function(r){ ssLookup2[String(r.ACCT_ID)] = r.SUBSTATION || 'Unknown'; });
 
     var clBySS = {}, clStatusBySS = {};
     clRows.forEach(function(r){
