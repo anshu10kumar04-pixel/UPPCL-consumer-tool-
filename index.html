@@ -1205,6 +1205,16 @@ let _defSortCol = 'OUTSTANDING', _defSortAsc = false;
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function gel(id){ return document.getElementById(id); }
+// HTML-escapes free text before it goes into an innerHTML string (REMARKS and
+// STAFF_NAME "OTHER — type name" are typed by field staff on their phones, so
+// unlike the billing-system NAME/ADDRESS columns they are directly attacker-
+// reachable; without this, a REMARKS value containing a stray "<" could run as
+// script in the browser of the next person who opens that report).
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':c==='"'?'&quot;':'&#39;';
+  });
+}
 function setText(id,v){ var e=gel(id); if(e) e.textContent=v; }
 function sl(m,p){ var ld=gel('loading'); if(ld)ld.style.display='flex'; setText('lt',m); var pf=gel('pf'); if(pf)pf.style.width=p+'%'; }
 function hl2(){ var ld=gel('loading'); if(ld){ld.style.display='none';ld.style.pointerEvents='none';} }
@@ -1393,7 +1403,7 @@ function _pgJump(el){
 function autoSyncAtr(){
   var url = getScriptUrl();
   if(!url) return;
-  fetch(url + '?action=get', {mode:'cors'})
+  fetch(withKey(url) + '&action=get', {mode:'cors'})
     .then(function(r){ return r.json(); })
     .then(function(data){
       var smAtr  = data['SM_ATR']       || {};
@@ -1504,7 +1514,7 @@ function pushLocalAtrToSheet(){
     method: 'POST',
     mode: 'no-cors',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ type:'batch', sm: smEntries, defaulter: defEntries })
+    body: JSON.stringify(addKey({ type:'batch', sm: smEntries, defaulter: defEntries }))
   }).then(function(){
     console.log('Batch ATR pushed:', Object.keys(smEntries).length, 'SM +', Object.keys(defEntries).length, 'Def');
     // Mark all pushed accounts as unlocked
@@ -1600,10 +1610,10 @@ function clMiniTable(map, label){
   if(!keys.length) return '<div style="padding:6px 10px;font-size:11px;color:#9CA3AF;">No data.</div>';
   var rows = keys.map(function(k){
     return '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 10px;font-size:11px;border-bottom:1px solid #EEF2F7;">'+
-      '<span style="color:#374151;">'+k+'</span><span style="font-weight:700;color:#0E7490;white-space:nowrap;">'+map[k]+'</span></div>';
+      '<span style="color:#374151;">'+esc(k)+'</span><span style="font-weight:700;color:#0E7490;white-space:nowrap;">'+map[k]+'</span></div>';
   }).join('');
   return '<div style="background:#F8FAFC;border-radius:8px;margin:4px 0 8px;overflow:hidden;border:1px solid #EEF2F7;">'+
-    '<div style="padding:4px 10px;font-size:9px;color:#9CA3AF;font-family:var(--fh);font-weight:700;letter-spacing:0.3px;background:#EEF2F7;">'+label+'</div>'+
+    '<div style="padding:4px 10px;font-size:9px;color:#9CA3AF;font-family:var(--fh);font-weight:700;letter-spacing:0.3px;background:#EEF2F7;">'+esc(label)+'</div>'+
     rows+
   '</div>';
 }
@@ -3767,7 +3777,7 @@ function buildDashboard(){
         var stSlug = 'cl-staff-'+i;
         var ssCount = Object.keys(clSSByStaff[st]).length;
         html += '<tr style="background:'+rowBg+'"><td style="padding:6px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+
-          '<a href="javascript:void(0)" onclick="dashSubToggle(\''+stSlug+'\')" id="'+stSlug+'-btn" title="Show SS-wise breakdown" style="display:inline-block;width:16px;text-align:center;text-decoration:none;color:#0E7490;font-weight:800;margin-right:6px;">+</a>'+st+'</td>'+
+          '<a href="javascript:void(0)" onclick="dashSubToggle(\''+stSlug+'\')" id="'+stSlug+'-btn" title="Show SS-wise breakdown" style="display:inline-block;width:16px;text-align:center;text-decoration:none;color:#0E7490;font-weight:800;margin-right:6px;">+</a>'+esc(st)+'</td>'+
           '<td style="padding:6px 8px;text-align:right;color:#374151;">'+ssCount+'</td>'+
           '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #F0F0F0;">'+staffTotal[st]+'</td></tr>';
         html += '<tr id="'+stSlug+'" style="display:none;"><td colspan="3" style="padding:0 10px 8px 28px;background:'+rowBg+';">'+
@@ -4923,7 +4933,7 @@ function downloadAtrFromSheet(){
   }
 
   if(btn){ btn.textContent='⏳ FETCHING…'; btn.disabled=true; }
-  fetch(url + '?action=get', {mode:'cors'})
+  fetch(withKey(url) + '&action=get', {mode:'cors'})
     .then(function(r){ return r.json(); })
     .then(function(data){ buildAndDownload(data['SM_ATR']||{}, data['Defaulter_ATR']||{}); })
     .catch(function(){
@@ -4935,6 +4945,15 @@ function downloadAtrFromSheet(){
 function getScriptUrl(){
   return localStorage.getItem('atr_script_url') || ATR_SCRIPT_URL || DEFAULT_SCRIPT_URL || '';
 }
+// The Apps Script backend now checks this key on every full-data GET (?action=get)
+// and every POST — so a random person who finds the /exec URL can no longer pull
+// the ATR sheet or write fake records. This constant must match SHARED_SECRET in
+// Code.gs; it ships with the tool's own public source, same as the /exec URL
+// already did, so it stops outsiders, not a motivated attacker — real protection
+// for truly private data still needs auth on the data itself, not just a shared key.
+var CLIENT_SHARED_KEY = '5c7f3575077e0650771c98dce359a163';
+function withKey(u){ return u + (u.indexOf('?')>=0 ? '&' : '?') + 'key=' + encodeURIComponent(CLIENT_SHARED_KEY); }
+function addKey(payload){ payload = payload || {}; payload.key = CLIENT_SHARED_KEY; return payload; }
 
 function syncAtrToSheet(payload){
   var url = getScriptUrl();
@@ -4943,7 +4962,7 @@ function syncAtrToSheet(payload){
     method: 'POST',
     mode: 'no-cors',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(payload)
+    body: JSON.stringify(addKey(payload))
   }).then(function(){ console.log('ATR synced:', payload.acct); })
     .catch(function(e){ console.warn('Sync error:', e); });
 }
@@ -4956,7 +4975,7 @@ function syncAtrFromSheet(){
   btn.textContent = '⏳ SYNCING…';
   btn.disabled = true;
   
-  fetch(url + '?action=get', {mode:'cors'})
+  fetch(withKey(url) + '&action=get', {mode:'cors'})
     .then(function(r){ return r.json(); })
     .then(function(data){
       var smAtr   = data['SM_ATR'] || {};
@@ -5194,8 +5213,8 @@ window.addEventListener('DOMContentLoaded',function(){
       var archUrl = localStorage.getItem('atr_script_url');
       if(archUrl && (Object.keys(smData).length || Object.keys(defData).length)){
         fetch(archUrl, {method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({type:'archive_month',month:lastMonth,sm:smData,defaulter:defData})
-        }).catch(function(){}); 
+          body:JSON.stringify(addKey({type:'archive_month',month:lastMonth,sm:smData,defaulter:defData}))
+        }).catch(function(){});
       }
       localStorage.removeItem('atr_data');
       localStorage.removeItem('def_atr_data');
@@ -6228,7 +6247,7 @@ function saveModalAtr(){
       outstanding: callRec.OUTSTANDING||0, lp_date: callRec.PAY_DATE||'', lp_amt: callRec.PAY_AMT||0,
       call_outcome: callOutcome, remarks: callRemarks
     };
-    fetch(callUrl, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(callPayload) })
+    fetch(callUrl, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(addKey(callPayload)) })
       .then(function(){
         CALLING_LATEST[String(modalCurrentAcct)] = { CALL_OUTCOME: callOutcome, REMARKS: callRemarks };
         alert('✅ Calling ATR saved for '+modalCurrentAcct+'.');
@@ -7895,13 +7914,13 @@ function uploadPhotoForConsumer(acctId, file){
       method: 'POST',
       mode: 'cors',
       headers: {'Content-Type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({
+      body: JSON.stringify(addKey({
         type: 'photo_upload',
         acct: acctId,
         data: base64Data,
         mimeType: mimeType || 'image/jpeg',
         filename: 'photo_'+acctId+'_'+Date.now()+'.jpg'
-      })
+      }))
     }).then(function(resp){ return resp.json(); })
       .then(function(data){
         if(!data || data.status !== 'ok' || !data.link) throw new Error('bad response');
@@ -8218,7 +8237,7 @@ function renderCallGate(){
   if(_callGateSS && _callGateStaff){
     box.innerHTML =
       '<div style="background:#ECFDF5;border:1.5px solid #6EE7B7;border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'+
-        '<div style="font-family:var(--fh);font-size:13px;color:#065F46;"><b>WORKING AS:</b> '+_callGateStaff+' &nbsp;&bull;&nbsp; <b>SS:</b> '+_callGateSS+'</div>'+
+        '<div style="font-family:var(--fh);font-size:13px;color:#065F46;"><b>WORKING AS:</b> '+esc(_callGateStaff)+' &nbsp;&bull;&nbsp; <b>SS:</b> '+esc(_callGateSS)+'</div>'+
         '<button class="btn" style="background:#fff;border:1.5px solid #6EE7B7;color:#065F46;padding:6px 14px;font-size:12px;" onclick="resetCallGate()">↺ CHANGE SS / STAFF</button>'+
       '</div>';
     if(main) main.style.display = '';
@@ -8666,7 +8685,7 @@ function renderFieldVisitTable(page){
       '<td style="white-space:nowrap;">'+fieldVisitActionIcons(r.ACCT_ID, r.MOBILE)+
       '</td>'+
       '<td><span style="color:'+col+';font-weight:700;font-size:11px;">'+atrLabel+'</span></td>'+
-      '<td style="max-width:160px;white-space:normal;font-size:11px;color:var(--muted);">'+(r._REMARKS||'-')+'</td>'+
+      '<td style="max-width:160px;white-space:normal;font-size:11px;color:var(--muted);">'+esc(r._REMARKS||'-')+'</td>'+
     '</tr>';
   }).join('');
   rp('fvv-pg', page, Math.ceil(FV2_FD.length/PS), renderFieldVisitTable);
@@ -8798,7 +8817,7 @@ function doSubmitSiteVisitLog(acctId, r, status, remarks, url, photoVal){
     outstanding: r.OUTSTANDING||0, lp_date: r.PAY_DATE||'', lp_amt: r.PAY_AMT||0,
     visit_status: status, remarks: remarks, photo: photoVal||''
   };
-  fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+  fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(addKey(payload)) })
     .then(function(){
       SITEVISIT_LATEST[String(acctId)] = { FIELD_VISIT_ATR: status, REMARKS: remarks };
       closeLogModal();
@@ -8846,7 +8865,7 @@ function submitCallingLog(acctId){
     outstanding: r.OUTSTANDING||0, lp_date: r.PAY_DATE||'', lp_amt: r.PAY_AMT||0,
     call_outcome: outcome, remarks: remarks, staff_name: _callGateStaff, working_ss: _callGateSS
   };
-  fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+  fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(addKey(payload)) })
     .then(function(){
       CALLING_LATEST[String(acctId)] = { CALL_OUTCOME: outcome, REMARKS: remarks };
       closeLogModal();
@@ -9150,7 +9169,7 @@ function renderFvTable(page){
       '<td>'+(r.DATE||'-')+'</td>'+
       '<td>'+(r.CONNECTION_FOUND||'-')+'</td>'+
       '<td style="font-weight:600;">'+(r.CONNECTION_STATUS||'-')+'</td>'+
-      '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
+      '<td style="font-size:12px;">'+esc(r.REMARKS||'-')+'</td>'+
       '<td>'+(photos.length?photos.join(', '):'-')+'</td>'+
       '<td>'+(hasLoc?'<a class="ml" href="https://www.google.com/maps?q='+r.LAT+','+r.LON+'" target="_blank">\ud83d\udccd</a>':'')+'</td>'+
     '</tr>';
@@ -9300,7 +9319,7 @@ function renderSvAtrTable(page){
       '<td style="font-size:11px;">'+excelDateToStr(r.LP_DATE)+'</td>'+
       '<td style="font-size:11px;">'+(r.LP_AMT||'-')+'</td>'+
       '<td style="font-weight:600;">'+(r.VISIT_STATUS||'-')+'</td>'+
-      '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
+      '<td style="font-size:12px;">'+esc(r.REMARKS||'-')+'</td>'+
       '<td style="text-align:center;">'+photoCell+'</td>'+
       '<td style="font-size:11px;">'+submittedCell+'</td>'+
     '</tr>';
@@ -9324,8 +9343,8 @@ function runClAtrFilter(){
 // without cross-referencing the REMARKS column separately.
 function clOutcomeCell(outcome, remarks){
   if(!outcome) return '-';
-  var label = CALL_OUTCOME_LABELS[outcome] || outcome;
-  if(outcome==='OTHER' && remarks) label += ' — ' + remarks;
+  var label = esc(CALL_OUTCOME_LABELS[outcome] || outcome);
+  if(outcome==='OTHER' && remarks) label += ' — ' + esc(remarks);
   return label;
 }
 
@@ -9351,8 +9370,8 @@ function renderClAtrTable(page){
       '<td style="font-size:11px;">'+excelDateToStr(r.LP_DATE)+'</td>'+
       '<td style="font-size:11px;">'+(r.LP_AMT||'-')+'</td>'+
       '<td style="font-weight:600;font-size:12px;">'+clOutcomeCell(r.CALL_OUTCOME, r.REMARKS)+'</td>'+
-      '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
-      '<td style="font-size:12px;">'+(r.STAFF_NAME||'-')+'</td>'+
+      '<td style="font-size:12px;">'+esc(r.REMARKS||'-')+'</td>'+
+      '<td style="font-size:12px;">'+esc(r.STAFF_NAME||'-')+'</td>'+
       '<td style="font-size:11px;">'+atrSubmittedCell(r.TIMESTAMP)+'</td>'+
     '</tr>';
   }).join('');
