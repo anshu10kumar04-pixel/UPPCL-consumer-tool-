@@ -8035,27 +8035,71 @@ var STAFF_DATA = {
   "MUNNALAL POWER HOUSE": STAFF_COMMON.concat(["JE L N VERMA","TG SHAMIM","VIVEK RAWAT","KAILASH","GOVIND DAS"]),
   "SUTIMILL": STAFF_COMMON.concat(["JE L N VERMA","TG RIAZ UL HAQ","SANTOSH","ASHISH","RAJENDRA"]),
   "SHIPRI": STAFF_COMMON.concat(["JE L N VERMA","TG SHARAD","TAHIR","KULDEEP","SANJAY"]),
-  "MEDIACL": STAFF_COMMON.concat(["JE RAMESH CHANDRA","TG DEEPIKA","VIMAL","VIKAS","JAIHININD"]),
+  "MEDICAL": STAFF_COMMON.concat(["JE RAMESH CHANDRA","TG DEEPIKA","VIMAL","VIKAS","JAIHININD"]),
   "GALLA MANDI": STAFF_COMMON.concat(["JE RAMESH CHANDRA","TG JAMUNA PRASAD","KARAN","SURESH","AZAD","MANOJ","RAVI","AMIT"]),
   "UNNAO GATE": STAFF_COMMON.concat(["JE RAMESH CHANDRA","TG KALKA","BRIJESH","KARAN","AMIR"]),
   "NAGRA": STAFF_COMMON.concat(["JE SUMAN","TG MANISH","HARISHANKAR","NEELESH","SYED WAZAHAT ALI"]),
   "NANDANPURA": STAFF_COMMON.concat(["JE SUMAN","TG TULSI","ASHWANI","HARISH","AMIT PAL"])
 };
-// Finds the STAFF_DATA key (short SS name) contained in a live/full substation name,
-// e.g. "132 KV HASARI" → "HASARI". Picks the longest matching key if more than one matches.
+// PULIYA NO 9 and GROWTH CENTER have no separate team in the staff sheet — they're
+// grouped under SHIPRI's and BIJOLI's teams respectively, so they share that roster.
+STAFF_DATA["PULIYA NO 9"] = STAFF_DATA["SHIPRI"];
+STAFF_DATA["GROWTH CENTER"] = STAFF_DATA["BIJOLI"];
+// A couple of roster SS names don't exactly spell-match the live substation name
+// (e.g. an older spelling) — alias them so matching still works either way.
+var STAFF_KEY_ALIASES = { "MEDICAL": ["MEDIACL"] };
+// Finds the STAFF_DATA key (short SS name) that best matches a live/full substation
+// name, e.g. "132 KV HASARI" → "HASARI", "RANI MAHAL_20050" → "RANIMAHAL".
+// Strips everything but letters/digits first so spacing/punctuation differences never
+// break a match, then does an approximate (edit-distance) match rather than requiring
+// an exact substring — so a genuine spelling difference between the uploaded staff
+// sheet and the live data (not just a typo we already know about) still matches,
+// as long as it's close, without needing a hand-added alias for every case.
+function squashSS(s){ return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function levenshtein(a,b){
+  var m=a.length, n=b.length;
+  if(m===0) return n; if(n===0) return m;
+  var dp=new Array(n+1);
+  for(var j=0;j<=n;j++) dp[j]=j;
+  for(var i=1;i<=m;i++){
+    var prev=dp[0]; dp[0]=i;
+    for(var j=1;j<=n;j++){
+      var tmp=dp[j];
+      dp[j]=Math.min(dp[j]+1, dp[j-1]+1, prev+(a[i-1]===b[j-1]?0:1));
+      prev=tmp;
+    }
+  }
+  return dp[n];
+}
+// Minimum edit distance between `needle` and any contiguous substring of `hay` whose
+// length is within 2 characters of needle's — lets a key match whether it sits at the
+// start, middle or end of the live name (which may carry a "132 KV " prefix or a
+// "_20059" trailing code), while still catching near-miss spellings in between.
+function fuzzyMinDist(hay, needle){
+  var kl = needle.length, best = Infinity;
+  var lo = Math.max(1, kl-2), hi = kl+2;
+  for(var len=lo; len<=hi; len++){
+    for(var i=0; i+len<=hay.length; i++){
+      var d = levenshtein(hay.substr(i,len), needle);
+      if(d<best) best = d;
+      if(best===0) return 0;
+    }
+  }
+  return best;
+}
 function findStaffKeyForSS(fullSS){
-  // Live substation names can come as "132 KV HASARI", "HASARI_20059",
-  // "JAIL_CHAURAHA_20061" etc. — normalize underscores/hyphens to spaces and strip
-  // trailing numeric codes so multi-word SS names (e.g. "JAIL CHAURAHA", "MUNNALAL
-  // POWER HOUSE") still match the roster instead of silently falling back to just
-  // the common EE/AE names.
-  var norm = String(fullSS||'').toUpperCase().replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
-  if(!norm) return null;
-  if(STAFF_DATA[norm]) return norm;
-  var normNoCode = norm.replace(/\s*\d+\s*$/,'').trim();
-  var bestKey = null, bestLen = 0;
+  var sq = squashSS(fullSS);
+  if(!sq) return null;
+  var bestKey = null, bestDist = Infinity;
   Object.keys(STAFF_DATA).forEach(function(key){
-    if((norm.indexOf(key)>=0 || normNoCode.indexOf(key)>=0) && key.length>bestLen){ bestKey = key; bestLen = key.length; }
+    var candidates = [key].concat(STAFF_KEY_ALIASES[key]||[]);
+    candidates.forEach(function(cand){
+      var sqKey = squashSS(cand);
+      if(!sqKey) return;
+      var threshold = Math.max(1, Math.round(sqKey.length*0.25)); // ~25% edit distance allowed
+      var dist = fuzzyMinDist(sq, sqKey);
+      if(dist<=threshold && dist<bestDist){ bestDist = dist; bestKey = key; }
+    });
   });
   return bestKey;
 }
@@ -9028,6 +9072,16 @@ var CLATR_CSV_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQu3FvhV4wFpr
 // a real ISO datetime string, or as a raw Excel date/time serial number —
 // feeding that raw serial into new Date() directly misreads it as
 // milliseconds and lands on 01 Jan 1970, so detect and convert it properly).
+// Shared epoch-ms parser for the same TIMESTAMP value atrSubmittedCell formats —
+// used to sort ATR records newest-first (latest filled ATR on top).
+function atrTimestampMs(ts){
+  if(ts===undefined || ts===null || ts==='') return 0;
+  var tsNum = parseFloat(ts);
+  if(!isNaN(tsNum) && tsNum>30000 && tsNum<60000) return (tsNum - 25569) * 86400 * 1000;
+  var d = Date.parse(ts);
+  return isNaN(d) ? 0 : d;
+}
+
 function atrSubmittedCell(ts){
   if(ts===undefined || ts===null || ts==='') return '-';
   var tsNum = parseFloat(ts);
@@ -9082,6 +9136,7 @@ function loadFieldAtr(force){
           VISIT_STATUS: r.FIELD_VISIT_ATR||r.VISIT_STATUS||'', REMARKS: r.REMARKS||'', PHOTO: r.PHOTO||''
         };
       });
+      SVATR_ALL.sort(function(a,b){ return atrTimestampMs(b.TIMESTAMP) - atrTimestampMs(a.TIMESTAMP); }); // latest ATR first
       SVATR_FD = SVATR_ALL.slice();
       runSvAtrFilter();
     }
@@ -9104,6 +9159,7 @@ function loadFieldAtr(force){
           TIMESTAMP: r.TIMESTAMP||''
         };
       });
+      CLATR_ALL.sort(function(a,b){ return atrTimestampMs(b.TIMESTAMP) - atrTimestampMs(a.TIMESTAMP); }); // latest ATR first
       CLATR_FD = CLATR_ALL.slice();
       runClAtrFilter();
     }
