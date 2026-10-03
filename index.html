@@ -8303,6 +8303,13 @@ function atrOptionsHtml(selected, opts, labels){
 
 function openSiteVisitLogModal(acctId){
   var r = findDefRec(acctId); if(!r) return alert('Consumer record not found.');
+  // Snapshot this record now, while we know it exists — DEF_ALL can get
+  // rebuilt in the background (periodic refresh) while the form is open
+  // (field staff often fill it, step away to take a photo, then come back),
+  // and a second lookup at SAVE time can silently miss the account and
+  // submit with NAME/LOAD/ADDRESS/LP_DATE/LP_AMT all blank. Reuse this
+  // confirmed snapshot at submit time instead of re-querying DEF_ALL.
+  window._svModalRec = { acctId: String(acctId), rec: r };
   var prev = SITEVISIT_LATEST[String(acctId)] || {};
   var box = gel('log-modal-box'); if(!box) return;
   box.innerHTML =
@@ -8329,7 +8336,7 @@ function openSiteVisitLogModal(acctId){
 }
 
 function submitSiteVisitLog(acctId){
-  var r = findDefRec(acctId) || {};
+  var r = (window._svModalRec && window._svModalRec.acctId===String(acctId)) ? window._svModalRec.rec : (findDefRec(acctId) || {});
   var status = gel('log-sv-status').value;
   if(!status){ alert('Kripya FIELD VISIT ATR select karein (yeh compulsory hai).'); return; }
   var photoVal = PHOTO_LINKS[String(acctId)]||'';
