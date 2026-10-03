@@ -1089,7 +1089,7 @@ let FILES_EUDD2=['eudd2a.csv','eudd2b.csv'].map(f=>RAW_BASE+f);
 let FILES=[];
 let SUB_DIVISION_MAP={};
 const DC_FILE = RAW_BASE+'disconnected.json'; // hosted in same repo as index.html/manifest.json (was: separate uppcl-data repo, unreliable)
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzd-Lq9Tx1dP8gn_dBb9ELyAm9B9PpKf0hPkcRL6EpQPIfc1ctPj3EhOmBzWIFqYjJzkg/exec';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxiqpcxjnCcGEbaPntAb4evNJsueZNqeU2O5ZM2luveOBnjbJRpZzjbMNMslVxjv7qIFg/exec';
 const DEFAULTER_FILE = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/uppcl-data/main/defaulter.csv';
 const DFP_FILE = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/uppcl-data/main/dfp.csv';
 const METERNO_FILE  = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/uppcl-data/main/METERNO.csv';
@@ -7747,7 +7747,7 @@ function findDefRec(acctId){
 }
 function waCategoryLabel(supplyType){
   var s = String(supplyType||'').trim().toUpperCase();
-  if(s==='LMV1') return 'गृहेलु';
+  if(s==='LMV1') return 'घरेलू';
   if(s==='LMV2') return 'वाणिज्यिक';
   if(s==='LMV6' || s==='HV2') return 'औद्योगिक';
   return '';
