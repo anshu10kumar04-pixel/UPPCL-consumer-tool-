@@ -503,6 +503,7 @@ select option{background:#fff;color:#1E1B4B;}
           <th style="min-width:130px">VISIT STATUS</th>
           <th style="min-width:150px">REMARKS</th>
           <th style="width:70px">PHOTO</th>
+          <th style="width:95px">SUBMITTED</th>
         </tr></thead>
         <tbody id="svatr-tbody"></tbody>
       </table></div>
@@ -8226,14 +8227,46 @@ function submitSiteVisitLog(acctId){
   var r = findDefRec(acctId) || {};
   var status = gel('log-sv-status').value;
   if(!status){ alert('Kripya FIELD VISIT ATR select karein (yeh compulsory hai).'); return; }
-  if(!PHOTO_LINKS[String(acctId)]){ alert('Kripya pehle PHOTO upload karein (yeh compulsory hai).'); return; }
+  var photoVal = PHOTO_LINKS[String(acctId)]||'';
+  if(!photoVal){ alert('Kripya pehle PHOTO upload karein (yeh compulsory hai).'); return; }
   var remarks = gel('log-sv-remarks').value.trim();
   var url = getScriptUrl();
   if(!url){ alert('Pehle SETTINGS \u2192 ATR GOOGLE SHEET SYNC mein Apps Script URL set karo.'); return; }
+
+  // Photo upload is a no-cors POST, so right after upload PHOTO_LINKS holds an
+  // optimistic 'PENDING_DRIVE_LINK_...' placeholder until the periodic sheet sync
+  // backfills the real Drive URL. If SAVE is clicked before that happens, do one
+  // quick live check against the sheet now \u2014 otherwise the placeholder gets written
+  // into this ATR row permanently and its PHOTO column shows "\u2014" forever.
+  if(/^PENDING_DRIVE_LINK_/.test(photoVal)){
+    fetch(url + '?action=get', { mode:'cors' })
+      .then(function(resp){ return resp.json(); })
+      .then(function(data){
+        var smAtr = data['SM_ATR'] || {};
+        var defAtr = data['Defaulter_ATR'] || {};
+        var rec = smAtr[String(acctId)] || defAtr[String(acctId)];
+        if(rec && rec.photo) mergePhotoLinkFromSync(acctId, rec.photo);
+        var resolved = PHOTO_LINKS[String(acctId)]||'';
+        if(/^PENDING_DRIVE_LINK_/.test(resolved)){
+          alert('\u23F3 Photo abhi Drive se sync ho raha hai. 10-15 second ruk kar dobara SAVE dabayein.');
+          return;
+        }
+        doSubmitSiteVisitLog(acctId, r, status, remarks, url, resolved);
+      })
+      .catch(function(){
+        alert('\u23F3 Photo link abhi confirm nahi ho paaya. Kuch second ruk kar dobara SAVE dabayein.');
+      });
+    return;
+  }
+
+  doSubmitSiteVisitLog(acctId, r, status, remarks, url, photoVal);
+}
+
+function doSubmitSiteVisitLog(acctId, r, status, remarks, url, photoVal){
   var payload = {
     type: 'sitevisit_atr', acct: acctId, name: r.NAME||'', load: r.LOAD||0, substation: r.SUBSTATION||'', feeder: r.FEEDER||'', address: r.ADDRESS||'',
     outstanding: r.OUTSTANDING||0, lp_date: r.PAY_DATE||'', lp_amt: r.PAY_AMT||0,
-    visit_status: status, remarks: remarks, photo: PHOTO_LINKS[String(acctId)]||''
+    visit_status: status, remarks: remarks, photo: photoVal||''
   };
   fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
     .then(function(){
@@ -8615,7 +8648,7 @@ function fetchCsvAsRows(url){
 function loadFieldAtr(force){
   if(_fieldAtrLoaded && !force){ runSvAtrFilter(); runClAtrFilter(); return; }
   var svBody = gel('svatr-tbody'), clBody = gel('clatr-tbody');
-  if(svBody) svBody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Site Visit ATR…</td></tr>';
+  if(svBody) svBody.innerHTML = '<tr><td colspan="13" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Site Visit ATR…</td></tr>';
   if(clBody) clBody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⌛ Loading Calling ATR…</td></tr>';
 
   Promise.all([
@@ -8626,7 +8659,7 @@ function loadFieldAtr(force){
     _fieldAtrLoaded = true;
 
     if(svRows && svRows.__err){
-      if(svBody) svBody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:#F43F5E;">⚠ Failed to load Site Visit ATR: '+svRows.__err+'</td></tr>';
+      if(svBody) svBody.innerHTML = '<tr><td colspan="13" style="padding:40px;text-align:center;color:#F43F5E;">⚠ Failed to load Site Visit ATR: '+svRows.__err+'</td></tr>';
       SVATR_ALL = [];
     } else {
       SVATR_ALL = (svRows||[]).filter(function(r){
@@ -8676,7 +8709,7 @@ function renderSvAtrTable(page){
   svAtrPage = page;
   var tbody = gel('svatr-tbody'); if(!tbody) return;
   if(!SVATR_FD.length){
-    tbody.innerHTML = '<tr><td colspan="12" style="padding:40px;text-align:center;color:var(--muted);">No Field Visit ATR yet — log one from the FIELD VISIT tab (📝 icon).</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="padding:40px;text-align:center;color:var(--muted);">No Field Visit ATR yet — log one from the FIELD VISIT tab (📝 icon).</td></tr>';
     var pgEl = gel('svatr-pg'); if(pgEl) pgEl.innerHTML='';
     return;
   }
@@ -8685,6 +8718,13 @@ function renderSvAtrTable(page){
     var rank = (page-1)*PS+i+1;
     var photoUrl = String(r.PHOTO||'');
     var photoCell = /^https?:\/\//.test(photoUrl) ? '<a href="'+photoUrl+'" target="_blank" title="View Photo">📷</a>' : '<span style="opacity:0.3;">—</span>';
+    var submittedCell = '-';
+    if(r.TIMESTAMP){
+      try{
+        var sd = new Date(r.TIMESTAMP);
+        if(!isNaN(sd)) submittedCell = sd.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
+      }catch(ex){}
+    }
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
       '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
@@ -8698,6 +8738,7 @@ function renderSvAtrTable(page){
       '<td style="font-weight:600;">'+(r.VISIT_STATUS||'-')+'</td>'+
       '<td style="font-size:12px;">'+(r.REMARKS||'-')+'</td>'+
       '<td style="text-align:center;">'+photoCell+'</td>'+
+      '<td style="font-size:11px;">'+submittedCell+'</td>'+
     '</tr>';
   }).join('');
   rp('svatr-pg', page, Math.ceil(SVATR_FD.length/PS), renderSvAtrTable);
