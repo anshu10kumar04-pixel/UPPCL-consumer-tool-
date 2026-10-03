@@ -7747,9 +7747,18 @@ function findDefRec(acctId){
 }
 function waConsumer(acctId, mobile){
   var r = findDefRec(acctId) || {};
+  var src = String(r.SOURCE||r.DATA_SOURCE||'').trim().toLowerCase();
+  if(src !== 'billed'){
+    alert('WhatsApp reminder sirf BILLED consumers ko bheja ja sakta hai.\nYeh consumer "'+(src||'unknown')+'" category mein hai.');
+    return;
+  }
   var mob = String(mobile||'').replace(/\D/g,'');
   if(mob.length===10) mob = '91'+mob;
-  var msg = 'Namaste '+(r.NAME||'Consumer')+', aapka UPPCL vidyut bill outstanding Rs. '+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+' hai. Kripya jald bhugtan karein. Dhanyawad. - DVVNL';
+  var dueDate = (r.DUE_DATE && r.DUE_DATE!=='-') ? r.DUE_DATE : 'yathashighra';
+  var msg = 'नमस्ते '+(r.NAME||'उपभोक्ता')+' जी,\n\n'+
+    'दक्षिणांचल विद्युत वितरण निगम लिमिटेड (DVVNL) की ओर से सूचित किया जाता है कि आपके उपभोक्ता खाता संख्या '+(r.ACCT_ID||acctId)+' पर वर्तमान में ₹'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+' की राशि बकाया है, जिसके भुगतान की देय तिथि '+dueDate+' है।\n\n'+
+    'कृपया देय तिथि तक भुगतान सुनिश्चित करें। निर्धारित अवधि में भुगतान न किए जाने की स्थिति में नियमानुसार विद्युत आपूर्ति विच्छेदित (Disconnect) की जा सकती है।\n\n'+
+    'सहयोग हेतु धन्यवाद।\n— DVVNL उपभोक्ता सेवा';
   window.open('https://wa.me/'+mob+'?text='+encodeURIComponent(msg), '_blank');
 }
 function rowActionButtons(acctId, mobile, mode){
