@@ -88,20 +88,21 @@
   ],
   "sync_status": {
     "233511": {
-      "master_period": "AUG_2026",
-      "billed_date": "30092026",
-      "unbilled_date": "30092026"
+      "master_period": "SEP_2026",
+      "billed_date": "02102026",
+      "unbilled_date": "02102026"
     },
     "233512": {
-      "master_period": "AUG_2026",
-      "billed_date": "30092026",
-      "unbilled_date": "30092026"
+      "master_period": "SEP_2026",
+      "billed_date": "02102026",
+      "unbilled_date": "02102026"
     }
   },
-  "updated": "2026-09-30T02:53:50.244521Z",
+  "updated": "2026-10-03T03:28:18.126837Z",
   "defaulters_eudd1": [
     "defaulters/def_eudd1a.csv",
-    "defaulters/def_eudd1b.csv"
+    "defaulters/def_eudd1b.csv",
+    "defaulters/def_eudd1c.csv"
   ],
   "defaulters_eudd2": [
     "defaulters/def_eudd2a.csv",
