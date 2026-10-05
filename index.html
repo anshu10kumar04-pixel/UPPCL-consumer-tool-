@@ -1296,6 +1296,35 @@ function payFlagBadgeHtml(r){
   if(!f) return '';
   return ' <span style="display:inline-block;padding:1px 6px;border-radius:9px;font-size:9px;font-weight:700;background:'+f.bg+';color:'+f.color+';white-space:nowrap;">'+f.label+'</span>';
 }
+// Short-code versions for the FIELD ATR report (SM/NSM, NP=Never Paid,
+// LUP=Long Unpaid) — the ATR sheet rows themselves don't carry METER_NO/
+// MR_SOURCE_CD/current PAY_DATE, so these look up the live defaulter record
+// by ACCT_ID (findDefRec) and tag off of THAT, not the ATR snapshot values.
+// Returns '' (no record found / no flag) when there's nothing to show.
+function atrSmTag(acctId){
+  var rec = (typeof findDefRec==='function') ? findDefRec(acctId) : null;
+  if(!rec) return '';
+  return defRecIsSM(rec) ? 'SM' : 'NSM';
+}
+function atrPayTag(acctId){
+  var rec = (typeof findDefRec==='function') ? findDefRec(acctId) : null;
+  if(!rec) return '';
+  var f = defRecPayFlag(rec);
+  if(!f) return '';
+  return f.code==='NEVER_PAID' ? 'NP' : 'LUP';
+}
+function atrSmBadgeHtml(acctId){
+  var tag = atrSmTag(acctId);
+  if(!tag) return '';
+  var isSm = tag==='SM';
+  return '<span style="display:inline-block;padding:1px 6px;border-radius:9px;font-size:9px;font-weight:700;background:'+(isSm?'#DCFCE7':'#E0E7FF')+';color:'+(isSm?'#15803D':'#3730A3')+';white-space:nowrap;">'+tag+'</span>';
+}
+function atrPayBadgeHtml(acctId){
+  var tag = atrPayTag(acctId);
+  if(!tag) return '';
+  var isNp = tag==='NP';
+  return ' <span style="display:inline-block;padding:1px 6px;border-radius:9px;font-size:9px;font-weight:700;background:'+(isNp?'#FEE2E2':'#FEF3C7')+';color:'+(isNp?'#B91C1C':'#B45309')+';white-space:nowrap;">'+tag+'</span>';
+}
 
 // Reporting "current date" = billed_date (from manifest) minus 1 day, since the
 // FTP file dated DDMMYYYY actually contains the PREVIOUS day's data. Progress
@@ -9313,7 +9342,11 @@ function loadFieldAtr(force){
           LP_DATE: r.LP_DATE||'', LP_AMT: r.LP_AMT||'',
           // The sheet's actual column (written by Code.gs) is named FIELD_VISIT_ATR,
           // not VISIT_STATUS — reading the wrong key meant this was always blank.
-          VISIT_STATUS: r.FIELD_VISIT_ATR||r.VISIT_STATUS||'', REMARKS: r.REMARKS||'', PHOTO: r.PHOTO||''
+          VISIT_STATUS: r.FIELD_VISIT_ATR||r.VISIT_STATUS||'', REMARKS: r.REMARKS||'', PHOTO: r.PHOTO||'',
+          // SM/NON-SM + NEVER PAID(NP)/LONG UNPAID(LUP) tags, looked up live off
+          // the current defaulter record (see atrSmTag/atrPayTag) — included here
+          // (not just computed at render time) so the XLSX export carries them too.
+          SM_TAG: atrSmTag(r.ACCT_ID), PAY_TAG: atrPayTag(r.ACCT_ID)
         };
       });
       SVATR_ALL.sort(function(a,b){ return atrTimestampMs(b.TIMESTAMP) - atrTimestampMs(a.TIMESTAMP); }); // latest ATR first
@@ -9336,7 +9369,10 @@ function loadFieldAtr(force){
           PROMISE_DATE: r.LP_DATE||r.PROMISE_DATE||'',
           CALL_OUTCOME: r.CALL_OUTCOME||'', REMARKS: r.REMARKS||'',
           STAFF_NAME: r.STAFF_NAME||'', WORKING_SS: r.WORKING_SS||'',
-          TIMESTAMP: r.TIMESTAMP||''
+          TIMESTAMP: r.TIMESTAMP||'',
+          // SM/NON-SM + NEVER PAID(NP)/LONG UNPAID(LUP) tags — see note above
+          // SVATR_ALL's identical fields.
+          SM_TAG: atrSmTag(r.ACCT_ID), PAY_TAG: atrPayTag(r.ACCT_ID)
         };
       });
       CLATR_ALL.sort(function(a,b){ return atrTimestampMs(b.TIMESTAMP) - atrTimestampMs(a.TIMESTAMP); }); // latest ATR first
@@ -9373,7 +9409,7 @@ function renderSvAtrTable(page){
     var submittedCell = atrSubmittedCell(r.TIMESTAMP);
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
-      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+' '+atrSmBadgeHtml(r.ACCT_ID)+atrPayBadgeHtml(r.ACCT_ID)+'</td>'+
       '<td style="font-size:12px;">'+(r.NAME||'-')+'</td>'+
       '<td style="font-size:12px;">'+(r.LOAD||'-')+'</td>'+
       '<td>'+(r.SUBSTATION||'-')+'</td>'+
@@ -9424,7 +9460,7 @@ function renderClAtrTable(page){
     var rank = (page-1)*PS+i+1;
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
-      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+' '+atrSmBadgeHtml(r.ACCT_ID)+atrPayBadgeHtml(r.ACCT_ID)+'</td>'+
       '<td style="font-size:12px;">'+(r.NAME||'-')+'</td>'+
       '<td>'+(r.MOBILE||'-')+'</td>'+
       '<td style="font-size:12px;">'+(r.LOAD||'-')+'</td>'+
