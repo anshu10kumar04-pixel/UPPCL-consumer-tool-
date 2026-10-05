@@ -1296,18 +1296,29 @@ function payFlagBadgeHtml(r){
   if(!f) return '';
   return ' <span style="display:inline-block;padding:1px 6px;border-radius:9px;font-size:9px;font-weight:700;background:'+f.bg+';color:'+f.color+';white-space:nowrap;">'+f.label+'</span>';
 }
+// Google Sheets (the ATR backend) sometimes stores/returns ACCT_ID as a
+// number, which silently drops any leading zero (e.g. 0372472000 comes
+// back as 372472000) — DEF_ALL's own ACCT_ID is always the full 10-digit
+// string, so a short numeric ID needs re-padding before it's displayed OR
+// used to look anything up, otherwise it just looks wrong AND the SM/NSM +
+// NP/LUP lookup below silently fails to match.
+function pad10(id){
+  var s = String(id||'').trim();
+  if(/^\d+$/.test(s) && s.length>0 && s.length<10) return s.padStart(10,'0');
+  return s;
+}
 // Short-code versions for the FIELD ATR report (SM/NSM, NP=Never Paid,
 // LUP=Long Unpaid) — the ATR sheet rows themselves don't carry METER_NO/
 // MR_SOURCE_CD/current PAY_DATE, so these look up the live defaulter record
 // by ACCT_ID (findDefRec) and tag off of THAT, not the ATR snapshot values.
 // Returns '' (no record found / no flag) when there's nothing to show.
 function atrSmTag(acctId){
-  var rec = (typeof findDefRec==='function') ? findDefRec(acctId) : null;
+  var rec = (typeof findDefRec==='function') ? findDefRec(pad10(acctId)) : null;
   if(!rec) return '';
   return defRecIsSM(rec) ? 'SM' : 'NSM';
 }
 function atrPayTag(acctId){
-  var rec = (typeof findDefRec==='function') ? findDefRec(acctId) : null;
+  var rec = (typeof findDefRec==='function') ? findDefRec(pad10(acctId)) : null;
   if(!rec) return '';
   var f = defRecPayFlag(rec);
   if(!f) return '';
@@ -8806,8 +8817,15 @@ function expFieldVisitX(){
 var SITEVISIT_LATEST = {}, CALLING_LATEST = {}, _atrLogsLoaded = false;
 var LOG_ATR_OPTIONS = ['PENDING','PAID','PARTIAL','PROMISE','LOCK','DISPUTE','TD','OTHER'];
 var LOG_ATR_LABELS = { PENDING:'\u23F3 PENDING / \u0932\u0902\u092C\u093F\u0924', PAID:'\u2705 PAID / \u092D\u0941\u0917\u0924\u093E\u0928 \u0939\u094B \u0917\u092F\u093E', PARTIAL:'\uD83D\uDCB0 PARTIAL PAYMENT / \u0906\u0902\u0936\u093F\u0915 \u092D\u0941\u0917\u0924\u093E\u0928', PROMISE:'\uD83E\uDD1D PROMISE TO PAY / \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u093E \u0935\u093E\u0926\u093E', LOCK:'\uD83D\uDD12 LOCK / AWAY / \u0918\u0930 \u092C\u0902\u0926', DISPUTE:'\u2696\uFE0F DISPUTE / \u0935\u093F\u0935\u093E\u0926', TD:'\uD83D\uDD0C TEMP DISCONNECTED / \u0905\u0938\u094D\u0925\u093E\u092F\u0940 \u0935\u093F\u091A\u094D\u091B\u0947\u0926\u0928', OTHER:'\uD83D\uDCDD OTHER / \u0905\u0928\u094D\u092F' };
-var CALL_OUTCOME_OPTIONS = ['NOT_PICKED','SWITCHED_OFF','WRONG_NUMBER','NOT_REACHABLE','PROMISE','PARTIAL','PAID','REFUSED','DISPUTE','CALLBACK','WARNED_DISCONNECTION','OTHER'];
-var CALL_OUTCOME_LABELS = { NOT_PICKED:'\uD83D\uDCF5 NOT PICKED / \u092B\u094B\u0928 \u0928\u0939\u0940\u0902 \u0909\u0920\u093E\u092F\u093E', SWITCHED_OFF:'\uD83D\uDCF4 SWITCHED OFF / \u0938\u094D\u0935\u093F\u091A\u094D\u0921 \u0911\u092B', WRONG_NUMBER:'\u274C WRONG NUMBER / \u0917\u0932\u0924 \u0928\u0902\u092C\u0930', NOT_REACHABLE:'\uD83D\uDCF6 NOT REACHABLE / \u0928\u0947\u091F\u0935\u0930\u094D\u0915 \u0928\u0939\u0940\u0902', PROMISE:'\uD83E\uDD1D PROMISED TO PAY / \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u093E \u0935\u093E\u0926\u093E', PARTIAL:'\uD83D\uDCB0 PARTIAL PAYMENT / \u0906\u0902\u0936\u093F\u0915 \u092D\u0941\u0917\u0924\u093E\u0928', PAID:'\u2705 ALREADY PAID / \u092D\u0941\u0917\u0924\u093E\u0928 \u0939\u094B \u091A\u0941\u0915\u093E', REFUSED:'\uD83D\uDEAB REFUSED TO PAY / \u092D\u0941\u0917\u0924\u093E\u0928 \u0938\u0947 \u0907\u0928\u0915\u093E\u0930', DISPUTE:'\u2696\uFE0F DISPUTE / \u092C\u093F\u0932 \u0935\u093F\u0935\u093E\u0926', CALLBACK:'\uD83D\uDD01 CALL BACK LATER / \u092C\u093E\u0926 \u092E\u0947\u0902 \u0915\u0949\u0932 \u0915\u0930\u0947\u0902', WARNED_DISCONNECTION:'\u26A0\uFE0F DISCONNECTION WARNING GIVEN / \u0935\u093F\u091A\u094D\u091B\u0947\u0926\u0928 \u0915\u0940 \u091A\u0947\u0924\u093E\u0935\u0928\u0940 \u0926\u0940', OTHER:'\uD83D\uDCDD OTHER / \u0905\u0928\u094D\u092F' };
+// NOT_PICKED and SWITCHED_OFF merged into one selectable option (user's call,
+// 05-Oct-2026: both mean "number is active, just didn't connect" to field
+// staff in practice) \u2014 SWITCHED_OFF is kept out of OPTIONS (so it no longer
+// shows in the dropdown) but stays in LABELS below so any already-submitted
+// SWITCHED_OFF records still render with a proper label instead of the raw
+// code. NOT_REACHABLE stays separate per the user's explicit distinction
+// (network/number itself unreachable, not just unanswered).
+var CALL_OUTCOME_OPTIONS = ['NOT_PICKED','WRONG_NUMBER','NOT_REACHABLE','PROMISE','PARTIAL','PAID','REFUSED','DISPUTE','CALLBACK','WARNED_DISCONNECTION','OTHER'];
+var CALL_OUTCOME_LABELS = { NOT_PICKED:'\uD83D\uDCF5 NOT PICKED / SWITCHED OFF / \u092B\u094B\u0928 \u0928\u0939\u0940\u0902 \u0909\u0920\u093E\u092F\u093E \u092F\u093E \u092C\u0902\u0926 \u0939\u0948', SWITCHED_OFF:'\uD83D\uDCF4 SWITCHED OFF / \u0938\u094D\u0935\u093F\u091A\u094D\u0921 \u0911\u092B', WRONG_NUMBER:'\u274C WRONG NUMBER / \u0917\u0932\u0924 \u0928\u0902\u092C\u0930', NOT_REACHABLE:'\uD83D\uDCF6 NOT REACHABLE / \u0928\u0947\u091F\u0935\u0930\u094D\u0915 \u0928\u0939\u0940\u0902', PROMISE:'\uD83E\uDD1D PROMISED TO PAY / \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u093E \u0935\u093E\u0926\u093E', PARTIAL:'\uD83D\uDCB0 PARTIAL PAYMENT / \u0906\u0902\u0936\u093F\u0915 \u092D\u0941\u0917\u0924\u093E\u0928', PAID:'\u2705 ALREADY PAID / \u092D\u0941\u0917\u0924\u093E\u0928 \u0939\u094B \u091A\u0941\u0915\u093E', REFUSED:'\uD83D\uDEAB REFUSED TO PAY / \u092D\u0941\u0917\u0924\u093E\u0928 \u0938\u0947 \u0907\u0928\u0915\u093E\u0930', DISPUTE:'\u2696\uFE0F DISPUTE / \u092C\u093F\u0932 \u0935\u093F\u0935\u093E\u0926', CALLBACK:'\uD83D\uDD01 CALL BACK LATER / \u092C\u093E\u0926 \u092E\u0947\u0902 \u0915\u0949\u0932 \u0915\u0930\u0947\u0902', WARNED_DISCONNECTION:'\u26A0\uFE0F DISCONNECTION WARNING GIVEN / \u0935\u093F\u091A\u094D\u091B\u0947\u0926\u0928 \u0915\u0940 \u091A\u0947\u0924\u093E\u0935\u0928\u0940 \u0926\u0940', OTHER:'\uD83D\uDCDD OTHER / \u0905\u0928\u094D\u092F' };
 
 function loadAtrLogs(cb){
   Promise.all([
@@ -8817,11 +8835,15 @@ function loadAtrLogs(cb){
     var svRows = res[0]||[], clRows = res[1]||[];
     SITEVISIT_LATEST = {}; CALLING_LATEST = {};
     svRows.forEach(function(r){
-      var acct = String(r.ACCT_ID||'').trim(); if(!acct) return;
+      // pad10: same Google Sheets leading-zero issue as the FIELD ATR report —
+      // without it, a short ACCT_ID here never matches the padded ACCT_ID the
+      // CALLING/FIELD VISIT lists look it up by, so a real submitted ATR
+      // silently shows as still PENDING.
+      var acct = pad10(r.ACCT_ID); if(!acct) return;
       SITEVISIT_LATEST[acct] = { FIELD_VISIT_ATR: r.FIELD_VISIT_ATR||'', REMARKS: r.REMARKS||'' };
     });
     clRows.forEach(function(r){
-      var acct = String(r.ACCT_ID||'').trim(); if(!acct) return;
+      var acct = pad10(r.ACCT_ID); if(!acct) return;
       CALLING_LATEST[acct] = { CALL_OUTCOME: r.CALL_OUTCOME||'', REMARKS: r.REMARKS||'' };
     });
     _atrLogsLoaded = true;
@@ -9336,8 +9358,12 @@ function loadFieldAtr(force){
       SVATR_ALL = (svRows||[]).filter(function(r){
         return String(r.ACCT_ID||'').trim() && String(r.ATR_ID||'')!=='EXAMPLE_ROW';
       }).map(function(r){
+        // pad10: Google Sheets can hand ACCT_ID back as a number, dropping any
+        // leading zero — re-pad to the canonical 10 digits before it's used
+        // anywhere (display, SM/NP lookup, export), see pad10's own comment.
+        var acct = pad10(r.ACCT_ID);
         return {
-          ACCT_ID: String(r.ACCT_ID||''), NAME: r.NAME||'', LOAD: r.LOAD||'', SUBSTATION: r.SUBSTATION||'', FEEDER: r.FEEDER||'',
+          ACCT_ID: acct, NAME: r.NAME||'', LOAD: r.LOAD||'', SUBSTATION: r.SUBSTATION||'', FEEDER: r.FEEDER||'',
           ADDRESS: r.ADDRESS||'', OUTSTANDING: r.OUTSTANDING||'', TIMESTAMP: r.TIMESTAMP||'',
           LP_DATE: r.LP_DATE||'', LP_AMT: r.LP_AMT||'',
           // The sheet's actual column (written by Code.gs) is named FIELD_VISIT_ATR,
@@ -9346,7 +9372,7 @@ function loadFieldAtr(force){
           // SM/NON-SM + NEVER PAID(NP)/LONG UNPAID(LUP) tags, looked up live off
           // the current defaulter record (see atrSmTag/atrPayTag) — included here
           // (not just computed at render time) so the XLSX export carries them too.
-          SM_TAG: atrSmTag(r.ACCT_ID), PAY_TAG: atrPayTag(r.ACCT_ID)
+          SM_TAG: atrSmTag(acct), PAY_TAG: atrPayTag(acct)
         };
       });
       SVATR_ALL.sort(function(a,b){ return atrTimestampMs(b.TIMESTAMP) - atrTimestampMs(a.TIMESTAMP); }); // latest ATR first
@@ -9361,8 +9387,9 @@ function loadFieldAtr(force){
       CLATR_ALL = (clRows||[]).filter(function(r){
         return String(r.ACCT_ID||'').trim() && String(r.ATR_ID||'')!=='EXAMPLE_ROW';
       }).map(function(r){
+        var acct = pad10(r.ACCT_ID);
         return {
-          ACCT_ID: String(r.ACCT_ID||''), NAME: r.NAME||'', MOBILE: r.MOBILE||'', LOAD: r.LOAD||'', SUBSTATION: r.SUBSTATION||'',
+          ACCT_ID: acct, NAME: r.NAME||'', MOBILE: r.MOBILE||'', LOAD: r.LOAD||'', SUBSTATION: r.SUBSTATION||'',
           OUTSTANDING: r.OUTSTANDING||'', LP_DATE: r.LP_DATE||'', LP_AMT: r.LP_AMT||'',
           // The sheet's actual column is LP_DATE (Code.gs never writes a PROMISE_DATE
           // column) — kept as a fallback in case an older row happens to have one.
@@ -9372,7 +9399,7 @@ function loadFieldAtr(force){
           TIMESTAMP: r.TIMESTAMP||'',
           // SM/NON-SM + NEVER PAID(NP)/LONG UNPAID(LUP) tags — see note above
           // SVATR_ALL's identical fields.
-          SM_TAG: atrSmTag(r.ACCT_ID), PAY_TAG: atrPayTag(r.ACCT_ID)
+          SM_TAG: atrSmTag(acct), PAY_TAG: atrPayTag(acct)
         };
       });
       CLATR_ALL.sort(function(a,b){ return atrTimestampMs(b.TIMESTAMP) - atrTimestampMs(a.TIMESTAMP); }); // latest ATR first
