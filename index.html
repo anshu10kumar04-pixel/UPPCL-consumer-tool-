@@ -3187,6 +3187,347 @@ function toggleYoYSub(id){
   }
 }
 
+// ── Date-range filter for the Calling ATR / Field Visit ATR status-breakdown
+// cards (added per user request "PREPARE THIS REPORT DATE WISE", 05-Oct-2026).
+// Only CARD 2 (Calling ATR status breakdown) and CARD 3 (Field Visit ATR status
+// breakdown) respect this filter — CARD 1 (SS-wise coverage: defaulters vs
+// calling/visit done) is always all-time, since "pending" there is measured
+// against the full live defaulter list and a date-scoped "done" count would
+// make that comparison meaningless.
+var _dashAtrDateMode = 'all';
+
+function atrDateRangeFor(mode){
+  var now = new Date();
+  function startOfDay(d){ var x=new Date(d); x.setHours(0,0,0,0); return x.getTime(); }
+  function endOfDay(d){ var x=new Date(d); x.setHours(23,59,59,999); return x.getTime(); }
+  if(mode==='today'){
+    return {from:startOfDay(now), to:endOfDay(now), label:'TODAY • '+now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})};
+  }
+  if(mode==='yesterday'){
+    var y=new Date(now.getTime()-86400000);
+    return {from:startOfDay(y), to:endOfDay(y), label:'YESTERDAY • '+y.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})};
+  }
+  if(mode==='week'){
+    var wd=now.getDay(); var mondayOffset=(wd===0?6:wd-1);
+    var monday=new Date(now.getTime()-mondayOffset*86400000);
+    return {from:startOfDay(monday), to:endOfDay(now), label:'THIS WEEK • since '+monday.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})};
+  }
+  if(mode==='month'){
+    var first=new Date(now.getFullYear(), now.getMonth(), 1);
+    return {from:startOfDay(first), to:endOfDay(now), label:'THIS MONTH • '+now.toLocaleDateString('en-IN',{month:'long',year:'numeric'})};
+  }
+  if(mode==='custom'){
+    var fEl=gel('dash-atr-from'), tEl=gel('dash-atr-to');
+    var fVal = fEl && fEl.value, tVal = tEl && tEl.value;
+    if(!fVal && !tVal) return null;
+    var fromMs = fVal ? startOfDay(new Date(fVal)) : -Infinity;
+    var toMs = tVal ? endOfDay(new Date(tVal)) : Infinity;
+    var lbl = (fVal||'...')+' to '+(tVal||'...');
+    return {from:fromMs, to:toMs, label:lbl};
+  }
+  return null; // 'all' — no filter
+}
+
+function setAtrDateFilter(mode){
+  _dashAtrDateMode = mode;
+  ['all','today','yesterday','week','month','custom'].forEach(function(m){
+    var b = gel('dash-atr-btn-'+m);
+    if(b){
+      if(m===mode){ b.style.background='#1E3A5F'; b.style.color='#fff'; }
+      else { b.style.background='#fff'; b.style.color='#1E3A5F'; }
+    }
+  });
+  var cw = gel('dash-atr-customwrap');
+  if(cw) cw.style.display = (mode==='custom') ? 'inline-flex' : 'none';
+  if(mode!=='custom') refreshAtrSummarySection();
+}
+
+function applyAtrCustomRange(){
+  _dashAtrDateMode = 'custom';
+  refreshAtrSummarySection();
+}
+
+function refreshAtrSummarySection(){
+  var wrap = gel('dash-atrsummary-wrap');
+  if(wrap) wrap.innerHTML = buildAtrSummaryCardsHtml(_dashAtrDateMode);
+}
+
+function buildAtrSummaryCardsHtml(dateMode){
+  function dedupeByAcct(arr){
+    var byId = {};
+    arr.forEach(function(r){
+      var id = String(r.ACCT_ID);
+      var prev = byId[id];
+      if(!prev){ byId[id] = r; return; }
+      var tsNew = atrTimestampMs(r.TIMESTAMP), tsOld = atrTimestampMs(prev.TIMESTAMP);
+      if(tsNew >= tsOld) byId[id] = r;
+    });
+    return Object.keys(byId).map(function(k){ return byId[k]; });
+  }
+  var dashTop16 = getTop16SSList();
+  var ssLookup2 = {};
+  DEF_ALL.forEach(function(r){ ssLookup2[String(r.ACCT_ID)] = r.SUBSTATION || 'Unknown'; });
+
+  var allClRows = dedupeByAcct(CLATR_ALL).filter(function(r){
+    var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
+    return isTop16SS(ss, dashTop16);
+  });
+  var allSvRows = dedupeByAcct(SVATR_ALL).filter(function(r){
+    var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
+    return isTop16SS(ss, dashTop16);
+  });
+
+  var range = atrDateRangeFor(dateMode);
+  function inRange(ts){
+    if(!range) return true;
+    var ms = atrTimestampMs(ts);
+    if(!ms) return false;
+    return ms>=range.from && ms<=range.to;
+  }
+  var clRows = range ? allClRows.filter(function(r){ return inRange(r.TIMESTAMP); }) : allClRows;
+  var svRows = range ? allSvRows.filter(function(r){ return inRange(r.TIMESTAMP); }) : allSvRows;
+
+  var ssDefCount = {};
+  DEF_ALL.forEach(function(r){
+    if((parseFloat(r.OUTSTANDING)||0) < 2000) return;
+    var ss = r.SUBSTATION || 'Unknown';
+    if(!isTop16SS(ss, dashTop16)) return;
+    ssDefCount[ss] = (ssDefCount[ss]||0) + 1;
+  });
+
+  // CARD 1 inputs — always all-time (coverage vs the live defaulter list)
+  var clBySS = {}, svBySS = {};
+  allClRows.forEach(function(r){
+    var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
+    clBySS[ss] = (clBySS[ss]||0)+1;
+  });
+  allSvRows.forEach(function(r){
+    var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
+    svBySS[ss] = (svBySS[ss]||0)+1;
+  });
+
+  // CARD 2 / CARD 3 inputs — respect the date filter
+  var clStatusBySS = {}, clStaffBySS = {}, clSSByStaff = {};
+  clRows.forEach(function(r){
+    var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
+    if(!clStatusBySS[ss]) clStatusBySS[ss] = {};
+    var st = r.CALL_OUTCOME || 'OTHER';
+    clStatusBySS[ss][st] = (clStatusBySS[ss][st]||0)+1;
+    var staff = (r.STAFF_NAME||'').trim() || '— NOT RECORDED —';
+    if(!clStaffBySS[ss]) clStaffBySS[ss] = {};
+    clStaffBySS[ss][staff] = (clStaffBySS[ss][staff]||0)+1;
+    if(!clSSByStaff[staff]) clSSByStaff[staff] = {};
+    clSSByStaff[staff][ss] = (clSSByStaff[staff][ss]||0)+1;
+  });
+  var svStatusBySS = {};
+  svRows.forEach(function(r){
+    var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
+    if(!svStatusBySS[ss]) svStatusBySS[ss] = {};
+    var st = r.VISIT_STATUS || 'PENDING';
+    svStatusBySS[ss][st] = (svStatusBySS[ss][st]||0)+1;
+  });
+
+  var allSsSet = {};
+  Object.keys(ssDefCount).forEach(function(s){allSsSet[s]=1;});
+  Object.keys(clBySS).forEach(function(s){allSsSet[s]=1;});
+  Object.keys(svBySS).forEach(function(s){allSsSet[s]=1;});
+  var allSsList = Object.keys(allSsSet).sort();
+
+  var totalCl = allClRows.length, totalSv = allSvRows.length; // Card 1 badge (all-time)
+  var totalClF = clRows.length, totalSvF = svRows.length;     // Card 2/3 badge (filtered)
+  var rangeNote = range ? (' &nbsp;<span style="font-size:10px;font-weight:600;background:rgba(255,255,255,.2);padding:2px 8px;border-radius:5px;">📅 '+range.label+'</span>') : '';
+
+  var html = '';
+
+  // ════════ CARD 1 — ATR SUMMARY (coverage, always all-time) ════════
+  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
+  html += '<div style="background:#1E3A5F;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-atrsum-body\')">';
+  html += '<span>📊 ATR SUMMARY — SS-WISE COVERAGE</span>';
+  html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">Calling: '+totalCl+' &nbsp;|&nbsp; Field Visit: '+totalSv+' &nbsp;&#9654;</span>';
+  html += '</div>';
+  html += '<div id="dash-atrsum-body" style="display:none;">';
+  html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-atrsum-body\',\'ATR_Summary\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-atrsum-body\',\'ATR Summary\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
+
+  if(allSsList.length===0){
+    html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No Calling ATR / Field Visit ATR data yet.</div>';
+  } else {
+    html += '<div style="overflow-x:auto;max-width:100%;padding-bottom:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+    html += '<thead><tr style="background:#EFF6FF;">'+
+      '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">SUBSTATION</th>'+
+      '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">TOTAL DEFAULTERS</th>'+
+      '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#0891B2;border-bottom:1px solid #BFDBFE;border-left:1px solid #BFDBFE;">CALLING DONE</th>'+
+      '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#DC2626;border-bottom:1px solid #BFDBFE;">CALLING PENDING</th>'+
+      '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#059669;border-bottom:1px solid #BFDBFE;">CALLING %</th>'+
+      '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#0891B2;border-bottom:1px solid #BFDBFE;border-left:1px solid #BFDBFE;">VISIT DONE</th>'+
+      '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#DC2626;border-bottom:1px solid #BFDBFE;">VISIT PENDING</th>'+
+      '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#059669;border-bottom:1px solid #BFDBFE;">VISIT %</th>'+
+      '</tr></thead><tbody>';
+
+    var gTotalDef=0, gClDone=0, gSvDone=0;
+    allSsList.forEach(function(ss,i){
+      var totDef = ssDefCount[ss]||0;
+      var clDone = clBySS[ss]||0;
+      var svDone = svBySS[ss]||0;
+      var clPend = Math.max(totDef-clDone,0);
+      var svPend = Math.max(totDef-svDone,0);
+      var clPct = totDef>0 ? Math.round(clDone/totDef*100) : 0;
+      var svPct = totDef>0 ? Math.round(svDone/totDef*100) : 0;
+      gTotalDef+=totDef; gClDone+=clDone; gSvDone+=svDone;
+      var rowBg = i%2?'#F9FAFB':'#fff';
+      html += '<tr style="background:'+rowBg+'">'+
+        '<td style="padding:6px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+ss+'</td>'+
+        '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#374151;">'+totDef+'</td>'+
+        '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#0891B2;border-left:1px solid #F0F0F0;">'+clDone+'</td>'+
+        '<td style="padding:6px 8px;text-align:right;color:#DC2626;">'+clPend+'</td>'+
+        '<td style="padding:6px 8px;text-align:right;font-weight:700;color:'+(clPct>=75?'#059669':clPct>=40?'#D97706':'#DC2626')+';">'+clPct+'%</td>'+
+        '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#0891B2;border-left:1px solid #F0F0F0;">'+svDone+'</td>'+
+        '<td style="padding:6px 8px;text-align:right;color:#DC2626;">'+svPend+'</td>'+
+        '<td style="padding:6px 8px;text-align:right;font-weight:700;color:'+(svPct>=75?'#059669':svPct>=40?'#D97706':'#DC2626')+';">'+svPct+'%</td>'+
+        '</tr>';
+    });
+    var gClPend=Math.max(gTotalDef-gClDone,0), gSvPend=Math.max(gTotalDef-gSvDone,0);
+    var gClPct = gTotalDef>0?Math.round(gClDone/gTotalDef*100):0, gSvPct = gTotalDef>0?Math.round(gSvDone/gTotalDef*100):0;
+    html += '<tr style="background:#EFF6FF;border-top:2px solid #BFDBFE;">'+
+      '<td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#1E3A5F;">TOTAL</td>'+
+      '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#374151;">'+gTotalDef+'</td>'+
+      '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#0891B2;border-left:1px solid #BFDBFE;">'+gClDone+'</td>'+
+      '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#DC2626;">'+gClPend+'</td>'+
+      '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#059669;">'+gClPct+'%</td>'+
+      '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#0891B2;border-left:1px solid #BFDBFE;">'+gSvDone+'</td>'+
+      '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#DC2626;">'+gSvPend+'</td>'+
+      '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#059669;">'+gSvPct+'%</td>'+
+      '</tr>';
+    html += '</tbody></table></div>';
+  }
+  html += '</div></div>'; // close dash-atrsum-body + card
+
+  // ════════ CARD 2 — CALLING ATR status breakdown (date-filterable) ════════
+  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
+  html += '<div style="background:#0E7490;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-clstatus-body\')">';
+  html += '<span>📞 CALLING ATR — SS-WISE STATUS BREAKDOWN</span>';
+  html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">'+totalClF+' submitted'+rangeNote+' &nbsp;&#9654;</span>';
+  html += '</div>';
+  html += '<div id="dash-clstatus-body" style="display:none;">';
+  html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-clstatus-body\',\'Calling_ATR_Status\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-clstatus-body\',\'Calling ATR Status Breakdown\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
+  html += '<div style="display:flex;gap:8px;padding:10px 16px 0;">'+
+    '<button id="cl-view-ss-btn" onclick="showClStatusView(\'ss\')" style="font-size:11px;font-family:var(--fh);font-weight:700;padding:6px 14px;border-radius:8px;border:1.5px solid #0E7490;background:#0E7490;color:#fff;cursor:pointer;">📋 ATR BY SS</button>'+
+    '<button id="cl-view-staff-btn" onclick="showClStatusView(\'staff\')" style="font-size:11px;font-family:var(--fh);font-weight:700;padding:6px 14px;border-radius:8px;border:1.5px solid #0E7490;background:#fff;color:#0E7490;cursor:pointer;">👤 ATR BY STAFF</button>'+
+  '</div>';
+
+  html += '<div id="dash-clstatus-ssview" style="display:block;">';
+  if(allSsList.length===0 || totalClF===0){
+    html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No Calling ATR data'+(range?' for '+range.label:' yet')+'.</div>';
+  } else {
+    var clColCount = CALL_OUTCOME_OPTIONS.length + 2;
+    html += '<div style="overflow-x:auto;max-width:100%;padding-bottom:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+    html += '<thead><tr style="background:#ECFEFF;"><th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">SUBSTATION</th>';
+    CALL_OUTCOME_OPTIONS.forEach(function(k){
+      html += '<th style="padding:7px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #A5F3FC;white-space:nowrap;">'+k.replace(/_/g,' ')+'</th>';
+    });
+    html += '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#065F46;border-bottom:1px solid #A5F3FC;border-left:1px solid #A5F3FC;">TOTAL</th></tr></thead><tbody>';
+    var clGrand={};
+    allSsList.forEach(function(ss,i){
+      var row = clStatusBySS[ss]||{};
+      var rowBg = i%2?'#F9FAFB':'#fff';
+      var ssSlug = 'cl-ss-'+i;
+      html += '<tr style="background:'+rowBg+'"><td style="padding:6px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+
+        '<a href="javascript:void(0)" onclick="dashSubToggle(\''+ssSlug+'\')" id="'+ssSlug+'-btn" title="Show staff-wise breakdown" style="display:inline-block;width:16px;text-align:center;text-decoration:none;color:#0E7490;font-weight:800;margin-right:6px;">+</a>'+ss+'</td>';
+      var rt=0;
+      CALL_OUTCOME_OPTIONS.forEach(function(k){
+        var v = row[k]||0; rt+=v; clGrand[k]=(clGrand[k]||0)+v;
+        html += '<td style="padding:6px 6px;text-align:right;color:'+(v>0?'#1D4ED8':'#D1D5DB')+';font-weight:'+(v>0?'700':'400')+';">'+(v||'-')+'</td>';
+      });
+      html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #F0F0F0;">'+(rt||'-')+'</td></tr>';
+      html += '<tr id="'+ssSlug+'" style="display:none;"><td colspan="'+clColCount+'" style="padding:0 10px 8px 28px;background:'+rowBg+';">'+
+        clMiniTable(clStaffBySS[ss]||{}, 'STAFF NAME — CALLS MADE IN '+ss)+
+      '</td></tr>';
+    });
+    html += '<tr style="background:#ECFEFF;border-top:2px solid #A5F3FC;"><td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#0E7490;">TOTAL</td>';
+    var clGt=0;
+    CALL_OUTCOME_OPTIONS.forEach(function(k){ var v=clGrand[k]||0; clGt+=v; html += '<td style="padding:7px 6px;text-align:right;font-weight:800;color:#1D4ED8;">'+(v||'-')+'</td>'; });
+    html += '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #A5F3FC;">'+clGt+'</td></tr>';
+    html += '</tbody></table></div>';
+  }
+  html += '</div>'; // close dash-clstatus-ssview
+
+  html += '<div id="dash-clstatus-staffview" style="display:none;">';
+  if(allSsList.length===0 || totalClF===0){
+    html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No Calling ATR data'+(range?' for '+range.label:' yet')+'.</div>';
+  } else {
+    var staffList = Object.keys(clSSByStaff);
+    var staffTotal = {};
+    staffList.forEach(function(st){
+      var sum=0; Object.keys(clSSByStaff[st]).forEach(function(ss){ sum+=clSSByStaff[st][ss]; });
+      staffTotal[st]=sum;
+    });
+    staffList.sort(function(a,b){ return staffTotal[b]-staffTotal[a]; });
+    html += '<div style="overflow-x:auto;max-width:100%;padding-bottom:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+    html += '<thead><tr style="background:#ECFEFF;">'+
+      '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">STAFF NAME</th>'+
+      '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">SS COVERED</th>'+
+      '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#065F46;border-bottom:1px solid #A5F3FC;border-left:1px solid #A5F3FC;">TOTAL CALLS</th>'+
+      '</tr></thead><tbody>';
+    staffList.forEach(function(st,i){
+      var rowBg = i%2?'#F9FAFB':'#fff';
+      var stSlug = 'cl-staff-'+i;
+      var ssCount = Object.keys(clSSByStaff[st]).length;
+      html += '<tr style="background:'+rowBg+'"><td style="padding:6px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+
+        '<a href="javascript:void(0)" onclick="dashSubToggle(\''+stSlug+'\')" id="'+stSlug+'-btn" title="Show SS-wise breakdown" style="display:inline-block;width:16px;text-align:center;text-decoration:none;color:#0E7490;font-weight:800;margin-right:6px;">+</a>'+esc(st)+'</td>'+
+        '<td style="padding:6px 8px;text-align:right;color:#374151;">'+ssCount+'</td>'+
+        '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #F0F0F0;">'+staffTotal[st]+'</td></tr>';
+      html += '<tr id="'+stSlug+'" style="display:none;"><td colspan="3" style="padding:0 10px 8px 28px;background:'+rowBg+';">'+
+        clMiniTable(clSSByStaff[st], 'SUBSTATION — CALLS MADE BY '+st)+
+      '</td></tr>';
+    });
+    html += '<tr style="background:#ECFEFF;border-top:2px solid #A5F3FC;"><td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#0E7490;">TOTAL</td><td></td>'+
+      '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #A5F3FC;">'+totalClF+'</td></tr>';
+    html += '</tbody></table></div>';
+  }
+  html += '</div>'; // close dash-clstatus-staffview
+
+  html += '</div></div>'; // close dash-clstatus-body + card
+
+  // ════════ CARD 3 — FIELD VISIT ATR status breakdown (date-filterable) ════════
+  html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
+  html += '<div style="background:#0E7490;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-svstatus-body\')">';
+  html += '<span>🧭 FIELD VISIT ATR — SS-WISE STATUS BREAKDOWN</span>';
+  html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">'+totalSvF+' submitted'+rangeNote+' &nbsp;&#9654;</span>';
+  html += '</div>';
+  html += '<div id="dash-svstatus-body" style="display:none;">';
+  html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-svstatus-body\',\'FieldVisit_ATR_Status\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-svstatus-body\',\'Field Visit ATR Status Breakdown\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
+
+  if(allSsList.length===0 || totalSvF===0){
+    html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No Field Visit ATR data'+(range?' for '+range.label:' yet')+'.</div>';
+  } else {
+    html += '<div style="overflow-x:auto;max-width:100%;padding-bottom:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
+    html += '<thead><tr style="background:#ECFEFF;"><th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">SUBSTATION</th>';
+    LOG_ATR_OPTIONS.forEach(function(k){
+      html += '<th style="padding:7px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #A5F3FC;white-space:nowrap;">'+k+'</th>';
+    });
+    html += '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#065F46;border-bottom:1px solid #A5F3FC;border-left:1px solid #A5F3FC;">TOTAL</th></tr></thead><tbody>';
+    var svGrand={};
+    allSsList.forEach(function(ss,i){
+      var row = svStatusBySS[ss]||{};
+      var rowBg = i%2?'#F9FAFB':'#fff';
+      html += '<tr style="background:'+rowBg+'"><td style="padding:6px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+ss+'</td>';
+      var rt=0;
+      LOG_ATR_OPTIONS.forEach(function(k){
+        var v = row[k]||0; rt+=v; svGrand[k]=(svGrand[k]||0)+v;
+        html += '<td style="padding:6px 6px;text-align:right;color:'+(v>0?'#1D4ED8':'#D1D5DB')+';font-weight:'+(v>0?'700':'400')+';">'+(v||'-')+'</td>';
+      });
+      html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #F0F0F0;">'+(rt||'-')+'</td></tr>';
+    });
+    html += '<tr style="background:#ECFEFF;border-top:2px solid #A5F3FC;"><td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#0E7490;">TOTAL</td>';
+    var svGt=0;
+    LOG_ATR_OPTIONS.forEach(function(k){ var v=svGrand[k]||0; svGt+=v; html += '<td style="padding:7px 6px;text-align:right;font-weight:800;color:#1D4ED8;">'+(v||'-')+'</td>'; });
+    html += '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #A5F3FC;">'+svGt+'</td></tr>';
+    html += '</tbody></table></div>';
+  }
+  html += '</div></div>'; // close dash-svstatus-body + card
+
+  return html;
+}
+
 function buildDashboard(){
   var el = gel('panel-dashboard');
   if(!el) return;
@@ -3651,279 +3992,25 @@ function buildDashboard(){
   });
   html += '</div></div></div>';
 
-  // ── ATR SUMMARY (server-synced Calling ATR + Field Visit ATR, each a separate expandable report) ──
-  (function(){
-    // De-dupe by ACCT_ID defensively (upsert in Code.gs already guarantees one row
-    // per consumer, but this is a safety net so a consumer's ATR is counted only
-    // once even if a stray duplicate row ever ends up in the sheet).
-    function dedupeByAcct(arr){
-      var byId = {};
-      arr.forEach(function(r){
-        var id = String(r.ACCT_ID);
-        var prev = byId[id];
-        if(!prev){ byId[id] = r; return; }
-        var tsNew = Date.parse(r.TIMESTAMP)||0, tsOld = Date.parse(prev.TIMESTAMP)||0;
-        if(tsNew >= tsOld) byId[id] = r;
-      });
-      return Object.keys(byId).map(function(k){ return byId[k]; });
-    }
-    // Restrict the whole ATR summary to the same top-16-SS used by the Calling ATR /
-    // Field Visit ATR candidate lists, so the Dashboard never shows SS outside that set
-    // (an ATR submitted while its SS was in the top-16 can otherwise linger here after
-    // the ranking shifts).
-    var dashTop16 = getTop16SSList();
-    var ssLookup2 = {};
-    DEF_ALL.forEach(function(r){ ssLookup2[String(r.ACCT_ID)] = r.SUBSTATION || 'Unknown'; });
-
-    var clRows = dedupeByAcct(CLATR_ALL).filter(function(r){
-      var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
-      return isTop16SS(ss, dashTop16);
-    });
-    var svRows = dedupeByAcct(SVATR_ALL).filter(function(r){
-      var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
-      return isTop16SS(ss, dashTop16);
-    });
-
-    // Total Defaulters — always the live, current defaulter count (consumers who
-    // have since paid off are excluded by syncLiveOutstanding() above; a consumer
-    // who still owes money is always counted here, even if their ATR was never
-    // actioned yet).
-    var ssDefCount = {};
-    DEF_ALL.forEach(function(r){
-      if((parseFloat(r.OUTSTANDING)||0) < 2000) return; // paid off / below defaulter floor
-      var ss = r.SUBSTATION || 'Unknown';
-      if(!isTop16SS(ss, dashTop16)) return;
-      ssDefCount[ss] = (ssDefCount[ss]||0) + 1;
-    });
-
-    var clBySS = {}, clStatusBySS = {}, clStaffBySS = {}, clSSByStaff = {};
-    clRows.forEach(function(r){
-      var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
-      clBySS[ss] = (clBySS[ss]||0)+1;
-      if(!clStatusBySS[ss]) clStatusBySS[ss] = {};
-      var st = r.CALL_OUTCOME || 'OTHER';
-      clStatusBySS[ss][st] = (clStatusBySS[ss][st]||0)+1;
-      var staff = (r.STAFF_NAME||'').trim() || '— NOT RECORDED —';
-      if(!clStaffBySS[ss]) clStaffBySS[ss] = {};
-      clStaffBySS[ss][staff] = (clStaffBySS[ss][staff]||0)+1;
-      if(!clSSByStaff[staff]) clSSByStaff[staff] = {};
-      clSSByStaff[staff][ss] = (clSSByStaff[staff][ss]||0)+1;
-    });
-
-    var svBySS = {}, svStatusBySS = {};
-    svRows.forEach(function(r){
-      var ss = r.SUBSTATION || ssLookup2[String(r.ACCT_ID)] || 'Unknown';
-      svBySS[ss] = (svBySS[ss]||0)+1;
-      if(!svStatusBySS[ss]) svStatusBySS[ss] = {};
-      var st = r.VISIT_STATUS || 'PENDING';
-      svStatusBySS[ss][st] = (svStatusBySS[ss][st]||0)+1;
-    });
-
-    var allSsSet = {};
-    Object.keys(ssDefCount).forEach(function(s){allSsSet[s]=1;});
-    Object.keys(clBySS).forEach(function(s){allSsSet[s]=1;});
-    Object.keys(svBySS).forEach(function(s){allSsSet[s]=1;});
-    var allSsList = Object.keys(allSsSet).sort();
-
-    var totalCl = clRows.length, totalSv = svRows.length;
-
-    // ════════════════════════════════════════════════════════════════════
-    // CARD 1 — ATR SUMMARY (coverage: defaulters vs calling/visit done)
-    // ════════════════════════════════════════════════════════════════════
-    html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-    html += '<div style="background:#1E3A5F;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-atrsum-body\')">';
-    html += '<span>📊 ATR SUMMARY — SS-WISE COVERAGE</span>';
-    html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">Calling: '+totalCl+' &nbsp;|&nbsp; Field Visit: '+totalSv+' &nbsp;&#9654;</span>';
-    html += '</div>';
-    html += '<div id="dash-atrsum-body" style="display:none;">';
-    html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-atrsum-body\',\'ATR_Summary\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-atrsum-body\',\'ATR Summary\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
-
-    if(allSsList.length===0){
-      html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No Calling ATR / Field Visit ATR data yet.</div>';
-    } else {
-      html += '<div style="overflow-x:auto;max-width:100%;padding-bottom:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
-      html += '<thead><tr style="background:#EFF6FF;">'+
-        '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">SUBSTATION</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #BFDBFE;">TOTAL DEFAULTERS</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#0891B2;border-bottom:1px solid #BFDBFE;border-left:1px solid #BFDBFE;">CALLING DONE</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#DC2626;border-bottom:1px solid #BFDBFE;">CALLING PENDING</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#059669;border-bottom:1px solid #BFDBFE;">CALLING %</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#0891B2;border-bottom:1px solid #BFDBFE;border-left:1px solid #BFDBFE;">VISIT DONE</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#DC2626;border-bottom:1px solid #BFDBFE;">VISIT PENDING</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#059669;border-bottom:1px solid #BFDBFE;">VISIT %</th>'+
-        '</tr></thead><tbody>';
-
-      var gTotalDef=0, gClDone=0, gSvDone=0;
-      allSsList.forEach(function(ss,i){
-        var totDef = ssDefCount[ss]||0;
-        var clDone = clBySS[ss]||0;
-        var svDone = svBySS[ss]||0;
-        var clPend = Math.max(totDef-clDone,0);
-        var svPend = Math.max(totDef-svDone,0);
-        var clPct = totDef>0 ? Math.round(clDone/totDef*100) : 0;
-        var svPct = totDef>0 ? Math.round(svDone/totDef*100) : 0;
-        gTotalDef+=totDef; gClDone+=clDone; gSvDone+=svDone;
-        var rowBg = i%2?'#F9FAFB':'#fff';
-        html += '<tr style="background:'+rowBg+'">'+
-          '<td style="padding:6px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+ss+'</td>'+
-          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#374151;">'+totDef+'</td>'+
-          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#0891B2;border-left:1px solid #F0F0F0;">'+clDone+'</td>'+
-          '<td style="padding:6px 8px;text-align:right;color:#DC2626;">'+clPend+'</td>'+
-          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:'+(clPct>=75?'#059669':clPct>=40?'#D97706':'#DC2626')+';">'+clPct+'%</td>'+
-          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#0891B2;border-left:1px solid #F0F0F0;">'+svDone+'</td>'+
-          '<td style="padding:6px 8px;text-align:right;color:#DC2626;">'+svPend+'</td>'+
-          '<td style="padding:6px 8px;text-align:right;font-weight:700;color:'+(svPct>=75?'#059669':svPct>=40?'#D97706':'#DC2626')+';">'+svPct+'%</td>'+
-          '</tr>';
-      });
-      var gClPend=Math.max(gTotalDef-gClDone,0), gSvPend=Math.max(gTotalDef-gSvDone,0);
-      var gClPct = gTotalDef>0?Math.round(gClDone/gTotalDef*100):0, gSvPct = gTotalDef>0?Math.round(gSvDone/gTotalDef*100):0;
-      html += '<tr style="background:#EFF6FF;border-top:2px solid #BFDBFE;">'+
-        '<td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#1E3A5F;">TOTAL</td>'+
-        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#374151;">'+gTotalDef+'</td>'+
-        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#0891B2;border-left:1px solid #BFDBFE;">'+gClDone+'</td>'+
-        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#DC2626;">'+gClPend+'</td>'+
-        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#059669;">'+gClPct+'%</td>'+
-        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#0891B2;border-left:1px solid #BFDBFE;">'+gSvDone+'</td>'+
-        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#DC2626;">'+gSvPend+'</td>'+
-        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#059669;">'+gSvPct+'%</td>'+
-        '</tr>';
-      html += '</tbody></table></div>';
-    }
-    html += '</div></div>'; // close dash-atrsum-body + card
-
-    // ════════════════════════════════════════════════════════════════════
-    // CARD 2 — CALLING ATR status breakdown
-    // ════════════════════════════════════════════════════════════════════
-    html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-    html += '<div style="background:#0E7490;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-clstatus-body\')">';
-    html += '<span>📞 CALLING ATR — SS-WISE STATUS BREAKDOWN</span>';
-    html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">'+totalCl+' submitted &nbsp;&#9654;</span>';
-    html += '</div>';
-    html += '<div id="dash-clstatus-body" style="display:none;">';
-    html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-clstatus-body\',\'Calling_ATR_Status\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-clstatus-body\',\'Calling ATR Status Breakdown\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
-    html += '<div style="display:flex;gap:8px;padding:10px 16px 0;">'+
-      '<button id="cl-view-ss-btn" onclick="showClStatusView(\'ss\')" style="font-size:11px;font-family:var(--fh);font-weight:700;padding:6px 14px;border-radius:8px;border:1.5px solid #0E7490;background:#0E7490;color:#fff;cursor:pointer;">📋 ATR BY SS</button>'+
-      '<button id="cl-view-staff-btn" onclick="showClStatusView(\'staff\')" style="font-size:11px;font-family:var(--fh);font-weight:700;padding:6px 14px;border-radius:8px;border:1.5px solid #0E7490;background:#fff;color:#0E7490;cursor:pointer;">👤 ATR BY STAFF</button>'+
-    '</div>';
-
-    // ── VIEW A — grouped by substation, each row expandable (+) to show the staff
-    // breakdown (who made how many calls) inside that SS ──
-    html += '<div id="dash-clstatus-ssview" style="display:block;">';
-    if(allSsList.length===0 || totalCl===0){
-      html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No Calling ATR data yet.</div>';
-    } else {
-      var clColCount = CALL_OUTCOME_OPTIONS.length + 2; // SUBSTATION + outcomes + TOTAL
-      html += '<div style="overflow-x:auto;max-width:100%;padding-bottom:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
-      html += '<thead><tr style="background:#ECFEFF;"><th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">SUBSTATION</th>';
-      CALL_OUTCOME_OPTIONS.forEach(function(k){
-        html += '<th style="padding:7px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #A5F3FC;white-space:nowrap;">'+k.replace(/_/g,' ')+'</th>';
-      });
-      html += '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#065F46;border-bottom:1px solid #A5F3FC;border-left:1px solid #A5F3FC;">TOTAL</th></tr></thead><tbody>';
-      var clGrand={};
-      allSsList.forEach(function(ss,i){
-        var row = clStatusBySS[ss]||{};
-        var rowBg = i%2?'#F9FAFB':'#fff';
-        var ssSlug = 'cl-ss-'+i;
-        html += '<tr style="background:'+rowBg+'"><td style="padding:6px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+
-          '<a href="javascript:void(0)" onclick="dashSubToggle(\''+ssSlug+'\')" id="'+ssSlug+'-btn" title="Show staff-wise breakdown" style="display:inline-block;width:16px;text-align:center;text-decoration:none;color:#0E7490;font-weight:800;margin-right:6px;">+</a>'+ss+'</td>';
-        var rt=0;
-        CALL_OUTCOME_OPTIONS.forEach(function(k){
-          var v = row[k]||0; rt+=v; clGrand[k]=(clGrand[k]||0)+v;
-          html += '<td style="padding:6px 6px;text-align:right;color:'+(v>0?'#1D4ED8':'#D1D5DB')+';font-weight:'+(v>0?'700':'400')+';">'+(v||'-')+'</td>';
-        });
-        html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #F0F0F0;">'+(rt||'-')+'</td></tr>';
-        html += '<tr id="'+ssSlug+'" style="display:none;"><td colspan="'+clColCount+'" style="padding:0 10px 8px 28px;background:'+rowBg+';">'+
-          clMiniTable(clStaffBySS[ss]||{}, 'STAFF NAME — CALLS MADE IN '+ss)+
-        '</td></tr>';
-      });
-      html += '<tr style="background:#ECFEFF;border-top:2px solid #A5F3FC;"><td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#0E7490;">TOTAL</td>';
-      var clGt=0;
-      CALL_OUTCOME_OPTIONS.forEach(function(k){ var v=clGrand[k]||0; clGt+=v; html += '<td style="padding:7px 6px;text-align:right;font-weight:800;color:#1D4ED8;">'+(v||'-')+'</td>'; });
-      html += '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #A5F3FC;">'+clGt+'</td></tr>';
-      html += '</tbody></table></div>';
-    }
-    html += '</div>'; // close dash-clstatus-ssview
-
-    // ── VIEW B — grouped by staff member, each row expandable (+) to show the
-    // substation-wise breakdown of that staff member's calls ──
-    html += '<div id="dash-clstatus-staffview" style="display:none;">';
-    if(allSsList.length===0 || totalCl===0){
-      html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No Calling ATR data yet.</div>';
-    } else {
-      var staffList = Object.keys(clSSByStaff);
-      var staffTotal = {};
-      staffList.forEach(function(st){
-        var sum=0; Object.keys(clSSByStaff[st]).forEach(function(ss){ sum+=clSSByStaff[st][ss]; });
-        staffTotal[st]=sum;
-      });
-      staffList.sort(function(a,b){ return staffTotal[b]-staffTotal[a]; });
-      html += '<div style="overflow-x:auto;max-width:100%;padding-bottom:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
-      html += '<thead><tr style="background:#ECFEFF;">'+
-        '<th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">STAFF NAME</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">SS COVERED</th>'+
-        '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#065F46;border-bottom:1px solid #A5F3FC;border-left:1px solid #A5F3FC;">TOTAL CALLS</th>'+
-        '</tr></thead><tbody>';
-      staffList.forEach(function(st,i){
-        var rowBg = i%2?'#F9FAFB':'#fff';
-        var stSlug = 'cl-staff-'+i;
-        var ssCount = Object.keys(clSSByStaff[st]).length;
-        html += '<tr style="background:'+rowBg+'"><td style="padding:6px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+
-          '<a href="javascript:void(0)" onclick="dashSubToggle(\''+stSlug+'\')" id="'+stSlug+'-btn" title="Show SS-wise breakdown" style="display:inline-block;width:16px;text-align:center;text-decoration:none;color:#0E7490;font-weight:800;margin-right:6px;">+</a>'+esc(st)+'</td>'+
-          '<td style="padding:6px 8px;text-align:right;color:#374151;">'+ssCount+'</td>'+
-          '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #F0F0F0;">'+staffTotal[st]+'</td></tr>';
-        html += '<tr id="'+stSlug+'" style="display:none;"><td colspan="3" style="padding:0 10px 8px 28px;background:'+rowBg+';">'+
-          clMiniTable(clSSByStaff[st], 'SUBSTATION — CALLS MADE BY '+st)+
-        '</td></tr>';
-      });
-      html += '<tr style="background:#ECFEFF;border-top:2px solid #A5F3FC;"><td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#0E7490;">TOTAL</td><td></td>'+
-        '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #A5F3FC;">'+totalCl+'</td></tr>';
-      html += '</tbody></table></div>';
-    }
-    html += '</div>'; // close dash-clstatus-staffview
-
-    html += '</div></div>'; // close dash-clstatus-body + card
-
-    // ════════════════════════════════════════════════════════════════════
-    // CARD 3 — FIELD VISIT ATR status breakdown
-    // ════════════════════════════════════════════════════════════════════
-    html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-top:16px;overflow:hidden;">';
-    html += '<div style="background:#0E7490;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;" onclick="dashToggle(\'dash-svstatus-body\')">';
-    html += '<span>🧭 FIELD VISIT ATR — SS-WISE STATUS BREAKDOWN</span>';
-    html += '<span style="font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:6px;">'+totalSv+' submitted &nbsp;&#9654;</span>';
-    html += '</div>';
-    html += '<div id="dash-svstatus-body" style="display:none;">';
-    html += '<div style="display:flex;gap:6px;justify-content:flex-end;padding:8px 16px 0;"><button onclick="dashSecXLSX(\'dash-svstatus-body\',\'FieldVisit_ATR_Status\')" style="font-size:10px;background:#059669;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">⬇ XLSX</button><button onclick="dashSecPDF(\'dash-svstatus-body\',\'Field Visit ATR Status Breakdown\')" style="font-size:10px;background:#DC2626;color:#fff;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:var(--fh);font-weight:700;">🖨 PDF</button></div>';
-
-    if(allSsList.length===0 || totalSv===0){
-      html += '<div style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px;">No Field Visit ATR data yet.</div>';
-    } else {
-      html += '<div style="overflow-x:auto;max-width:100%;padding-bottom:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;">';
-      html += '<thead><tr style="background:#ECFEFF;"><th style="padding:7px 10px;text-align:left;font-family:var(--fh);font-size:10px;color:#6B7280;border-bottom:1px solid #A5F3FC;">SUBSTATION</th>';
-      LOG_ATR_OPTIONS.forEach(function(k){
-        html += '<th style="padding:7px 6px;text-align:right;font-family:var(--fh);font-size:9px;color:#6B7280;border-bottom:1px solid #A5F3FC;white-space:nowrap;">'+k+'</th>';
-      });
-      html += '<th style="padding:7px 8px;text-align:right;font-family:var(--fh);font-size:10px;color:#065F46;border-bottom:1px solid #A5F3FC;border-left:1px solid #A5F3FC;">TOTAL</th></tr></thead><tbody>';
-      var svGrand={};
-      allSsList.forEach(function(ss,i){
-        var row = svStatusBySS[ss]||{};
-        var rowBg = i%2?'#F9FAFB':'#fff';
-        html += '<tr style="background:'+rowBg+'"><td style="padding:6px 10px;font-weight:700;color:#1E3A5F;font-family:var(--fh);white-space:nowrap;">'+ss+'</td>';
-        var rt=0;
-        LOG_ATR_OPTIONS.forEach(function(k){
-          var v = row[k]||0; rt+=v; svGrand[k]=(svGrand[k]||0)+v;
-          html += '<td style="padding:6px 6px;text-align:right;color:'+(v>0?'#1D4ED8':'#D1D5DB')+';font-weight:'+(v>0?'700':'400')+';">'+(v||'-')+'</td>';
-        });
-        html += '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #F0F0F0;">'+(rt||'-')+'</td></tr>';
-      });
-      html += '<tr style="background:#ECFEFF;border-top:2px solid #A5F3FC;"><td style="padding:7px 10px;font-weight:800;font-family:var(--fh);color:#0E7490;">TOTAL</td>';
-      var svGt=0;
-      LOG_ATR_OPTIONS.forEach(function(k){ var v=svGrand[k]||0; svGt+=v; html += '<td style="padding:7px 6px;text-align:right;font-weight:800;color:#1D4ED8;">'+(v||'-')+'</td>'; });
-      html += '<td style="padding:7px 8px;text-align:right;font-weight:800;color:#065F46;border-left:1px solid #A5F3FC;">'+svGt+'</td></tr>';
-      html += '</tbody></table></div>';
-    }
-    html += '</div></div>'; // close dash-svstatus-body + card
-  })();
-
+  // ── ATR SUMMARY (server-synced Calling ATR + Field Visit ATR) — the three
+  // cards' data logic now lives in buildAtrSummaryCardsHtml()/atrDateRangeFor()
+  // (defined above, near buildDashboard), so the date-wise filter bar below can
+  // re-render CARD 2 / CARD 3 in place without rebuilding the whole dashboard.
+  html += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px;padding:10px 14px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;">';
+  html += '<span style="font-family:var(--fh);font-size:11px;font-weight:700;color:#1E3A5F;white-space:nowrap;">📅 CALLING / FIELD VISIT ATR — DATE FILTER:</span>';
+  [['all','ALL TIME'],['today','TODAY'],['yesterday','YESTERDAY'],['week','THIS WEEK'],['month','THIS MONTH'],['custom','CUSTOM']].forEach(function(opt){
+    var active = opt[0]===_dashAtrDateMode;
+    html += '<button id="dash-atr-btn-'+opt[0]+'" onclick="setAtrDateFilter(\''+opt[0]+'\')" style="font-size:10.5px;font-family:var(--fh);font-weight:700;padding:5px 11px;border-radius:7px;border:1.5px solid #1E3A5F;background:'+(active?'#1E3A5F':'#fff')+';color:'+(active?'#fff':'#1E3A5F')+';cursor:pointer;">'+opt[1]+'</button>';
+  });
+  html += '<span id="dash-atr-customwrap" style="display:'+(_dashAtrDateMode==='custom'?'inline-flex':'none')+';align-items:center;gap:5px;">'+
+    '<input type="date" id="dash-atr-from" style="font-size:11px;padding:4px 6px;border:1px solid #BFDBFE;border-radius:6px;">'+
+    '<span style="font-size:10px;color:#6B7280;">to</span>'+
+    '<input type="date" id="dash-atr-to" style="font-size:11px;padding:4px 6px;border:1px solid #BFDBFE;border-radius:6px;">'+
+    '<button onclick="applyAtrCustomRange()" style="font-size:10.5px;font-family:var(--fh);font-weight:700;padding:5px 11px;border-radius:7px;border:1.5px solid #059669;background:#059669;color:#fff;cursor:pointer;">APPLY</button>'+
+  '</span>';
+  html += '<span style="font-size:10px;color:#6B7280;">(applies to the two STATUS BREAKDOWN reports below — not the coverage summary)</span>';
+  html += '</div>';
+  html += '<div id="dash-atrsummary-wrap">' + buildAtrSummaryCardsHtml(_dashAtrDateMode) + '</div>';
 
   html += '</div>'; // end container
   el.innerHTML = html;
@@ -8093,6 +8180,7 @@ function waConsumer(acctId, mobile){
     msg = greet+
       'दक्षिणांचल विद्युत वितरण निगम लिमिटेड (DVVNL) की ओर से सूचित किया जाता है कि आपके उपभोक्ता खाता संख्या '+acct+catTag+' पर वर्तमान में ₹'+outFmt+' की राशि बकाया है, जिसके भुगतान की देय तिथि '+dueDate+' है।\n\n'+
       'कृपया देय तिथि तक भुगतान सुनिश्चित करें। निर्धारित अवधि में भुगतान न किए जाने की स्थिति में नियमानुसार विद्युत आपूर्ति विच्छेदित (Disconnect) की जा सकती है।\n\n'+
+      'ऑनलाइन बिल भुगतान/डाउनलोड हेतु लिंक: https://consumer.uppcl.org/wss/pay_bill_home\n\n'+
       'सहयोग हेतु धन्यवाद।\n— DVVNL उपभोक्ता सेवा';
   } else if(src === 'unbilled' || src === 'master'){
     // The defaulters/ CSV's own SOURCE column isn't 'billed'/'unbilled' — it's
@@ -8109,6 +8197,7 @@ function waConsumer(acctId, mobile){
     msg = greet+
       'दक्षिणांचल विद्युत वितरण निगम लिमिटेड (DVVNL) की ओर से सूचित किया जाता है कि आपके उपभोक्ता खाता संख्या '+acct+catTag+' पर गत माह तक का पूर्व बकाया (Previous Outstanding) ₹'+outFmt+' है।\n\n'+
       'कृपया उक्त राशि का शीघ्र भुगतान सुनिश्चित करें।\n\n'+
+      'ऑनलाइन बिल भुगतान/डाउनलोड हेतु लिंक: https://consumer.uppcl.org/wss/pay_bill_home\n\n'+
       'सहयोग हेतु धन्यवाद।\n— DVVNL उपभोक्ता सेवा';
   } else {
     alert('WhatsApp reminder sirf BILLED ya UNBILLED (outstanding wale) consumers ko bheja ja sakta hai.\nYeh consumer "'+(src||'unknown')+'" category mein hai.');
