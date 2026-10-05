@@ -1259,6 +1259,44 @@ function pf(v){
   return parseFloat(String(v).replace(/,/g,'')) || 0;
 }
 
+// SM/NON-SM + NEVER PAID / LONG UNPAID helpers — shared by CALLING and FIELD
+// VISIT (list rows + ATR detail modals). Same mrSrc/serial logic already used
+// by the Defaulter tab's SM filter (MR_SOURCE_CD==='SM' OR meter serial starts
+// 'GE'), with a window._smLookup (master-built) fallback for rows that don't
+// carry their own MR_SOURCE_CD.
+function defRecIsSM(r){
+  var mrSrc = String((r&&r.MR_SOURCE_CD)||'').trim().toUpperCase();
+  if(!mrSrc && window._smLookup) mrSrc = String(window._smLookup[String(r&&r.ACCT_ID)]||'').toUpperCase();
+  var serial = String((r&&(r.METER_NO||r.METER_SERIAL_NBR||r.SERIAL_NBR||r.MTR_SRL_NO))||'').trim().toUpperCase().replace(/^'/,'');
+  return mrSrc === 'SM' || serial.startsWith('GE');
+}
+// NEVER PAID: no LAST_PAY_DATE on record at all. LONG UNPAID: has a last-pay
+// date, but it's 4+ months before the effective data date (not the browser's
+// literal "today" — keeps it consistent with the rest of the tool, see
+// getEffectiveDataDate below).
+function defRecPayFlag(r){
+  var pd = r && r.PAY_DATE;
+  if(!pd || pd==='-' || String(pd).trim()===''){
+    return { code:'NEVER_PAID', label:'❌ NEVER PAID', color:'#B91C1C', bg:'#FEE2E2' };
+  }
+  var d = (typeof parseDate==='function') ? parseDate(pd) : null;
+  if(!d) return null;
+  var ref = (typeof getEffectiveDataDate==='function') ? getEffectiveDataDate() : new Date();
+  var months = (ref.getFullYear()-d.getFullYear())*12 + (ref.getMonth()-d.getMonth());
+  if(ref.getDate() < d.getDate()) months--;
+  if(months>=4) return { code:'LONG_UNPAID', label:'⏳ LONG UNPAID', color:'#B45309', bg:'#FEF3C7' };
+  return null;
+}
+function smBadgeHtml(r){
+  var isSm = defRecIsSM(r);
+  return '<span style="display:inline-block;padding:1px 6px;border-radius:9px;font-size:9px;font-weight:700;background:'+(isSm?'#DCFCE7':'#E0E7FF')+';color:'+(isSm?'#15803D':'#3730A3')+';white-space:nowrap;">'+(isSm?'SM':'NON-SM')+'</span>';
+}
+function payFlagBadgeHtml(r){
+  var f = defRecPayFlag(r);
+  if(!f) return '';
+  return ' <span style="display:inline-block;padding:1px 6px;border-radius:9px;font-size:9px;font-weight:700;background:'+f.bg+';color:'+f.color+';white-space:nowrap;">'+f.label+'</span>';
+}
+
 // Reporting "current date" = billed_date (from manifest) minus 1 day, since the
 // FTP file dated DDMMYYYY actually contains the PREVIOUS day's data. Progress
 // Report, SM report, and YoY Comparison all use this — not the browser's literal
@@ -8477,7 +8515,7 @@ function renderCallTable(page){
     var manualTag = r._SRC==='manual' ? ' <span title="Manually pushed" style="color:#F59E0B;font-size:10px;font-weight:700;">[M]</span>' : '';
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
-      '<td><a href="javascript:void(0)" onclick="openCallingLogModal(\''+r.ACCT_ID+'\')" title="Open consumer detail / log Calling ATR" style="font-family:var(--fh);color:#4F46E5;font-weight:700;text-decoration:none;">'+r.ACCT_ID+'</a>'+manualTag+'</td>'+
+      '<td><a href="javascript:void(0)" onclick="openCallingLogModal(\''+r.ACCT_ID+'\')" title="Open consumer detail / log Calling ATR" style="font-family:var(--fh);color:#4F46E5;font-weight:700;text-decoration:none;">'+r.ACCT_ID+'</a>'+manualTag+'<br>'+smBadgeHtml(r)+payFlagBadgeHtml(r)+'</td>'+
       '<td style="font-weight:600;">'+(r.NAME||'-')+'</td>'+
       '<td style="max-width:180px;white-space:normal;font-size:11px;color:var(--muted);">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.MOBILE ? '<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" title="Call (number copied)" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+'</a>' : '-')+'</td>'+
@@ -8689,7 +8727,7 @@ function renderFieldVisitTable(page){
     var atrLabel = (r._ATR && r._ATR!=='PENDING') ? (LOG_ATR_LABELS[r._ATR]||r._ATR) : '⏳ PENDING';
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
-      '<td><a href="javascript:void(0)" onclick="openSiteVisitLogModal(\''+r.ACCT_ID+'\')" title="Open consumer detail / log Field Visit ATR" style="font-family:var(--fh);color:#4F46E5;font-weight:700;text-decoration:none;">'+r.ACCT_ID+'</a></td>'+
+      '<td><a href="javascript:void(0)" onclick="openSiteVisitLogModal(\''+r.ACCT_ID+'\')" title="Open consumer detail / log Field Visit ATR" style="font-family:var(--fh);color:#4F46E5;font-weight:700;text-decoration:none;">'+r.ACCT_ID+'</a><br>'+smBadgeHtml(r)+payFlagBadgeHtml(r)+'</td>'+
       '<td style="font-weight:600;">'+(r.NAME||'-')+'</td>'+
       '<td style="max-width:180px;white-space:normal;font-size:11px;color:var(--muted);">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.MOBILE ? '<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" title="Call (number copied)" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+'</a>' : '-')+'</td>'+
@@ -8788,10 +8826,10 @@ function openSiteVisitLogModal(acctId){
         '<span style="cursor:pointer;font-size:20px;color:var(--muted);line-height:1;" onclick="closeLogModal()">&times;</span>'+
       '</div>'+
       '<div style="font-size:13px;margin-bottom:14px;color:var(--muted);line-height:1.9;background:#FAF5FF;border-radius:8px;padding:10px 12px;">'+
-        '<b style="color:#111827;">'+(r.NAME||'-')+'</b> &bull; '+acctId+'<br>'+
+        '<b style="color:#111827;">'+(r.NAME||'-')+'</b> &bull; '+acctId+' '+smBadgeHtml(r)+'<br>'+
         'Mobile: '+(r.MOBILE?'<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+' \uD83D\uDCDE</a>':'-')+' &bull; Tariff: '+(r.TARIFF||stToTariff(r.SUPPLY_TYPE)||'-')+'<br>'+
         (r.SUBSTATION||'-')+' / '+(r.FEEDER||'-')+' &bull; Meter: '+(r.METER_NO||'-')+'<br>'+
-        'Outstanding: <b style="color:#F43F5E;">\u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</b>'+
+        'Outstanding: <b style="color:#F43F5E;">\u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</b>'+payFlagBadgeHtml(r)+
       '</div>'+
       '<div class="lbl">FIELD VISIT ATR / फील्ड विज़िट परिणाम (REQUIRED)</div>'+
       '<select id="log-sv-status" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;">'+atrOptionsHtml(prev.FIELD_VISIT_ATR)+'</select>'+
@@ -8862,10 +8900,10 @@ function openCallingLogModal(acctId){
         '<span style="cursor:pointer;font-size:20px;color:var(--muted);line-height:1;" onclick="closeLogModal()">&times;</span>'+
       '</div>'+
       '<div style="font-size:13px;margin-bottom:14px;color:var(--muted);line-height:1.9;background:#F0FDFF;border-radius:8px;padding:10px 12px;">'+
-        '<b style="color:#111827;">'+(r.NAME||'-')+'</b> &bull; '+acctId+'<br>'+
+        '<b style="color:#111827;">'+(r.NAME||'-')+'</b> &bull; '+acctId+' '+smBadgeHtml(r)+'<br>'+
         'Mobile: '+(r.MOBILE?'<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+' \uD83D\uDCDE</a>':'-')+' &bull; Tariff: '+(r.TARIFF||stToTariff(r.SUPPLY_TYPE)||'-')+'<br>'+
         (r.SUBSTATION||'-')+' / '+(r.FEEDER||'-')+' &bull; Meter: '+(r.METER_NO||'-')+'<br>'+
-        'Outstanding: <b style="color:#F43F5E;">\u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</b>'+
+        'Outstanding: <b style="color:#F43F5E;">\u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</b>'+payFlagBadgeHtml(r)+
       '</div>'+
       '<div class="lbl">CALL OUTCOME / कॉल का नतीजा (REQUIRED)</div>'+
       '<select id="log-cl-outcome" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:13px;margin-bottom:12px;box-sizing:border-box;">'+atrOptionsHtml(prev.CALL_OUTCOME, CALL_OUTCOME_OPTIONS, CALL_OUTCOME_LABELS)+'</select>'+
