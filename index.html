@@ -7160,7 +7160,7 @@ function openDefaulterModal(acctId, mode){
     '<div class="modal-field"><div class="lbl">METER NO</div><div class="val" style="font-family:var(--fh);color:#1D4ED8;font-weight:700;">'+meterNo+'</div></div>'+
     '<div class="modal-field"><div class="lbl">TARIFF / CATEGORY</div><div class="val">'+catBadge(defRec.SUPPLY_TYPE)+'</div></div>'+
     '<div class="modal-field"><div class="lbl">LOAD</div><div class="val" style="font-weight:700;">'+(defRec.LOAD||r&&r.LOAD||'-')+' kW</div></div>'+
-    '<div class="modal-field"><div class="lbl">CONSUMER STATUS</div><div class="val">'+(defRec.SOURCE==='billed'?'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#D1FAE5;color:#065F46;">✅ BILLED</span>':defRec.SOURCE==='unbilled'?'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#FEF3C7;color:#92400E;">⚠ UNBILLED</span>':'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#F3F4F6;color:#374151;">— UNKNOWN</span>')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">CONSUMER STATUS</div><div class="val">'+(defRec.SOURCE==='billed'?'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#D1FAE5;color:#065F46;">✅ BILLED</span>':(defRec.SOURCE==='unbilled'||defRec.SOURCE==='master')?'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#FEF3C7;color:#92400E;">⚠ UNBILLED</span>':'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#F3F4F6;color:#374151;">— UNKNOWN</span>')+'</div></div>'+
     '<div class="modal-field"><div class="lbl">CA (CURR ARREAR)</div><div class="val" style="font-weight:700;color:#DC2626;">'+(defRec.CA?'\u20b9'+Math.round(parseFloat(defRec.CA)||0).toLocaleString():'-')+'</div></div>'+
     '<div class="modal-field"><div class="lbl">BILLED UNITS</div><div class="val" style="font-weight:700;color:#0369A1;">'+(defRec.BILLED_UNITS?defRec.BILLED_UNITS+' U':'-')+'</div></div>'+
     '<div class="modal-field"><div class="lbl">BILL DATE</div><div class="val">'+(defRec.BILL_DATE||'-')+'</div></div>'+
@@ -8016,7 +8016,14 @@ function waConsumer(acctId, mobile){
       'दक्षिणांचल विद्युत वितरण निगम लिमिटेड (DVVNL) की ओर से सूचित किया जाता है कि आपके उपभोक्ता खाता संख्या '+acct+catTag+' पर वर्तमान में ₹'+outFmt+' की राशि बकाया है, जिसके भुगतान की देय तिथि '+dueDate+' है।\n\n'+
       'कृपया देय तिथि तक भुगतान सुनिश्चित करें। निर्धारित अवधि में भुगतान न किए जाने की स्थिति में नियमानुसार विद्युत आपूर्ति विच्छेदित (Disconnect) की जा सकती है।\n\n'+
       'सहयोग हेतु धन्यवाद।\n— DVVNL उपभोक्ता सेवा';
-  } else if(src === 'unbilled'){
+  } else if(src === 'unbilled' || src === 'master'){
+    // The defaulters/ CSV's own SOURCE column isn't 'billed'/'unbilled' — it's
+    // 'master' (pulled from the master ledger's outstanding balance, no bill
+    // tied to it) or 'billed' (tied to a specific bill). ~87% of all defaulter
+    // rows are 'master', so treating only 'unbilled' as the no-bill case was
+    // silently failing WhatsApp reminders for almost every defaulter. 'master'
+    // means the same thing here: no current bill, just carried-forward dues —
+    // same "Previous Outstanding" message applies.
     if(out <= 0){
       alert('Is unbilled consumer ka outstanding nahi hai — reminder bhejne ki zaroorat nahi.');
       return;
