@@ -8827,14 +8827,21 @@ function doSubmitSiteVisitLog(acctId, r, status, remarks, url, photoVal){
     outstanding: r.OUTSTANDING||0, lp_date: r.PAY_DATE||'', lp_amt: r.PAY_AMT||0,
     visit_status: status, remarks: remarks, photo: photoVal||''
   };
+  // PERF: mode:'no-cors' makes the response opaque, so .then() below was never
+  // real confirmation anyway (a server-side error would still resolve it) \u2014 it
+  // was only ever "the full round-trip finished", which is also what was making
+  // SAVE feel slow (Apps Script cold start + Sheet write, often several seconds).
+  // Update local state and close the modal immediately; the POST keeps running
+  // in the background with nothing lost, since the old wait never actually
+  // verified success either. A genuine network failure (offline, DNS, etc. \u2014
+  // the only thing .catch() can ever see here) still alerts so it's never
+  // silently dropped.
+  SITEVISIT_LATEST[String(acctId)] = { FIELD_VISIT_ATR: status, REMARKS: remarks };
+  closeLogModal();
+  if(gel('fvv-tbody')) runFieldVisitFilter();
+  alert('\u2705 Field Visit ATR saved for '+acctId+'.');
   fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(addKey(payload)) })
-    .then(function(){
-      SITEVISIT_LATEST[String(acctId)] = { FIELD_VISIT_ATR: status, REMARKS: remarks };
-      closeLogModal();
-      if(gel('fvv-tbody')) runFieldVisitFilter();
-      alert('\u2705 Field Visit ATR saved for '+acctId+'.');
-    })
-    .catch(function(e){ alert('\u274C Error: '+e.message); });
+    .catch(function(e){ alert('\u274C Field Visit ATR save for '+acctId+' may have failed (network error: '+e.message+'). Please check and retry.'); });
 }
 
 function openCallingLogModal(acctId){
@@ -8875,14 +8882,15 @@ function submitCallingLog(acctId){
     outstanding: r.OUTSTANDING||0, lp_date: r.PAY_DATE||'', lp_amt: r.PAY_AMT||0,
     call_outcome: outcome, remarks: remarks, staff_name: _callGateStaff, working_ss: _callGateSS
   };
+  // PERF: same reasoning as doSubmitSiteVisitLog above \u2014 no-cors already makes
+  // .then() a fake confirmation, so close/alert immediately and let the POST
+  // finish in the background instead of making SAVE feel slow for nothing.
+  CALLING_LATEST[String(acctId)] = { CALL_OUTCOME: outcome, REMARKS: remarks };
+  closeLogModal();
+  if(gel('call-tbody')) runCallFilter();
+  alert('\u2705 Calling ATR saved for '+acctId+'.');
   fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(addKey(payload)) })
-    .then(function(){
-      CALLING_LATEST[String(acctId)] = { CALL_OUTCOME: outcome, REMARKS: remarks };
-      closeLogModal();
-      if(gel('call-tbody')) runCallFilter();
-      alert('\u2705 Calling ATR saved for '+acctId+'.');
-    })
-    .catch(function(e){ alert('\u274C Error: '+e.message); });
+    .catch(function(e){ alert('\u274C Calling ATR save for '+acctId+' may have failed (network error: '+e.message+'). Please check and retry.'); });
 }
 
 
