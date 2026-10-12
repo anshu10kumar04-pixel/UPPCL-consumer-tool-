@@ -1202,7 +1202,7 @@ function doSync(types, force, btn, logEl){
 
 // ─── GLOBALS ─────────────────────────────────────────────────────────────────
 let D = [], PAY_DATA = {}, FD = [], METER_DATA = {}, BILLED_LOC = {};
-var D_PRI = {}, MASTER_MAP = {}, GEO_MAP = {}, LOCATION_MAP = {}; // acct_id -> meter_no
+var D_PRI = {}, MASTER_MAP = {}, GEO_MAP = {}, LOCATION_MAP = {}, MOBILE_OVERLAY = {}; // acct_id -> meter_no / extra mobile numbers
 let MASTER_CUTOFF = null; // Date object for last day of master month
 let DC = [], DC_FD = [], ATR_DATA = {}, ATR_SCRIPT_URL = '';
 let DEF_DATA = [];
@@ -1427,6 +1427,17 @@ function billBasisInfo(code){
 
 function ac(id){
   return String(id||'').trim();  // Keep leading zeros - consistent key across all sources
+}
+
+// mobile_overlay.json gives extra/alternate numbers found from field uploads (e.g. WC smart-meter form)
+// without ever overwriting the main MOBILE_NO from master/billed/unbilled. Falls back to the plain
+// number when no overlay entry exists for this account.
+function mobDisplay(acctId, fallbackMobile){
+  var ov = MOBILE_OVERLAY[ac(acctId)];
+  if(ov && ov.length){
+    return ov.map(function(n,i){ return '☎'+(i+1)+' '+n; }).join(', ');
+  }
+  return fallbackMobile || '-';
 }
 
 function catBadge(cat){
@@ -5894,6 +5905,9 @@ function ia(){
   fetch(RAW_BASE+'geo_mapping.json').then(r=>r.ok?r.json():{}).then(function(map){
     GEO_MAP=map;applyGeoAndStats();
   }).catch(function(){applyGeoAndStats();});
+  fetch(RAW_BASE+'mobile_overlay.json').then(r=>r.ok?r.json():{}).then(function(map){
+    MOBILE_OVERLAY=map;
+  }).catch(function(){});
 
   function applyGeoAndStats(){
     var i=0;
@@ -6025,7 +6039,7 @@ function buildConsumerCard(r, q){
     '<div style="text-align:right"><div style="color:rgba(255,255,255,0.7);font-size:10px;font-family:var(--fh);">LOAD</div>'+
     '<div style="font-family:var(--fh);font-size:26px;font-weight:700;color:#FCD34D;">'+(r.LOAD || '-')+' <span style="font-size:13px;color:rgba(255,255,255,0.7);">kW</span></div></div></div>'+
     '<div class="db"><div class="dgrid">'+
-      '<div class="df"><div class="lbl">MOBILE</div><div class="val">'+(r.MOBILE_NO || '-')+'</div></div>'+
+      '<div class="df"><div class="lbl">MOBILE</div><div class="val">'+mobDisplay(r.ACCT_ID, r.MOBILE_NO)+'</div></div>'+
       '<div class="df"><div class="lbl">METER NO</div><div class="val" style="font-family:var(--fh);color:#1D4ED8;font-weight:700;">'+(METER_DATA[String(r.ACCT_ID)] || r.SERIAL_NBR || '-')+'</div></div>'+
       '<div class="df"><div class="lbl">SUBSTATION</div><div class="val">'+(r.SUBSTATION || '-')+'</div></div>'+
       '<div class="df"><div class="lbl">FEEDER</div><div class="val">'+(r.FEEDER || '-')+'</div></div>'+
@@ -6206,7 +6220,7 @@ function renderDcTable(page){
       '<td style="font-size:11px;color:var(--muted);">'+excelDateToStr(r.DATE_DC)+'</td>'+
       '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;cursor:pointer;" data-id="'+r.ACCT_ID+'" onclick="openDcDetail(this.dataset.id)">'+r.ACCT_ID+'</td>'+
       '<td style="font-weight:600;">'+r.NAME+'</td>'+
-      '<td>'+r.MOBILE_NO+'</td>'+
+      '<td>'+mobDisplay(r.ACCT_ID, r.MOBILE_NO)+'</td>'+
       '<td style="font-family:var(--fh);color:var(--muted);">'+r.METER_NO+'</td>'+
       '<td>'+atrBadge(r.LMV||'LMV-1')+'</td>'+
       '<td class="mob-hide" style="font-size:11px;color:var(--muted);">'+excelDateToStr(r.LP_DATE)+'</td>'+
@@ -6238,7 +6252,7 @@ function openDcDetail(acctId){
   gel('modal-title').textContent='SM UNRECHARGE — '+r.NAME;
   gel('modal-grid').innerHTML=
     '<div class="modal-field"><div class="lbl">DATE OF DC</div><div class="val">'+(r.DATE_DC||'-')+'</div></div>'+
-    '<div class="modal-field"><div class="lbl">MOBILE</div><div class="val">'+(r.MOBILE_NO||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">MOBILE</div><div class="val">'+mobDisplay(r.ACCT_ID, r.MOBILE_NO)+'</div></div>'+
     '<div class="modal-field"><div class="lbl">METER NUMBER</div><div class="val">'+(r.METER_NO||'-')+'</div></div>'+
     '<div class="modal-field"><div class="lbl">LMV TYPE</div><div class="val">'+(r.LMV||'-')+'</div></div>'+
     '<div class="modal-field"><div class="lbl">LOAD</div><div class="val">'+(r.LOAD||'-')+' kW</div></div>'+
@@ -7321,7 +7335,7 @@ function openDefaulterModal(acctId, mode){
   gel('modal-title').innerHTML = (defRec.NAME||'Consumer Details') + '&nbsp;&nbsp;' + srcBadge;
   gel('modal-grid').innerHTML =
     '<div class="modal-field"><div class="lbl">ACCT ID</div><div class="val" style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+defRec.ACCT_ID+'</div></div>'+
-    '<div class="modal-field"><div class="lbl">MOBILE</div><div class="val">'+(defRec.MOBILE||defRec.MOBILE_NO||'-')+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">MOBILE</div><div class="val">'+mobDisplay(defRec.ACCT_ID, defRec.MOBILE||defRec.MOBILE_NO)+'</div></div>'+
     '<div class="modal-field"><div class="lbl">METER NO</div><div class="val" style="font-family:var(--fh);color:#1D4ED8;font-weight:700;">'+meterNo+'</div></div>'+
     '<div class="modal-field"><div class="lbl">TARIFF / CATEGORY</div><div class="val">'+catBadge(defRec.SUPPLY_TYPE)+'</div></div>'+
     '<div class="modal-field"><div class="lbl">LOAD</div><div class="val" style="font-weight:700;">'+(defRec.LOAD||r&&r.LOAD||'-')+' kW</div></div>'+
@@ -7592,14 +7606,14 @@ function openDefaulterMap(acctId){
 
   var data=[{
     lat:lat,lon:lon,name:r.NAME||'Unknown',acct:String(r.ACCT_ID),
-    mobile:r.MOBILE_NO||r.MOBILE||'-',out:Math.round(r.OUTSTANDING||0),
+    mobile:mobDisplay(r.ACCT_ID, r.MOBILE_NO||r.MOBILE),out:Math.round(r.OUTSTANDING||0),
     sub:r.SUBSTATION||'-',feed:r.FEEDER||'-',
     addr:(r.ADDRESS||'-').substring(0,100),
     lmv:r.SUPPLY_TYPE||'-',atr:'DEFAULTER',main:true,dist:0
   }].concat(nearby.map(function(x){
     return {
       lat:x._lat,lon:x._lon,name:x.NAME||'Unknown',acct:String(x.ACCT_ID),
-      mobile:x.MOBILE_NO||x.MOBILE||'-',out:Math.round(x.OUTSTANDING||0),
+      mobile:mobDisplay(x.ACCT_ID, x.MOBILE_NO||x.MOBILE),out:Math.round(x.OUTSTANDING||0),
       sub:x.SUBSTATION||'-',feed:x.FEEDER||'-',
       addr:(x.ADDRESS||'-').substring(0,100),
       lmv:x.SUPPLY_TYPE||'-',atr:'DEFAULTER',main:false,dist:x._dist
@@ -7728,7 +7742,7 @@ function renderDfpTable(page){
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
       '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;cursor:pointer;" onclick="openFromDfpRow(\''+r.ACCT_ID+'\')">'+r.ACCT_ID+'</td>'+
       '<td style="font-weight:600;">'+r.NAME+'</td>'+
-      '<td>'+r.MOBILE_NO+'</td>'+
+      '<td>'+mobDisplay(r.ACCT_ID, r.MOBILE_NO)+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
       '<td>'+r.SUBSTATION+'</td>'+
       '<td style="display:none">'+r.FEEDER+'</td>'+
@@ -7816,13 +7830,13 @@ function openDfpMap(acctId){
 
   var data=[{
     lat:lat,lon:lon,name:r.NAME||'Unknown',acct:String(r.ACCT_ID),
-    mobile:r.MOBILE_NO||'-',out:Math.round(r.OUTSTANDING||0),
+    mobile:mobDisplay(r.ACCT_ID, r.MOBILE_NO),out:Math.round(r.OUTSTANDING||0),
     sub:r.SUBSTATION||'-',feed:r.FEEDER||'-',
     addr:'-', lmv:'-', atr:r._type||'POLE DC', main:true, dist:0
   }].concat(nearby.map(x=>{
     return {
       lat:x._lat,lon:x._lon,name:x.NAME||'Unknown',acct:String(x.ACCT_ID),
-      mobile:x.MOBILE_NO||'-',out:Math.round(x.OUTSTANDING||0),
+      mobile:mobDisplay(x.ACCT_ID, x.MOBILE_NO),out:Math.round(x.OUTSTANDING||0),
       sub:x.SUBSTATION||'-',feed:x.FEEDER||'-',
       addr:'-', lmv:'-', atr:x._type, main:false, dist:x._dist
     };
