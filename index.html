@@ -6068,19 +6068,24 @@ function abPromptOtp(sapId, cb, errMsg){
   };
 }
 
-function abApi(path, method, body, headers){
-  var opts = { method: method, headers: Object.assign({'Content-Type':'application/json'}, headers||{}) };
-  if(body!==undefined) opts.body = JSON.stringify(body);
-  return fetch(AB_BASE+path, opts).then(function(r){
-    return r.json().then(function(j){ return {status:r.status, body:j}; }).catch(function(){ return {status:r.status, body:null}; });
-  });
+// Relays through the Apps Script proxy (no explicit Content-Type header, so the
+// browser sends a "simple request" with no CORS preflight — same pattern already
+// proven working for the private-data proxy's put_file calls).
+function abApi(action, extra){
+  var payload = Object.assign({key: CLIENT_SHARED_KEY, action: action}, extra||{});
+  return fetch(AB_PROXY_URL, { method:'POST', body: JSON.stringify(payload) })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if(!j.ok) throw new Error(j.error||'proxy_error');
+      return {status: j.status, body: j.body};
+    });
 }
 
-function abSendOtp(sapId){ return abApi('/va/auth/sendOtp','POST',{sapID:sapId, appSignatureID:AB_APP_SIG}); }
-function abDoLogin(sapId, otp){ return abApi('/va/auth/login','POST',{sapID:sapId, otp:otp}); }
-function abAuthAreas(deviceId, refreshToken){ return abApi('/auth/public/auth-areas-mobile?appCode='+AB_APP_CODE,'GET',undefined,{'X-Device-Id':deviceId,'refresh-token':refreshToken}); }
-function abIssueAccessToken(deviceId, refreshToken, roleID, officeID){ return abApi('/auth/public/issue-access-token-mobile','POST',{appCode:AB_APP_CODE, roleID:roleID, officeID:officeID},{'X-Device-Id':deviceId,'refresh-token':refreshToken}); }
-function abGetConsumerDetails(acctId, accessToken, deviceId){ return abApi('/va/inspection/getConsumerDetails','POST',{AccountID:String(acctId)},{'Authorization':'Bearer '+accessToken,'X-Device-Id':deviceId}); }
+function abSendOtp(sapId){ return abApi('send_otp', {sapID:sapId}); }
+function abDoLogin(sapId, otp){ return abApi('login', {sapID:sapId, otp:otp}); }
+function abAuthAreas(deviceId, refreshToken){ return abApi('auth_areas', {deviceId:deviceId, refreshToken:refreshToken}); }
+function abIssueAccessToken(deviceId, refreshToken, roleID, officeID){ return abApi('issue_access_token', {deviceId:deviceId, refreshToken:refreshToken, roleID:roleID, officeID:officeID}); }
+function abGetConsumerDetails(acctId, accessToken, deviceId){ return abApi('get_consumer_details', {acctId:acctId, accessToken:accessToken, deviceId:deviceId}); }
 
 // Full login chain — only runs when there's no usable cached refresh token, or it was rejected.
 function abFullLogin(sapId, cb, onErr){
