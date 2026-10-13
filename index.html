@@ -6085,7 +6085,10 @@ function abSendOtp(sapId){ return abApi('send_otp', {sapID:sapId}); }
 function abDoLogin(sapId, otp){ return abApi('login', {sapID:sapId, otp:otp}); }
 function abAuthAreas(deviceId, refreshToken){ return abApi('auth_areas', {deviceId:deviceId, refreshToken:refreshToken}); }
 function abIssueAccessToken(deviceId, refreshToken, roleID, officeID){ return abApi('issue_access_token', {deviceId:deviceId, refreshToken:refreshToken, roleID:roleID, officeID:officeID}); }
-function abGetConsumerDetails(acctId, accessToken, deviceId){ return abApi('get_consumer_details', {acctId:acctId, accessToken:accessToken, deviceId:deviceId}); }
+// discom defaults to 'DVVNL' — the API docs list it alongside AccountID in
+// getConsumerDetails's request body; exact requiredness unconfirmed but
+// harmless to always send it.
+function abGetConsumerDetails(acctId, accessToken, deviceId){ return abApi('get_consumer_details', {acctId:acctId, accessToken:accessToken, deviceId:deviceId, discom:'DVVNL'}); }
 
 // Full login chain — only runs when there's no usable cached refresh token, or it was rejected.
 function abFullLogin(sapId, cb, onErr){
@@ -6168,7 +6171,10 @@ function checkAbOutstanding(acctId, btnId){
       }
       btn.disabled = false; btn.textContent = '⚡ CHECK LIVE OUTSTANDING';
       if(res.status!==200 || !res.body){
-        if(box) box.innerHTML = '<span style="color:#F43F5E;font-size:11px;">⚠ ASSBILL lookup failed (HTTP '+res.status+')</span>';
+        // status 0 means the proxy itself couldn't reach sso.uppcl.org (network/timeout on
+        // Google's side); otherwise show whatever message UPPCL's own API sent back.
+        var abErrMsg = (res.body && (res.body.message || res.body.error)) || ('HTTP '+res.status);
+        if(box) box.innerHTML = '<span style="color:#F43F5E;font-size:11px;">⚠ ASSBILL lookup failed: '+abErrMsg+'</span>';
         return;
       }
       var d = res.body.data || res.body; // exact success-response shape not yet confirmed live
