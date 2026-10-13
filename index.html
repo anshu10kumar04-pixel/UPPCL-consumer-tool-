@@ -6332,7 +6332,7 @@ function buildConsumerCard(r, q){
     var lx=LOCATION_MAP[String(r.ACCT_ID)];
     if(lx){lat=lx.lat;lon=lx.lon;}
   }
-  var mapBtn = (lat>20&&lat<30&&lon>70) ? '<a class="mb" href="https://www.google.com/maps?q='+lat+','+lon+'&z=17" target="_blank">📍 OPEN IN GOOGLE MAPS</a>' : '';
+  var mapBtn = (lat>20&&lat<30&&lon>70) ? '<a class="mb" style="width:100%;box-sizing:border-box;" href="https://www.google.com/maps?q='+lat+','+lon+'&z=17" target="_blank">📍 OPEN IN GOOGLE MAPS</a>' : '';
   
   function hl(t){ if(!q || !t) return t; var i = String(t).toLowerCase().indexOf(q.toLowerCase()); if(i < 0) return t; return t.slice(0,i)+'<mark>'+t.slice(i,i+q.length)+'</mark>'+t.slice(i+q.length); }
   
@@ -6353,12 +6353,12 @@ function buildConsumerCard(r, q){
       '<div class="df"><div class="lbl">LATITUDE</div><div class="val">'+(lat || r.LAT || '-')+'</div></div>'+
       '<div class="df"><div class="lbl">LONGITUDE</div><div class="val">'+(lon || r.LON || '-')+'</div></div>'+
     '</div>'+payHtml+
-    '<div style="margin-top:12px;">'+mapBtn+'</div>'+
-    '<div style="margin-top:10px;">'+
-      '<button id="ab-btn-'+r.ACCT_ID+'" onclick="checkAbOutstanding(\''+r.ACCT_ID+'\',\'ab-btn-'+r.ACCT_ID+'\')" style="padding:8px 14px;border-radius:8px;border:none;background:#2563EB;color:#fff;font-weight:700;font-size:11px;cursor:pointer;font-family:var(--fh);">⚡ CHECK LIVE OUTSTANDING</button>'+
-      '<button id="dl-btn-'+r.ACCT_ID+'" onclick="abOpenBillDownload(\''+r.ACCT_ID+'\')" title="Opens UPPCL\'s bill page in a new tab and copies this account ID — you still select district, solve both captchas, and click View/Download Bill there yourself" style="margin-left:8px;padding:8px 14px;border-radius:8px;border:none;background:#059669;color:#fff;font-weight:700;font-size:11px;cursor:pointer;font-family:var(--fh);">📄 DOWNLOAD BILL</button>'+
-      '<div id="ab-btn-'+r.ACCT_ID+'-res"></div>'+
+    '<div style="margin-top:12px;display:flex;gap:8px;">'+
+      '<button id="ab-btn-'+r.ACCT_ID+'" onclick="checkAbOutstanding(\''+r.ACCT_ID+'\',\'ab-btn-'+r.ACCT_ID+'\')" style="flex:1;padding:10px 12px;border-radius:10px;border:none;background:#2563EB;color:#fff;font-weight:700;font-size:11px;cursor:pointer;font-family:var(--fh);text-align:center;">⚡ CHECK LIVE OUTSTANDING</button>'+
+      '<button id="dl-btn-'+r.ACCT_ID+'" onclick="abOpenBillDownload(\''+r.ACCT_ID+'\')" title="Opens UPPCL\'s bill page in a new tab and copies this account ID — you still select district, solve both captchas, and click View/Download Bill there yourself" style="flex:1;padding:10px 12px;border-radius:10px;border:none;background:#059669;color:#fff;font-weight:700;font-size:11px;cursor:pointer;font-family:var(--fh);text-align:center;">📄 DOWNLOAD BILL</button>'+
     '</div>'+
+    '<div id="ab-btn-'+r.ACCT_ID+'-res"></div>'+
+    '<div style="margin-top:10px;">'+mapBtn+'</div>'+
     '</div></div>';
 }
 
