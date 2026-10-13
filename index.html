@@ -6311,6 +6311,7 @@ function uppclDecrypt(cdata) {
 function uppclRelay(path, payload, onOk, onErr) {
   fetch(BILL_PROXY_URL, {
     method: 'POST',
+    headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({key: CLIENT_SHARED_KEY, action: 'consumer_relay',
                           path: path, body: {_cdata: uppclEncrypt(JSON.stringify(payload))}})
   })
