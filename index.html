@@ -5994,6 +5994,8 @@ function dl(){
 // only ever talks to script.google.com, same trick already used elsewhere.
 // Gated by CLIENT_SHARED_KEY (already defined above for other proxy calls).
 const AB_PROXY_URL = 'https://script.google.com/macros/s/AKfycbw2lgqXAeHc6mwqmNJvUExwt16uRMH2e-In07822vjtTxy6Ld8rFUDjAMiSas5M4QPy/exec';
+// Consumer portal bill download proxy — deploy BillProxy.gs, paste its /exec URL here.
+const BILL_PROXY_URL = 'REPLACE_WITH_BILL_PROXY_URL';
 const AB_MANIFEST_URL = RAW_BASE + 'assbill_manifest.json';
 var AB_SAPID_CACHE = null;
 
@@ -6274,18 +6276,136 @@ function checkAbOutstanding(acctId, btnId){
 // both math captchas, and the View Bill / Download Bill clicks still happen on UPPCL's
 // real page, done by the person — same as doing it manually today, just one click
 // closer. (Per policy this tool will never auto-solve or relay the captcha itself.)
-function abOpenBillDownload(acctId){
-  var text = String(acctId||'').trim();
-  if(!text) return;
-  try{
-    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text).catch(function(){}); }
-    else {
-      var ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
-      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+// ─── CryptoJS lazy loader ────────────────────────────────────────────────────
+function abCryptoReady(cb) {
+  if (window.CryptoJS) { cb(); return; }
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js';
+  s.onload  = function() { cb(); };
+  s.onerror = function() { cb(new Error('CryptoJS load failed')); };
+  document.head.appendChild(s);
+}
+
+// ─── UPPCL consumer portal crypto (PBKDF2-SHA1 / AES-256-CBC) ────────────────
+var _UC_KEY   = '2b57ea4715h#2d6abf1360e8';
+var _UC_ITERS = 1989;
+var _UC_KSIZE = 8;
+
+function uppclEncrypt(plaintext) {
+  var salt = CryptoJS.lib.WordArray.random(32);
+  var iv   = CryptoJS.lib.WordArray.random(16);
+  var dk   = CryptoJS.PBKDF2(_UC_KEY, salt, {keySize:_UC_KSIZE, iterations:_UC_ITERS, hasher:CryptoJS.algo.SHA1});
+  var ct   = CryptoJS.AES.encrypt(plaintext, dk, {iv:iv});
+  return salt.toString(CryptoJS.enc.Hex) + iv.toString(CryptoJS.enc.Hex) + ct.ciphertext.toString(CryptoJS.enc.Base64);
+}
+
+function uppclDecrypt(cdata) {
+  var salt = CryptoJS.enc.Hex.parse(cdata.slice(0, 64));
+  var iv   = CryptoJS.enc.Hex.parse(cdata.slice(64, 96));
+  var dk   = CryptoJS.PBKDF2(_UC_KEY, salt, {keySize:_UC_KSIZE, iterations:_UC_ITERS, hasher:CryptoJS.algo.SHA1});
+  var cp   = CryptoJS.lib.CipherParams.create({ciphertext: CryptoJS.enc.Base64.parse(cdata.slice(96))});
+  return CryptoJS.AES.decrypt(cp, dk, {iv:iv}).toString(CryptoJS.enc.Utf8);
+}
+
+// ─── Relay one UPPCL API call through the Apps Script proxy ──────────────────
+function uppclRelay(path, payload, onOk, onErr) {
+  fetch(BILL_PROXY_URL, {
+    method: 'POST',
+    body: JSON.stringify({key: CLIENT_SHARED_KEY, action: 'consumer_relay',
+                          path: path, body: {_cdata: uppclEncrypt(JSON.stringify(payload))}})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(j){
+    if (!j.ok) throw new Error(j.error || 'proxy_error');
+    var resp = j.response;
+    if (!resp || !resp._cdata) throw new Error('no _cdata in response');
+    onOk(JSON.parse(uppclDecrypt(resp._cdata)));
+  })
+  .catch(onErr);
+}
+
+// ─── Download bill button handler ─────────────────────────────────────────────────
+// Uses the account ID on the card as the KNO to fetch the bill from consumer.uppcl.org.
+function abOpenBillDownload(acctId) {
+  var id  = String(acctId || '').trim();
+  if (!id) return;
+  var btn = document.getElementById('dl-btn-' + id);
+  var box = document.getElementById('ab-btn-' + id + '-res');
+
+  // Fallback to old tab-open behaviour if proxy URL is not yet configured
+  if (!BILL_PROXY_URL || BILL_PROXY_URL.indexOf('REPLACE_') >= 0) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText)
+        navigator.clipboard.writeText(id).catch(function(){});
+      else {
+        var ta=document.createElement('textarea');ta.value=id;
+        ta.style.position='fixed';ta.style.opacity='0';
+        document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+      }
+    } catch(e) {}
+    try { toast('✓ Account ID copied — paste it on the UPPCL tab that just opened'); } catch(e) {}
+    window.open('https://consumer.uppcl.org/wss/pay_bill_home', '_blank');
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Fetching…'; }
+  if (box) box.innerHTML = '<span style="font-size:11px;color:#6B7280;">Getting bill details…</span>';
+
+  abCryptoReady(function(loadErr) {
+    if (loadErr) {
+      if (btn) { btn.disabled=false; btn.textContent='⬇️ DOWNLOAD BILL'; }
+      if (box) box.innerHTML='<span style="color:#F43F5E;font-size:11px;">⚠ CryptoJS load failed</span>';
+      return;
     }
-  }catch(e){}
-  try{ toast('✓ Account ID copied — paste it on the UPPCL tab that just opened'); }catch(e){}
-  window.open('https://consumer.uppcl.org/wss/pay_bill_home', '_blank');
+
+    uppclRelay('/v2/api/getConsumerDetails', {kno: id, discomName: 'DVVNL'},
+      function(details) {
+        var d = details && details.ConsumerDetails;
+        if (!d || !d.billNo) {
+          if (btn) { btn.disabled=false; btn.textContent='⬇️ DOWNLOAD BILL'; }
+          if (box) box.innerHTML='<span style="color:#F43F5E;font-size:11px;">⚠ Consumer not found</span>';
+          return;
+        }
+        if (box) box.innerHTML='<span style="font-size:11px;color:#6B7280;">Downloading PDF…</span>';
+
+        uppclRelay('/v2/api/viewBillDownloadPDF',
+          {kno: id, discomName: d.discom || 'DVVNL', billNo: d.billNo,
+           category: d.category, identifierType: 'UNMASKED', flag: 'BILL'},
+          function(pdfResp) {
+            if (btn) { btn.disabled=false; btn.textContent='⬇️ DOWNLOAD BILL'; }
+            var b64 = pdfResp && pdfResp.Response;
+            if (!b64) {
+              if (box) box.innerHTML='<span style="color:#F43F5E;font-size:11px;">⚠ No PDF returned</span>';
+              return;
+            }
+            try {
+              var bin = atob(b64), arr = new Uint8Array(bin.length);
+              for (var i=0; i<bin.length; i++) arr[i] = bin.charCodeAt(i);
+              var blob = new Blob([arr], {type:'application/pdf'});
+              var url  = URL.createObjectURL(blob);
+              var a    = document.createElement('a');
+              a.href = url; a.download = id + '_bill.pdf';
+              document.body.appendChild(a); a.click();
+              setTimeout(function(){ URL.revokeObjectURL(url); document.body.removeChild(a); }, 3000);
+              if (box) box.innerHTML = '<span style="font-size:11px;color:#059669;">✅ Downloaded: '
+                + (d.name||id) + ' | Bill ' + (d.billNo||'')
+                + ' | Due ₹' + Math.round(d.dueBillAmt||0).toLocaleString('en-IN') + '</span>';
+            } catch(e) {
+              if (box) box.innerHTML='<span style="color:#F43F5E;font-size:11px;">⚠ Save failed: '+e.message+'</span>';
+            }
+          },
+          function(err) {
+            if (btn) { btn.disabled=false; btn.textContent='⬇️ DOWNLOAD BILL'; }
+            if (box) box.innerHTML='<span style="color:#F43F5E;font-size:11px;">⚠ '+String(err.message||err)+'</span>';
+          }
+        );
+      },
+      function(err) {
+        if (btn) { btn.disabled=false; btn.textContent='⬇️ DOWNLOAD BILL'; }
+        if (box) box.innerHTML='<span style="color:#F43F5E;font-size:11px;">⚠ '+String(err.message||err)+'</span>';
+      }
+    );
+  });
 }
 
 function buildConsumerCard(r, q){
