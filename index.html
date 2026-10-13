@@ -5983,6 +5983,205 @@ function dl(){
   lr.innerHTML=res.map(function(r){return buildConsumerCard(r,q);}).join('');
 }
 
+// ─── ASSBILL LIVE OUTSTANDING (new, purely additive) ──────────────────────────
+// On-demand real-time outstanding check against the UPPCL Assisted-Billing backend
+// (sso.uppcl.org), using the same SAP-ID + SMS-OTP login the ASSBILL app itself uses.
+// Does not touch D/PAY_DATA/any existing fetch — separate, opt-in, per-consumer lookup
+// triggered by the "CHECK LIVE OUTSTANDING" button on a search result card.
+const AB_BASE = 'https://sso.uppcl.org';
+const AB_APP_CODE = 'VVD0007';
+const AB_APP_SIG = 'gQatEL6I7Sx';
+const AB_MANIFEST_URL = RAW_BASE + 'assbill_manifest.json';
+var AB_SAPID_CACHE = null;
+
+function abLS(k, v){
+  try{
+    if(v===undefined) return localStorage.getItem('ab_'+k);
+    if(v===null) localStorage.removeItem('ab_'+k);
+    else localStorage.setItem('ab_'+k, v);
+  }catch(e){ return null; }
+}
+
+function abGetSapId(cb){
+  var saved = abLS('sapid');
+  if(saved){ cb(saved); return; }
+  if(AB_SAPID_CACHE!==null){ cb(AB_SAPID_CACHE); return; }
+  fetch(AB_MANIFEST_URL+'?_='+Date.now())
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){
+      var sid = (j && j.sapID && String(j.sapID).indexOf('PUT_YOUR')!==0) ? String(j.sapID).trim() : '';
+      AB_SAPID_CACHE = sid;
+      cb(sid);
+    })
+    .catch(function(){ AB_SAPID_CACHE=''; cb(''); });
+}
+
+function abModal(html){
+  var old = gel('ab-modal-wrap'); if(old) old.remove();
+  var wrap = document.createElement('div');
+  wrap.id = 'ab-modal-wrap';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  wrap.innerHTML = '<div style="background:#fff;border-radius:14px;padding:20px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:var(--fb);">'+html+'</div>';
+  document.body.appendChild(wrap);
+  return wrap;
+}
+function abCloseModal(){ var w=gel('ab-modal-wrap'); if(w) w.remove(); }
+
+function abPromptSapId(cb){
+  abModal(
+    '<div style="font-family:var(--fh);font-weight:700;font-size:14px;margin-bottom:10px;">ASSBILL LOGIN — SAP ID</div>'+
+    '<div style="font-size:12px;color:#64748B;margin-bottom:10px;">Enter your staff SAP ID. It is saved in this browser so you only enter it once.</div>'+
+    '<input id="ab-sapid-inp" type="text" placeholder="SAP ID" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:14px;margin-bottom:12px;box-sizing:border-box;" />'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
+      '<button onclick="abCloseModal()" style="padding:8px 14px;border-radius:8px;border:1px solid #CBD5E1;background:#F1F5F9;cursor:pointer;">Cancel</button>'+
+      '<button id="ab-sapid-ok" style="padding:8px 14px;border-radius:8px;border:none;background:#2563EB;color:#fff;font-weight:700;cursor:pointer;">Send OTP</button>'+
+    '</div>'
+  );
+  gel('ab-sapid-ok').onclick = function(){
+    var v = (gel('ab-sapid-inp').value||'').trim();
+    if(!v) return;
+    abLS('sapid', v);
+    abCloseModal();
+    cb(v);
+  };
+}
+
+function abPromptOtp(sapId, cb, errMsg){
+  abModal(
+    '<div style="font-family:var(--fh);font-weight:700;font-size:14px;margin-bottom:10px;">ASSBILL LOGIN — ENTER OTP</div>'+
+    '<div style="font-size:12px;color:#64748B;margin-bottom:10px;">OTP sent via SMS for SAP ID '+sapId+'.</div>'+
+    (errMsg ? '<div style="font-size:12px;color:#F43F5E;margin-bottom:10px;">'+errMsg+'</div>' : '')+
+    '<input id="ab-otp-inp" type="text" inputmode="numeric" placeholder="6-digit OTP" style="width:100%;padding:10px;border:1.5px solid #C7D2FE;border-radius:8px;font-size:14px;margin-bottom:12px;box-sizing:border-box;" />'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
+      '<button onclick="abCloseModal()" style="padding:8px 14px;border-radius:8px;border:1px solid #CBD5E1;background:#F1F5F9;cursor:pointer;">Cancel</button>'+
+      '<button id="ab-otp-ok" style="padding:8px 14px;border-radius:8px;border:none;background:#2563EB;color:#fff;font-weight:700;cursor:pointer;">Verify</button>'+
+    '</div>'
+  );
+  gel('ab-otp-ok').onclick = function(){
+    var v = (gel('ab-otp-inp').value||'').trim();
+    if(!v) return;
+    abCloseModal();
+    cb(v);
+  };
+}
+
+function abApi(path, method, body, headers){
+  var opts = { method: method, headers: Object.assign({'Content-Type':'application/json'}, headers||{}) };
+  if(body!==undefined) opts.body = JSON.stringify(body);
+  return fetch(AB_BASE+path, opts).then(function(r){
+    return r.json().then(function(j){ return {status:r.status, body:j}; }).catch(function(){ return {status:r.status, body:null}; });
+  });
+}
+
+function abSendOtp(sapId){ return abApi('/va/auth/sendOtp','POST',{sapID:sapId, appSignatureID:AB_APP_SIG}); }
+function abDoLogin(sapId, otp){ return abApi('/va/auth/login','POST',{sapID:sapId, otp:otp}); }
+function abAuthAreas(deviceId, refreshToken){ return abApi('/auth/public/auth-areas-mobile?appCode='+AB_APP_CODE,'GET',undefined,{'X-Device-Id':deviceId,'refresh-token':refreshToken}); }
+function abIssueAccessToken(deviceId, refreshToken, roleID, officeID){ return abApi('/auth/public/issue-access-token-mobile','POST',{appCode:AB_APP_CODE, roleID:roleID, officeID:officeID},{'X-Device-Id':deviceId,'refresh-token':refreshToken}); }
+function abGetConsumerDetails(acctId, accessToken, deviceId){ return abApi('/va/inspection/getConsumerDetails','POST',{AccountID:String(acctId)},{'Authorization':'Bearer '+accessToken,'X-Device-Id':deviceId}); }
+
+// Full login chain — only runs when there's no usable cached refresh token, or it was rejected.
+function abFullLogin(sapId, cb, onErr){
+  abSendOtp(sapId).then(function(res){
+    if(res.status!==200){ onErr('Could not send OTP: '+(res.body&&res.body.message||res.status)); return; }
+    abPromptOtp(sapId, function(otp){
+      abDoLogin(sapId, otp).then(function(res2){
+        if(res2.status===200 && res2.body && res2.body.refreshToken){ abOnLoginOk(res2.body, cb, onErr); return; }
+        // one retry on wrong/expired OTP
+        abPromptOtp(sapId, function(otp2){
+          abDoLogin(sapId, otp2).then(function(res3){
+            if(res3.status===200 && res3.body && res3.body.refreshToken){ abOnLoginOk(res3.body, cb, onErr); return; }
+            onErr('Login failed: '+(res3.body&&res3.body.message||res3.status));
+          }).catch(function(e){ onErr('Network/CORS error on login: '+e); });
+        }, 'Wrong OTP or expired — try again.');
+      }).catch(function(e){ onErr('Network/CORS error on login: '+e); });
+    });
+  }).catch(function(e){ onErr('Network/CORS error on sendOtp: '+e); });
+}
+
+function abOnLoginOk(loginBody, cb, onErr){
+  abLS('device', loginBody.deviceId);
+  abLS('refresh', loginBody.refreshToken);
+  abAuthAreas(loginBody.deviceId, loginBody.refreshToken).then(function(res){
+    if(res.status!==200 || !res.body || !res.body.authorizationAreas || !res.body.authorizationAreas.length){
+      onErr('No authorization areas on this account.'); return;
+    }
+    var area = res.body.authorizationAreas[0].area; // first role/office pair
+    var roleID = area.role.uID, officeID = area.office.uID;
+    abLS('role', roleID); abLS('office', officeID);
+    abIssueAccessToken(loginBody.deviceId, loginBody.refreshToken, roleID, officeID).then(function(res2){
+      if(res2.status!==200 || !res2.body || !res2.body.accessToken){ onErr('Could not issue access token.'); return; }
+      abLS('access', res2.body.accessToken);
+      abLS('access_exp', String(Date.now() + (res2.body.expiresIn||900)*1000 - 15000));
+      cb(res2.body.accessToken, loginBody.deviceId);
+    }).catch(function(e){ onErr('Network/CORS error on issue-access-token: '+e); });
+  }).catch(function(e){ onErr('Network/CORS error on auth-areas: '+e); });
+}
+
+// Entry point: guarantees a usable accessToken (reusing/refreshing the cached one when
+// possible), then calls back with (accessToken, deviceId).
+function abEnsureToken(cb, onErr){
+  var access = abLS('access'), exp = parseInt(abLS('access_exp')||'0',10), device = abLS('device'), refresh = abLS('refresh'), role = abLS('role'), office = abLS('office');
+  if(access && device && Date.now() < exp){ cb(access, device); return; }
+  if(refresh && device && role && office){
+    abIssueAccessToken(device, refresh, role, office).then(function(res){
+      if(res.status===200 && res.body && res.body.accessToken){
+        abLS('access', res.body.accessToken);
+        abLS('access_exp', String(Date.now() + (res.body.expiresIn||900)*1000 - 15000));
+        cb(res.body.accessToken, device);
+        return;
+      }
+      // refresh token rejected (expired/invalid) — clear it and fall through to full login
+      abLS('refresh', null); abLS('device', null); abLS('role', null); abLS('office', null); abLS('access', null);
+      abGetSapId(function(sapId){
+        if(!sapId){ abPromptSapId(function(s){ abFullLogin(s, cb, onErr); }); return; }
+        abFullLogin(sapId, cb, onErr);
+      });
+    }).catch(function(e){ onErr('Network/CORS error refreshing token: '+e); });
+    return;
+  }
+  abGetSapId(function(sapId){
+    if(!sapId){ abPromptSapId(function(s){ abFullLogin(s, cb, onErr); }); return; }
+    abFullLogin(sapId, cb, onErr);
+  });
+}
+
+// Called by the "CHECK LIVE OUTSTANDING" button on each search result card.
+function checkAbOutstanding(acctId, btnId){
+  var btn = gel(btnId); if(!btn) return;
+  var box = gel(btnId+'-res');
+  btn.disabled = true; btn.textContent = 'Checking…';
+  abEnsureToken(function(accessToken, deviceId){
+    abGetConsumerDetails(acctId, accessToken, deviceId).then(function(res){
+      if(res.status===401){
+        abLS('access', null);
+        btn.disabled = false; btn.textContent = '⚡ CHECK LIVE OUTSTANDING';
+        checkAbOutstanding(acctId, btnId); // one retry after forcing a fresh token
+        return;
+      }
+      btn.disabled = false; btn.textContent = '⚡ CHECK LIVE OUTSTANDING';
+      if(res.status!==200 || !res.body){
+        if(box) box.innerHTML = '<span style="color:#F43F5E;font-size:11px;">⚠ ASSBILL lookup failed (HTTP '+res.status+')</span>';
+        return;
+      }
+      var d = res.body.data || res.body; // exact success-response shape not yet confirmed live
+      var outstanding = d.outstandingAmount!==undefined?d.outstandingAmount:(d.totalOutstanding!==undefined?d.totalOutstanding:(d.outstanding!==undefined?d.outstanding:null));
+      if(box){
+        box.innerHTML = (outstanding!==null)
+          ? '<div style="margin-top:8px;padding:10px 12px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;">'+
+              '<div style="font-size:9px;color:#15803D;font-family:var(--fh);font-weight:700;">⚡ LIVE OUTSTANDING (ASSBILL)</div>'+
+              '<div style="font-size:16px;font-weight:700;color:#DC2626;">₹'+Math.round(outstanding).toLocaleString()+'</div></div>'
+          : '<div style="margin-top:8px;padding:10px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;font-size:11px;">Got a response but no recognizable outstanding field — raw: <code style="word-break:break-all;">'+JSON.stringify(d).slice(0,300)+'</code></div>';
+      }
+    }).catch(function(e){
+      btn.disabled = false; btn.textContent = '⚡ CHECK LIVE OUTSTANDING';
+      if(box) box.innerHTML = '<span style="color:#F43F5E;font-size:11px;">⚠ Network/CORS error — '+e+'. May need a proxy (tell Claude this exact message).</span>';
+    });
+  }, function(errMsg){
+    btn.disabled = false; btn.textContent = '⚡ CHECK LIVE OUTSTANDING';
+    if(box) box.innerHTML = '<span style="color:#F43F5E;font-size:11px;">⚠ '+errMsg+'</span>';
+  });
+}
+
 function buildConsumerCard(r, q){
   var pay = PAY_DATA[ac(r.ACCT_ID)] || null;
   var payHtml = '';
@@ -6049,6 +6248,10 @@ function buildConsumerCard(r, q){
       '<div class="df"><div class="lbl">LONGITUDE</div><div class="val">'+(lon || r.LON || '-')+'</div></div>'+
     '</div>'+payHtml+
     '<div style="margin-top:12px;">'+mapBtn+'</div>'+
+    '<div style="margin-top:10px;">'+
+      '<button id="ab-btn-'+r.ACCT_ID+'" onclick="checkAbOutstanding(\''+r.ACCT_ID+'\',\'ab-btn-'+r.ACCT_ID+'\')" style="padding:8px 14px;border-radius:8px;border:none;background:#2563EB;color:#fff;font-weight:700;font-size:11px;cursor:pointer;font-family:var(--fh);">⚡ CHECK LIVE OUTSTANDING</button>'+
+      '<div id="ab-btn-'+r.ACCT_ID+'-res"></div>'+
+    '</div>'+
     '</div></div>';
 }
 
