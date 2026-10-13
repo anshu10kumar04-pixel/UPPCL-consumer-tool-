@@ -1231,7 +1231,7 @@ function esc(s){
 function setText(id,v){ var e=gel(id); if(e) e.textContent=v; }
 function sl(m,p){ var ld=gel('loading'); if(ld)ld.style.display='flex'; setText('lt',m); var pf=gel('pf'); if(pf)pf.style.width=p+'%'; }
 function hl2(){ var ld=gel('loading'); if(ld){ld.style.display='none';ld.style.pointerEvents='none';} }
-function toast(){ var t=gel('toast'); t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},2000); }
+function toast(msg){ var t=gel('toast'); if(t) t.textContent = msg || '✓ COPIED'; t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},2500); }
 function haversine(lat1,lon1,lat2,lon2){ var R=6371,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180,a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2); return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
 
 function parseDate(s){
@@ -6266,6 +6266,28 @@ function checkAbOutstanding(acctId, btnId){
   });
 }
 
+// Called by the "📄 DOWNLOAD BILL" button on each search result card.
+// A plain webpage cannot script a different website's page (cross-origin — the same
+// browser rule that protects every bank/government site, UPPCL included), so this does
+// the two things that ARE possible from here: open UPPCL's own bill page in a new tab,
+// and copy the account ID to the clipboard so it's one paste away. District selection,
+// both math captchas, and the View Bill / Download Bill clicks still happen on UPPCL's
+// real page, done by the person — same as doing it manually today, just one click
+// closer. (Per policy this tool will never auto-solve or relay the captcha itself.)
+function abOpenBillDownload(acctId){
+  var text = String(acctId||'').trim();
+  if(!text) return;
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text).catch(function(){}); }
+    else {
+      var ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    }
+  }catch(e){}
+  try{ toast('✓ Account ID copied — paste it on the UPPCL tab that just opened'); }catch(e){}
+  window.open('https://consumer.uppcl.org/wss/pay_bill_home', '_blank');
+}
+
 function buildConsumerCard(r, q){
   var pay = PAY_DATA[ac(r.ACCT_ID)] || null;
   var payHtml = '';
@@ -6334,6 +6356,7 @@ function buildConsumerCard(r, q){
     '<div style="margin-top:12px;">'+mapBtn+'</div>'+
     '<div style="margin-top:10px;">'+
       '<button id="ab-btn-'+r.ACCT_ID+'" onclick="checkAbOutstanding(\''+r.ACCT_ID+'\',\'ab-btn-'+r.ACCT_ID+'\')" style="padding:8px 14px;border-radius:8px;border:none;background:#2563EB;color:#fff;font-weight:700;font-size:11px;cursor:pointer;font-family:var(--fh);">⚡ CHECK LIVE OUTSTANDING</button>'+
+      '<button id="dl-btn-'+r.ACCT_ID+'" onclick="abOpenBillDownload(\''+r.ACCT_ID+'\')" title="Opens UPPCL\'s bill page in a new tab and copies this account ID — you still select district, solve both captchas, and click View/Download Bill there yourself" style="margin-left:8px;padding:8px 14px;border-radius:8px;border:none;background:#059669;color:#fff;font-weight:700;font-size:11px;cursor:pointer;font-family:var(--fh);">📄 DOWNLOAD BILL</button>'+
       '<div id="ab-btn-'+r.ACCT_ID+'-res"></div>'+
     '</div>'+
     '</div></div>';
