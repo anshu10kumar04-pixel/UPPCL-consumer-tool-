@@ -1440,6 +1440,26 @@ function mobDisplay(acctId, fallbackMobile){
   return fallbackMobile || '-';
 }
 
+// Same numbers as mobDisplay(), but each one is a tap-to-call tel: link with a
+// WhatsApp icon next to it — used on the Search tab's Consumer Card only.
+// (mobDisplay() itself stays plain text/unchanged: it also feeds the Map tab's
+// nearby-consumer popups via localStorage into a separate page (map.html) that
+// expects plain text, so turning it into HTML there would leak raw tags.)
+function mobDisplayLinked(acctId, fallbackMobile){
+  var ov = MOBILE_OVERLAY[ac(acctId)];
+  var nums = (ov && ov.length) ? ov : (fallbackMobile ? [fallbackMobile] : []);
+  if(!nums.length) return '-';
+  var multi = nums.length > 1;
+  return nums.map(function(n,i){
+    var tel = String(n||'').replace(/\D/g,'');
+    var label = multi ? ('☎'+(i+1)+' ') : '';
+    if(!tel) return label+n;
+    return label+
+      '<a href="tel:'+tel+'" style="color:inherit;text-decoration:underline;font-weight:700;">'+n+'</a> '+
+      '<a href="javascript:void(0)" onclick="waConsumer(\''+acctId+'\',\''+tel+'\')" title="WhatsApp" style="text-decoration:none;">💬</a>';
+  }).join(', ');
+}
+
 function catBadge(cat){
   var c=(cat||'').toUpperCase().trim();
   var cls='b-oth';
@@ -6465,7 +6485,7 @@ function buildConsumerCard(r, q){
     '<div style="text-align:right"><div style="color:rgba(255,255,255,0.7);font-size:10px;font-family:var(--fh);">LOAD</div>'+
     '<div style="font-family:var(--fh);font-size:26px;font-weight:700;color:#FCD34D;">'+(r.LOAD || '-')+' <span style="font-size:13px;color:rgba(255,255,255,0.7);">kW</span></div></div></div>'+
     '<div class="db"><div class="dgrid">'+
-      '<div class="df"><div class="lbl">MOBILE</div><div class="val">'+mobDisplay(r.ACCT_ID, r.MOBILE_NO)+'</div></div>'+
+      '<div class="df"><div class="lbl">MOBILE</div><div class="val">'+mobDisplayLinked(r.ACCT_ID, r.MOBILE_NO)+'</div></div>'+
       '<div class="df"><div class="lbl">METER NO</div><div class="val" style="font-family:var(--fh);color:#1D4ED8;font-weight:700;">'+(METER_DATA[String(r.ACCT_ID)] || r.SERIAL_NBR || '-')+'</div></div>'+
       '<div class="df"><div class="lbl">SUBSTATION</div><div class="val">'+(r.SUBSTATION || '-')+'</div></div>'+
       '<div class="df"><div class="lbl">FEEDER</div><div class="val">'+(r.FEEDER || '-')+'</div></div>'+
@@ -8680,18 +8700,28 @@ function copyMobile(mobile){
     }
   }catch(e){}
 }
-function callingActionIcons(acctId, mobile){
-  var telNum = String(mobile||'').replace(/\D/g,'');
-  var telBtn = telNum ? '<a href="tel:'+telNum+'" onclick="copyMobile(\''+telNum+'\')" title="Call (number copied)" style="margin-right:10px;text-decoration:none;font-size:16px;">📞</a>' : '<span style="opacity:0.3;margin-right:10px;">📞</span>';
-  var waBtn = telNum ? '<a href="javascript:void(0)" onclick="waConsumer(\''+acctId+'\',\''+telNum+'\')" title="WhatsApp" style="text-decoration:none;font-size:16px;">💬</a>' : '<span style="opacity:0.3;">💬</span>';
-  return telBtn+waBtn;
+// Shared call+WhatsApp icon builder — looks up MOBILE_OVERLAY for a 2nd/3rd
+// saved number beyond the single one each row normally carries (r.MOBILE),
+// so the Calling and Field Visit tabs can reach every saved number for a
+// consumer, same as the Search tab's Consumer Card (mobDisplayLinked).
+// Falls back to the single passed-in number when there's no overlay entry,
+// so behavior is unchanged for consumers with only one known number.
+function multiCallWaIcons(acctId, fallbackMobile){
+  var ov = MOBILE_OVERLAY[ac(acctId)];
+  var nums = (ov && ov.length) ? ov : (fallbackMobile ? [fallbackMobile] : []);
+  if(!nums.length){
+    return '<span style="opacity:0.3;margin-right:10px;">📞</span><span style="opacity:0.3;">💬</span>';
+  }
+  return nums.map(function(n,i){
+    var telNum = String(n||'').replace(/\D/g,'');
+    if(!telNum) return '';
+    var sep = (i < nums.length-1) ? '<span style="opacity:0.3;margin:0 6px;">│</span>' : '';
+    return '<a href="tel:'+telNum+'" onclick="copyMobile(\''+telNum+'\')" title="Call '+telNum+'" style="margin-right:6px;text-decoration:none;font-size:16px;">📞</a>'+
+           '<a href="javascript:void(0)" onclick="waConsumer(\''+acctId+'\',\''+telNum+'\')" title="WhatsApp '+telNum+'" style="text-decoration:none;font-size:16px;">💬</a>'+sep;
+  }).join('');
 }
-function fieldVisitActionIcons(acctId, mobile){
-  var telNum = String(mobile||'').replace(/\D/g,'');
-  var telBtn = telNum ? '<a href="tel:'+telNum+'" onclick="copyMobile(\''+telNum+'\')" title="Call (number copied)" style="margin-right:10px;text-decoration:none;font-size:16px;">📞</a>' : '<span style="opacity:0.3;margin-right:10px;">📞</span>';
-  var waBtn = telNum ? '<a href="javascript:void(0)" onclick="waConsumer(\''+acctId+'\',\''+telNum+'\')" title="WhatsApp" style="text-decoration:none;font-size:16px;">💬</a>' : '<span style="opacity:0.3;">💬</span>';
-  return telBtn+waBtn;
-}
+function callingActionIcons(acctId, mobile){ return multiCallWaIcons(acctId, mobile); }
+function fieldVisitActionIcons(acctId, mobile){ return multiCallWaIcons(acctId, mobile); }
 
 // Photo button shown inside the Field Visit ATR modal (below Remarks) — photo is compulsory before ATR submit
 function svPhotoSectionHtml(acctId){
