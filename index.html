@@ -6089,6 +6089,10 @@ function abIssueAccessToken(deviceId, refreshToken, roleID, officeID){ return ab
 // getConsumerDetails's request body; exact requiredness unconfirmed but
 // harmless to always send it.
 function abGetConsumerDetails(acctId, accessToken, deviceId){ return abApi('get_consumer_details', {acctId:acctId, accessToken:accessToken, deviceId:deviceId, discom:'DVVNL'}); }
+// Server-side session persistence (Apps Script Script Properties, keyed by sapID) — lets a
+// login done on one browser/device be reused on another, not just the one that did the OTP.
+function abSaveSession(sapId, deviceId, refreshToken, roleID, officeID){ return abApi('save_session', {sapID:sapId, deviceId:deviceId, refreshToken:refreshToken, roleID:roleID, officeID:officeID}); }
+function abLoadSession(sapId){ return abApi('load_session', {sapID:sapId}); }
 
 // Full login chain — only runs when there's no usable cached refresh token, or it was rejected.
 function abFullLogin(sapId, cb, onErr){
@@ -6096,11 +6100,11 @@ function abFullLogin(sapId, cb, onErr){
     if(res.status!==200){ onErr('Could not send OTP: '+(res.body&&res.body.message||res.status)); return; }
     abPromptOtp(sapId, function(otp){
       abDoLogin(sapId, otp).then(function(res2){
-        if(res2.status===200 && res2.body && res2.body.refreshToken){ abOnLoginOk(res2.body, cb, onErr); return; }
+        if(res2.status===200 && res2.body && res2.body.refreshToken){ abOnLoginOk(res2.body, sapId, cb, onErr); return; }
         // one retry on wrong/expired OTP
         abPromptOtp(sapId, function(otp2){
           abDoLogin(sapId, otp2).then(function(res3){
-            if(res3.status===200 && res3.body && res3.body.refreshToken){ abOnLoginOk(res3.body, cb, onErr); return; }
+            if(res3.status===200 && res3.body && res3.body.refreshToken){ abOnLoginOk(res3.body, sapId, cb, onErr); return; }
             onErr('Login failed: '+(res3.body&&res3.body.message||res3.status));
           }).catch(function(e){ onErr('Network/CORS error on login: '+e); });
         }, 'Wrong OTP or expired — try again.');
@@ -6109,7 +6113,7 @@ function abFullLogin(sapId, cb, onErr){
   }).catch(function(e){ onErr('Network/CORS error on sendOtp: '+e); });
 }
 
-function abOnLoginOk(loginBody, cb, onErr){
+function abOnLoginOk(loginBody, sapId, cb, onErr){
   abLS('device', loginBody.deviceId);
   abLS('refresh', loginBody.refreshToken);
   abAuthAreas(loginBody.deviceId, loginBody.refreshToken).then(function(res){
@@ -6123,9 +6127,40 @@ function abOnLoginOk(loginBody, cb, onErr){
       if(res2.status!==200 || !res2.body || !res2.body.accessToken){ onErr('Could not issue access token.'); return; }
       abLS('access', res2.body.accessToken);
       abLS('access_exp', String(Date.now() + (res2.body.expiresIn||900)*1000 - 15000));
+      // Push this session to the server too (fire-and-forget) so any other browser/device
+      // can reuse it without a fresh OTP, as long as sapId is known (manifest or saved).
+      if(sapId){ abSaveSession(sapId, loginBody.deviceId, loginBody.refreshToken, roleID, officeID).catch(function(){}); }
       cb(res2.body.accessToken, loginBody.deviceId);
     }).catch(function(e){ onErr('Network/CORS error on issue-access-token: '+e); });
   }).catch(function(e){ onErr('Network/CORS error on auth-areas: '+e); });
+}
+
+// Tries a server-saved session (from a login done on a different browser/device) before
+// falling back to a fresh OTP login. Used whenever this browser has no usable local token.
+function abTryServerSession(cb, onErr){
+  abGetSapId(function(sapId){
+    if(!sapId){ abPromptSapId(function(s){ abFullLogin(s, cb, onErr); }); return; }
+    abLoadSession(sapId).then(function(res){
+      if(res.status===200 && res.body && res.body.found && res.body.refreshToken){
+        var sess = res.body;
+        abIssueAccessToken(sess.deviceId, sess.refreshToken, sess.roleID, sess.officeID).then(function(res2){
+          if(res2.status===200 && res2.body && res2.body.accessToken){
+            abLS('device', sess.deviceId); abLS('refresh', sess.refreshToken);
+            abLS('role', sess.roleID); abLS('office', sess.officeID);
+            abLS('access', res2.body.accessToken);
+            abLS('access_exp', String(Date.now() + (res2.body.expiresIn||900)*1000 - 15000));
+            cb(res2.body.accessToken, sess.deviceId);
+            return;
+          }
+          // server-saved session is also stale/invalid — fall through to a fresh OTP login
+          abFullLogin(sapId, cb, onErr);
+        }).catch(function(e){ onErr('Network/CORS error using saved session: '+e); });
+        return;
+      }
+      // nothing saved server-side either — fresh OTP login
+      abFullLogin(sapId, cb, onErr);
+    }).catch(function(e){ onErr('Network/CORS error loading saved session: '+e); });
+  });
 }
 
 // Entry point: guarantees a usable accessToken (reusing/refreshing the cached one when
@@ -6141,19 +6176,14 @@ function abEnsureToken(cb, onErr){
         cb(res.body.accessToken, device);
         return;
       }
-      // refresh token rejected (expired/invalid) — clear it and fall through to full login
+      // local refresh token rejected (expired/invalid) — clear it and try a server-saved
+      // session (from another browser/device) before falling back to a fresh OTP login.
       abLS('refresh', null); abLS('device', null); abLS('role', null); abLS('office', null); abLS('access', null);
-      abGetSapId(function(sapId){
-        if(!sapId){ abPromptSapId(function(s){ abFullLogin(s, cb, onErr); }); return; }
-        abFullLogin(sapId, cb, onErr);
-      });
+      abTryServerSession(cb, onErr);
     }).catch(function(e){ onErr('Network/CORS error refreshing token: '+e); });
     return;
   }
-  abGetSapId(function(sapId){
-    if(!sapId){ abPromptSapId(function(s){ abFullLogin(s, cb, onErr); }); return; }
-    abFullLogin(sapId, cb, onErr);
-  });
+  abTryServerSession(cb, onErr);
 }
 
 // Recursively searches a getConsumerDetails response for any key that looks like an
