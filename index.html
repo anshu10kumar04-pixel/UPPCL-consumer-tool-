@@ -6156,6 +6156,43 @@ function abEnsureToken(cb, onErr){
   });
 }
 
+// Recursively searches a getConsumerDetails response for any key that looks like an
+// outstanding-dues figure (UPPCL's exact field name/nesting isn't documented, and the
+// live response so far only showed a "billingDetails" block with no dues figure in it —
+// this searches the whole object tree instead of guessing one hardcoded name/path).
+function abIsOutstandingKey_(k){
+  if(/outstanding/i.test(k)) return true;
+  // "due"/"dues" as a whole underscore/space-separated token only (so AMOUNT_DUE and
+  // TOTAL_DUES match, but DUE_DATE / DUE_DAYS / PAYMENT_DUE_DATE don't).
+  var tokens = k.split(/[_\s]+/).map(function(t){ return t.toLowerCase(); });
+  if((tokens.indexOf('due')!==-1 || tokens.indexOf('dues')!==-1) && !/date|day/i.test(k)) return true;
+  return false;
+}
+function abFindOutstanding(obj, depth){
+  if(!obj || typeof obj !== 'object' || (depth||0) > 4) return null;
+  var matches = [];
+  for(var k in obj){
+    if(!Object.prototype.hasOwnProperty.call(obj,k)) continue;
+    var v = obj[k];
+    if(abIsOutstandingKey_(k) && (typeof v==='number' || (typeof v==='string' && v.trim()!=='' && !isNaN(Number(v))))){
+      matches.push({key:k, value: typeof v==='number'?v:Number(v)});
+    }
+  }
+  if(matches.length){
+    matches.sort(function(a,b){ return (/total/i.test(a.key)?0:1) - (/total/i.test(b.key)?0:1); });
+    return matches[0];
+  }
+  for(var k2 in obj){
+    if(!Object.prototype.hasOwnProperty.call(obj,k2)) continue;
+    var v2 = obj[k2];
+    if(v2 && typeof v2==='object'){
+      var r = abFindOutstanding(v2, (depth||0)+1);
+      if(r) return r;
+    }
+  }
+  return null;
+}
+
 // Called by the "CHECK LIVE OUTSTANDING" button on each search result card.
 function checkAbOutstanding(acctId, btnId){
   var btn = gel(btnId); if(!btn) return;
@@ -6178,13 +6215,16 @@ function checkAbOutstanding(acctId, btnId){
         return;
       }
       var d = res.body.data || res.body; // exact success-response shape not yet confirmed live
-      var outstanding = d.outstandingAmount!==undefined?d.outstandingAmount:(d.totalOutstanding!==undefined?d.totalOutstanding:(d.outstanding!==undefined?d.outstanding:null));
+      var found = abFindOutstanding(d, 0);
       if(box){
-        box.innerHTML = (outstanding!==null)
+        box.innerHTML = found
           ? '<div style="margin-top:8px;padding:10px 12px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;">'+
               '<div style="font-size:9px;color:#15803D;font-family:var(--fh);font-weight:700;">⚡ LIVE OUTSTANDING (ASSBILL)</div>'+
-              '<div style="font-size:16px;font-weight:700;color:#DC2626;">₹'+Math.round(outstanding).toLocaleString()+'</div></div>'
-          : '<div style="margin-top:8px;padding:10px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;font-size:11px;">Got a response but no recognizable outstanding field — raw: <code style="word-break:break-all;">'+JSON.stringify(d).slice(0,300)+'</code></div>';
+              '<div style="font-size:16px;font-weight:700;color:#DC2626;">₹'+Math.round(found.value).toLocaleString()+'</div>'+
+              '<div style="font-size:9px;color:#94A3B8;margin-top:2px;">field: '+found.key+'</div></div>'
+          // No match found by name-pattern search — show the full raw response (not truncated
+          // to 300 chars like before) so the exact field name can be spotted and added above.
+          : '<div style="margin-top:8px;padding:10px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;font-size:11px;">Got a response but no recognizable outstanding field — raw: <code style="word-break:break-all;">'+JSON.stringify(d)+'</code></div>';
       }
     }).catch(function(e){
       btn.disabled = false; btn.textContent = '⚡ CHECK LIVE OUTSTANDING';
