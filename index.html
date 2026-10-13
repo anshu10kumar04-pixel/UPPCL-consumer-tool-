@@ -5988,9 +5988,12 @@ function dl(){
 // (sso.uppcl.org), using the same SAP-ID + SMS-OTP login the ASSBILL app itself uses.
 // Does not touch D/PAY_DATA/any existing fetch — separate, opt-in, per-consumer lookup
 // triggered by the "CHECK LIVE OUTSTANDING" button on a search result card.
-const AB_BASE = 'https://sso.uppcl.org';
-const AB_APP_CODE = 'VVD0007';
-const AB_APP_SIG = 'gQatEL6I7Sx';
+// sso.uppcl.org blocks direct browser calls from this github.io origin (CORS),
+// so every ASSBILL call is relayed through a small standalone Apps Script proxy
+// instead (brand-new project, separate from the GitHub-data one) — the browser
+// only ever talks to script.google.com, same trick already used elsewhere.
+// Gated by CLIENT_SHARED_KEY (already defined above for other proxy calls).
+const AB_PROXY_URL = 'https://script.google.com/macros/s/AKfycbw2lgqXAeHc6mwqmNJvUExwt16uRMH2e-In07822vjtTxy6Ld8rFUDjAMiSas5M4QPy/exec';
 const AB_MANIFEST_URL = RAW_BASE + 'assbill_manifest.json';
 var AB_SAPID_CACHE = null;
 
