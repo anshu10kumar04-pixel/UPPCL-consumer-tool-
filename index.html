@@ -562,7 +562,7 @@ select option{background:#fff;color:#1E1B4B;}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
       <div>
         <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#0891B2;">📞 CALLING LIST</div>
-        <div style="font-size:12px;color:var(--muted);">Defaulters above ₹2000 (LMV1/2/6, HV2) + consumers manually pushed for calling. Click ACCT ID to open consumer detail &amp; log Calling ATR.</div>
+        <div style="font-size:12px;color:var(--muted);">Defaulters above ₹2000 (LMV1/2/6/9, HV2) + consumers manually pushed for calling. Click ACCT ID to open consumer detail &amp; log Calling ATR.</div>
       </div>
     </div>
     <div id="call-gate-box"></div>
@@ -701,7 +701,7 @@ select option{background:#fff;color:#1E1B4B;}
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
       <div>
         <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#7C3AED;">🚶 FIELD VISIT</div>
-        <div style="font-size:12px;color:var(--muted);">Defaulters above ₹5000 (LMV1/2/6, HV2). Click ACCT ID to open consumer detail &amp; log Field Visit ATR.</div>
+        <div style="font-size:12px;color:var(--muted);">Defaulters above ₹5000 (LMV1/2/6/9, HV2). Click ACCT ID to open consumer detail &amp; log Field Visit ATR.</div>
       </div>
     </div>
     <div class="fg" style="margin-bottom:12px;flex-wrap:wrap;">
@@ -4834,7 +4834,7 @@ function buildSettingsPanel(){
       /* CALLING PUSH LIST UPLOAD CARD */
       '<div class="settings-card" style="background:#ECFEFF;border-color:#A5F3FC;">'+
         '<div style="font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:12px;color:#0E7490;display:flex;align-items:center;gap:8px;">📞 UPLOAD CALLING PUSH LIST</div>'+
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:15px;line-height:1.5;">Bulk-add consumers to the CALLING tab that do not meet the auto-filter (₹5000+, LMV1/2/6/HV2). Just needs a file with an <b>ACCT_ID</b> column.</div>'+
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:15px;line-height:1.5;">Bulk-add consumers to the CALLING tab that do not meet the auto-filter (₹5000+, LMV1/2/6/9/HV2). Just needs a file with an <b>ACCT_ID</b> column.</div>'+
         '<input type="file" id="calling-upload-file" accept=".xlsx,.xls,.csv" style="width:100%;margin-bottom:15px;padding:8px;border:1px solid #A5F3FC;border-radius:8px;font-size:12px;background:#fff;"/>'+
         '<button class="btn" style="background:#0E7490;color:#fff;width:100%;" onclick="processCallingPushUpload()">📞 ADD TO CALLING LIST</button>'+
         '<div id="calling-upload-log" style="margin-top:12px;font-size:11px;font-family:monospace;display:none;"></div>'+
@@ -8974,7 +8974,7 @@ var CALL_PUSH_IDS = {}, _callPushLoaded = false;
 var CALL_ALL = [], CALL_FD = [], callPage = 1, _callLoaded = false;
 var CALLING_AUTO_THRESHOLD = 2000;
 var FIELDVISIT_AUTO_THRESHOLD = 5000;
-var AUTO_TARIFFS = ['LMV1','LMV2','LMV6','HV2'];
+var AUTO_TARIFFS = ['LMV1','LMV2','LMV6','LMV9','HV2'];
 
 // ---- STAFF ROSTER (per-substation JE / TG / lineman, from uploaded staff list) ----
 // Gates the Calling tab: SS must be picked, then a staff name, before the list works.
