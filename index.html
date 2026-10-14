@@ -3592,6 +3592,23 @@ function buildDashboard(){
   }
   _dashRetry = 0; _dashDefRetry = 0;
 
+  // Ensure the persisted ever-defaulter ID list is loaded — needed by the
+  // "DEFAULTER RECOVERY REPORT — WHO PAID" section below so a consumer who
+  // was EVER a defaulter still counts whenever they pay, not only while
+  // they're still a defaulter today.
+  if(!_everDefLoaded){
+    loadEverDefaulterIds();
+    _dashEverDefRetry = (_dashEverDefRetry||0) + 1;
+    if(_dashEverDefRetry <= 15){
+      el.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-family:var(--fh);">⏳ Loading recovery history…</div>';
+      setTimeout(buildDashboard, 1000);
+      return;
+    }
+    // proceed anyway after retries exhausted (falls back to current-defaulter + reconstruction heuristic below)
+  }
+  _dashEverDefRetry = 0;
+  mergeTodaysDefaultersIntoEverDef();
+
   // Keep DEF_ALL's OUTSTANDING in sync with the live D data so a consumer who has
   // paid off (outstanding dropped to 0) is reflected correctly everywhere downstream.
   syncLiveOutstanding();
@@ -3919,12 +3936,32 @@ function buildDashboard(){
   var recYest=[], recMonth=[];
 
   D.forEach(function(r){
-    if(!defAcctSet.has(String(r.ACCT_ID))) return;
     var pd = parseDate(r.LAST_PAY_DATE||r.PAY_DATE);
     if(!pd) return;
     var pday=pd.getDate(), pmon=pd.getMonth(), pyear=pd.getFullYear();
     var isYest   = pday===yDay && pmon===yMon && pyear===yYear;
     var isCurMon = pyear===curYear && pmon===curMon;
+    if(!isYest && !isCurMon) return;
+
+    // Bug fix (14-Oct-2026, refined per explicit request): a consumer who
+    // paid off their FULL outstanding drops out of today's live defaulters
+    // list, so checking defAcctSet (today only) membership alone silently
+    // excludes exactly the full recoveries this report exists to show.
+    // "Once a consumer has EVER been a defaulter, count it whenever they
+    // pay" — not just while they're still a defaulter today — so the real
+    // check is membership in EVER_DEF_IDS, the persisted list of every
+    // ACCT_ID ever seen on a defaulters list (today's DEF_ALL is already
+    // merged into it above, before this loop runs). The current-day set and
+    // the reconstructed-pre-payment-outstanding check stay on as fallbacks
+    // for the same-day gap before EVER_DEF_IDS has accumulated history
+    // (first run of this feature, or no GitHub PAT configured to persist it).
+    var everDefaulter = !!EVER_DEF_IDS[String(r.ACCT_ID)];
+    var isCurrentDefaulter = defAcctSet.has(String(r.ACCT_ID));
+    var payAmt = Math.max(0, parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0);
+    var curOut = Math.max(0, parseFloat(r.AMOUNT_PAYABLE||r.OUTSTANDING||0)||0);
+    var wasDefaulterBeforePaying = (curOut + payAmt) > 2000;
+    if(!everDefaulter && !isCurrentDefaulter && !wasDefaulterBeforePaying) return;
+
     if(isYest)    recYest.push(r);
     if(isCurMon)  recMonth.push(r);
   });
@@ -8959,6 +8996,46 @@ function loadCallPushList(cb){
       else if(data && typeof data==='object') Object.keys(data).forEach(function(k){ CALL_PUSH_IDS[k]=true; });
       _callPushLoaded = true; if(cb) cb();
     }).catch(function(){ _callPushLoaded = true; if(cb) cb(); });
+}
+
+// ---- EVER-BEEN-A-DEFAULTER ID LIST (persisted, grows over time) ----
+// The live DEFAULTERS list (DEF_ALL) only ever shows TODAY's current
+// defaulters — a consumer who clears their full outstanding drops off it
+// the very next day. For the Dashboard's "DEFAULTER RECOVERY REPORT — WHO
+// PAID" to count a payment from anyone who was EVER a defaulter (not just
+// someone still a defaulter today), we keep our own running list of every
+// ACCT_ID ever seen in DEF_ALL, hosted the same way as calling_push.json /
+// mobile_overlay.json — fetched here, unioned with today's DEF_ALL once per
+// load, and (when a GitHub PAT is set in SETTINGS) written back so the list
+// keeps growing day over day. 14-Oct-2026, explicit request.
+var EVER_DEF_IDS = {}, _everDefLoaded = false, _everDefMerged = false;
+function loadEverDefaulterIds(cb){
+  fetch(RAW_BASE+'ever_defaulter_ids.json?_='+Date.now())
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(data){
+      EVER_DEF_IDS = {};
+      if(Array.isArray(data)) data.forEach(function(id){ EVER_DEF_IDS[String(id)] = true; });
+      else if(data && typeof data==='object') Object.keys(data).forEach(function(k){ EVER_DEF_IDS[k]=true; });
+      _everDefLoaded = true; if(cb) cb();
+    }).catch(function(){ _everDefLoaded = true; if(cb) cb(); });
+}
+function persistEverDefaulterIds(){
+  if(!getGhPat()) return; // no write access configured — in-memory list still works for this session
+  ghPutFile('ever_defaulter_ids.json', JSON.stringify(Object.keys(EVER_DEF_IDS)), 'Update ever-defaulter ID list')
+    .catch(function(e){ console.error('Failed to save ever-defaulter list', e); });
+}
+// Union today's live defaulters into the persisted ever-defaulter list. Only
+// actually pushes to GitHub when new IDs showed up today (avoids a no-op
+// commit on every single page load). Runs once per page session.
+function mergeTodaysDefaultersIntoEverDef(){
+  if(_everDefMerged) return;
+  _everDefMerged = true;
+  var addedAny = false;
+  DEF_ALL.forEach(function(r){
+    var id = String(r.ACCT_ID);
+    if(!EVER_DEF_IDS[id]){ EVER_DEF_IDS[id] = true; addedAny = true; }
+  });
+  if(addedAny) persistEverDefaulterIds();
 }
 
 // ---- TOP 16 SS (same methodology/ranking as Progress Report: top SS by billable
