@@ -681,11 +681,11 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="min-width:160px">ADDRESS</th>
         <th style="width:105px">MOBILE</th>
         <th style="width:70px">LOAD</th>
-        <th style="width:110px">OUTSTANDING</th>
+        <th style="width:70px">TARIFF</th>
         <th style="width:95px">LP DATE</th>
         <th style="width:95px">LP AMT</th>
-        <th style="width:70px">TARIFF</th>
-        <th style="width:110px">METER NO</th>
+        <th style="width:110px">OUTSTANDING</th>
+        <th style="width:95px">DUE DATE</th>
         <th style="width:90px">ACTIONS</th>
         <th style="width:150px">ATR STATUS</th>
         <th style="min-width:140px">REMARKS</th>
@@ -817,11 +817,11 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="min-width:160px">ADDRESS</th>
         <th style="width:105px">MOBILE</th>
         <th style="width:70px">LOAD</th>
-        <th style="width:110px">OUTSTANDING</th>
+        <th style="width:70px">TARIFF</th>
         <th style="width:95px">LP DATE</th>
         <th style="width:95px">LP AMT</th>
-        <th style="width:70px">TARIFF</th>
-        <th style="width:110px">METER NO</th>
+        <th style="width:110px">OUTSTANDING</th>
+        <th style="width:95px">DUE DATE</th>
         <th style="width:120px">ACTIONS</th>
         <th style="width:150px">ATR STATUS</th>
         <th style="min-width:140px">ATR REMARK</th>
@@ -9124,11 +9124,11 @@ function renderCallTable(page){
       '<td style="max-width:180px;white-space:normal;font-size:11px;color:var(--muted);">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.MOBILE ? '<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" title="Call (number copied)" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+'</a>' : '-')+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD?r.LOAD+' kW':'-')+'</td>'+
-      '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
+      '<td>'+(r.TARIFF||'-')+'</td>'+
       '<td>'+(r.PAY_DATE||'-')+'</td>'+
       '<td>'+(r.PAY_AMT?'₹'+Math.round(r.PAY_AMT).toLocaleString():'-')+'</td>'+
-      '<td>'+(r.TARIFF||'-')+'</td>'+
-      '<td>'+(r.METER_NO||'-')+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
+      '<td>'+(r.DUE_DATE||'-')+'</td>'+
       '<td style="white-space:nowrap;">'+callingActionIcons(r.ACCT_ID, r.MOBILE)+(r._SRC==='manual' ? ' <a href="javascript:void(0)" onclick="removeFromCalling(\''+r.ACCT_ID+'\')" title="Remove from Calling" style="margin-left:10px;text-decoration:none;font-size:15px;">🗑️</a>' : '')+'</td>'+
       '<td><span style="color:'+atrColor+';font-weight:700;font-size:11px;">'+atrLabel+'</span></td>'+
       '<td style="max-width:160px;white-space:normal;font-size:11px;color:var(--muted);">'+(cl.REMARKS||'-')+'</td>'+
@@ -9336,11 +9336,11 @@ function renderFieldVisitTable(page){
       '<td style="max-width:180px;white-space:normal;font-size:11px;color:var(--muted);">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.MOBILE ? '<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" title="Call (number copied)" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+'</a>' : '-')+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD?r.LOAD+' kW':'-')+'</td>'+
-      '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
+      '<td>'+(r.TARIFF||'-')+'</td>'+
       '<td>'+(r.PAY_DATE||'-')+'</td>'+
       '<td>'+(r.PAY_AMT?'₹'+Math.round(r.PAY_AMT).toLocaleString():'-')+'</td>'+
-      '<td>'+(r.TARIFF||'-')+'</td>'+
-      '<td>'+(r.METER_NO||'-')+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;color:#F43F5E;">₹'+out.toLocaleString()+'</td>'+
+      '<td>'+(r.DUE_DATE||'-')+'</td>'+
       '<td style="white-space:nowrap;">'+fieldVisitActionIcons(r.ACCT_ID, r.MOBILE)+
       '</td>'+
       '<td><span style="color:'+col+';font-weight:700;font-size:11px;">'+atrLabel+'</span></td>'+
