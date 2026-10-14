@@ -6285,20 +6285,22 @@ function abEnsureToken(cb, onErr){
         cb(res.body.accessToken, device);
         return;
       }
-      // Only treat this as "refresh token actually rejected" on a real auth failure
-      // (401/403 from UPPCL). Anything else — status 0 (proxy couldn't reach
-      // sso.uppcl.org), a 5xx, or a malformed body — is a transient hiccup, not proof
-      // the week-long refresh token has expired. Wiping stored credentials on every
-      // such hiccup was forcing a fresh OTP login far more often than UPPCL's own
-      // refresh-token lifetime (this was the "expires in a day" bug) — so only clear
-      // the session on a genuine 401/403, and otherwise just surface a retryable error.
-      if(res.status===401 || res.status===403){
-        abLS('refresh', null); abLS('device', null); abLS('role', null); abLS('office', null); abLS('access', null);
-        abTryServerSession(cb, onErr);
+      // status===0 means the proxy itself couldn't reach sso.uppcl.org at all (network
+      // blip/timeout on Google's side) — that's a transient hiccup, not proof the
+      // refresh token is bad, so keep the stored credentials and just surface a
+      // retryable error (this was the actual cause of the old "expires in a day" bug:
+      // any hiccup, including this one, used to wipe the session and force a fresh
+      // OTP login). Any OTHER status means UPPCL's own server actually answered —
+      // 401/403, or any other code with a body saying the session is invalid/revoked
+      // — and that answer is always trusted: clear the stored session and fall back
+      // to a server-saved session or a fresh OTP login.
+      if(res.status===0){
+        var transientMsg = (res.body && (res.body.message || res.body.error)) || 'network error';
+        onErr('Could not refresh session (will retry next time) — '+transientMsg);
         return;
       }
-      var transientMsg = (res.body && (res.body.message || res.body.error)) || ('HTTP '+res.status);
-      onErr('Could not refresh session (will retry next time) — '+transientMsg);
+      abLS('refresh', null); abLS('device', null); abLS('role', null); abLS('office', null); abLS('access', null);
+      abTryServerSession(cb, onErr);
     }).catch(function(e){ onErr('Network/CORS error refreshing token: '+e); });
     return;
   }
