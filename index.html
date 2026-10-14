@@ -1986,7 +1986,7 @@ function buildProgressReport(){
   var h = '';
   h += '<div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;">';
   h += '<div style="background:#1E3A5F;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
-  h += '<div style="font-family:var(--fh);font-weight:700;font-size:13px;">📈 SUB STATION WISE BILLING & COLLECTION SUMMARY <span style="color:#93C5FD;font-size:11px;">(Amt in Lacs)</span></div>';
+  h += '<div style="font-family:var(--fh);font-weight:700;font-size:13px;">📈 SUB STATION WISE BILLING & COLLECTION SUMMARY (SM/Non-SM also) <span style="color:#93C5FD;font-size:11px;">(Amt in Lacs)</span></div>';
   h += '<div style="display:flex;gap:8px;align-items:center;">';
   h += '<span style="font-size:11px;opacity:0.8;">upto</span>';
   h += '<span style="background:#3B82F6;padding:3px 10px;border-radius:5px;font-size:12px;font-weight:700;">'+dateStr+'</span><span style="font-size:10px;opacity:0.7;margin-left:4px;">(prev day data)</span>';
@@ -2193,8 +2193,12 @@ function buildProgressReport(){
   h += '</div>';
 
   el.innerHTML = h;
-  // Build SM/NonSM report section below
-  buildSMReport();
+  // Standalone "SM / Non-SM WISE BILLING & COLLECTION SUMMARY" report removed
+  // (14-Oct-2026, explicit request) — redundant with the SUB STATION WISE
+  // report above, which already shows the same SM/Non-SM split per
+  // substation via the "SM/NSM" toggle on each row (togglePrSM). buildSMReport()
+  // itself is left in place (unused) rather than deleted, same as other
+  // retired-but-kept report functions in this file.
   // Auto-load YoY if prev year data already cached
   if(PY_LOADED) setTimeout(buildYoYReport, 100);
 }
