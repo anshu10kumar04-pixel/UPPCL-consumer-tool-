@@ -6249,7 +6249,8 @@ function abTryServerSession(cb, onErr){
         var sess = res.body;
         abIssueAccessToken(sess.deviceId, sess.refreshToken, sess.roleID, sess.officeID).then(function(res2){
           if(res2.status===200 && res2.body && res2.body.accessToken){
-            abLS('device', sess.deviceId); abLS('refresh', sess.refreshToken);
+            abLS('device', sess.deviceId);
+            abLS('refresh', res2.body.refreshToken || sess.refreshToken);
             abLS('role', sess.roleID); abLS('office', sess.officeID);
             abLS('access', res2.body.accessToken);
             abLS('access_exp', String(Date.now() + (res2.body.expiresIn||900)*1000 - 15000));
@@ -6277,13 +6278,27 @@ function abEnsureToken(cb, onErr){
       if(res.status===200 && res.body && res.body.accessToken){
         abLS('access', res.body.accessToken);
         abLS('access_exp', String(Date.now() + (res.body.expiresIn||900)*1000 - 15000));
+        // UPPCL may rotate the refresh token on every issue-access-token call; if the
+        // response hands back a (possibly new) refreshToken, store it so we keep using
+        // the latest one instead of an old one that could get invalidated server-side.
+        if(res.body.refreshToken) abLS('refresh', res.body.refreshToken);
         cb(res.body.accessToken, device);
         return;
       }
-      // local refresh token rejected (expired/invalid) — clear it and try a server-saved
-      // session (from another browser/device) before falling back to a fresh OTP login.
-      abLS('refresh', null); abLS('device', null); abLS('role', null); abLS('office', null); abLS('access', null);
-      abTryServerSession(cb, onErr);
+      // Only treat this as "refresh token actually rejected" on a real auth failure
+      // (401/403 from UPPCL). Anything else — status 0 (proxy couldn't reach
+      // sso.uppcl.org), a 5xx, or a malformed body — is a transient hiccup, not proof
+      // the week-long refresh token has expired. Wiping stored credentials on every
+      // such hiccup was forcing a fresh OTP login far more often than UPPCL's own
+      // refresh-token lifetime (this was the "expires in a day" bug) — so only clear
+      // the session on a genuine 401/403, and otherwise just surface a retryable error.
+      if(res.status===401 || res.status===403){
+        abLS('refresh', null); abLS('device', null); abLS('role', null); abLS('office', null); abLS('access', null);
+        abTryServerSession(cb, onErr);
+        return;
+      }
+      var transientMsg = (res.body && (res.body.message || res.body.error)) || ('HTTP '+res.status);
+      onErr('Could not refresh session (will retry next time) — '+transientMsg);
     }).catch(function(e){ onErr('Network/CORS error refreshing token: '+e); });
     return;
   }
@@ -6327,6 +6342,53 @@ function abFindOutstanding(obj, depth){
   return null;
 }
 
+// Same idea as abFindOutstanding, but for the last-payment amount and last-payment
+// date (LP AMT / LP DATE) — UPPCL's exact field names/nesting for these in
+// getConsumerDetails aren't documented either, so this searches the whole response
+// tree by name pattern instead of a single hardcoded path.
+function abIsLpAmtKey_(k){
+  var s = String(k).toLowerCase().replace(/[_\s]+/g,'');
+  return (/lastpay/.test(s) || /^lp/.test(s) || /\blp/.test(s)) && /amt|amount/.test(s);
+}
+function abIsLpDateKey_(k){
+  var s = String(k).toLowerCase().replace(/[_\s]+/g,'');
+  return (/lastpay/.test(s) || /^lp/.test(s) || /\blp/.test(s)) && /date/.test(s);
+}
+// Last Bill Consumption — same ASSBILL response, confirmed present (field label
+// "Last Bill Consumption" alongside Total Outstanding/Last Pay Date/Last Pay Amount
+// in the Assisted Billing consumer-details screen).
+function abIsLastBillConsumptionKey_(k){
+  var s = String(k).toLowerCase().replace(/[_\s]+/g,'');
+  return /consumption/.test(s);
+}
+function abFindByPattern_(obj, matcherFn, wantNumeric, depth){
+  if(!obj || typeof obj !== 'object' || (depth||0) > 4) return null;
+  var matches = [];
+  for(var k in obj){
+    if(!Object.prototype.hasOwnProperty.call(obj,k)) continue;
+    var v = obj[k];
+    var okType = wantNumeric
+      ? (typeof v==='number' || (typeof v==='string' && v.trim()!=='' && !isNaN(Number(v))))
+      : (typeof v==='string' && v.trim()!=='') || typeof v==='number';
+    if(matcherFn(k) && okType){
+      matches.push({key:k, value: wantNumeric ? (typeof v==='number'?v:Number(v)) : v});
+    }
+  }
+  if(matches.length) return matches[0];
+  for(var k2 in obj){
+    if(!Object.prototype.hasOwnProperty.call(obj,k2)) continue;
+    var v2 = obj[k2];
+    if(v2 && typeof v2==='object'){
+      var r = abFindByPattern_(v2, matcherFn, wantNumeric, (depth||0)+1);
+      if(r) return r;
+    }
+  }
+  return null;
+}
+function abFindLpAmt(obj){ return abFindByPattern_(obj, abIsLpAmtKey_, true, 0); }
+function abFindLpDate(obj){ return abFindByPattern_(obj, abIsLpDateKey_, false, 0); }
+function abFindLastBillConsumption(obj){ return abFindByPattern_(obj, abIsLastBillConsumptionKey_, true, 0); }
+
 // Called by the "CHECK LIVE OUTSTANDING" button on each search result card.
 function checkAbOutstanding(acctId, btnId){
   var btn = gel(btnId); if(!btn) return;
@@ -6348,17 +6410,48 @@ function checkAbOutstanding(acctId, btnId){
         if(box) box.innerHTML = '<span style="color:#F43F5E;font-size:11px;">⚠ ASSBILL lookup failed: '+abErrMsg+'</span>';
         return;
       }
-      var d = res.body.data || res.body; // exact success-response shape not yet confirmed live
-      var found = abFindOutstanding(d, 0);
+      var d = res.body.data || res.body;
+      // Confirmed live response shape (getConsumerDetails): {status, billingDetails:{...}, hierarchy, feeders}.
+      // billingDetails carries flat fields: TOTAL_OUTSTANDING, LAST_BILL_DATE, LAST_BILL_READING,
+      // LAST_BILL_CONSUMPTION, LAST_PAY_DATE, LAST_PAY_AMT, OPR_FLG, CON_STATUS, CONSUMER_NAME, etc.
+      // Read these directly now that they're confirmed, instead of guessing by name-pattern.
+      var bd = d.billingDetails || d;
+      var outVal = bd.TOTAL_OUTSTANDING!==undefined && bd.TOTAL_OUTSTANDING!==null && !isNaN(Number(bd.TOTAL_OUTSTANDING))
+        ? {key:'TOTAL_OUTSTANDING', value:Number(bd.TOTAL_OUTSTANDING)} : null;
+      var lastConsumption = (bd.LAST_BILL_CONSUMPTION!==undefined && bd.LAST_BILL_CONSUMPTION!==null && !isNaN(Number(bd.LAST_BILL_CONSUMPTION)))
+        ? {key:'LAST_BILL_CONSUMPTION', value:Number(bd.LAST_BILL_CONSUMPTION)} : null;
+      var lpDate = (bd.LAST_PAY_DATE!==undefined && bd.LAST_PAY_DATE!==null && String(bd.LAST_PAY_DATE).trim()!=='')
+        ? {key:'LAST_PAY_DATE', value:bd.LAST_PAY_DATE} : null;
+      var lpAmt = (bd.LAST_PAY_AMT!==undefined && bd.LAST_PAY_AMT!==null && !isNaN(Number(bd.LAST_PAY_AMT)))
+        ? {key:'LAST_PAY_AMT', value:Number(bd.LAST_PAY_AMT)} : null;
+      // Fallback to the whole-tree name-pattern search if billingDetails is missing/renamed
+      // for some account type (keeps older behavior as a safety net, not the primary path).
+      var found = outVal || abFindOutstanding(d, 0);
+      if(!lpAmt) lpAmt = abFindLpAmt(d);
+      if(!lpDate) lpDate = abFindLpDate(d);
+      if(!lastConsumption) lastConsumption = abFindLastBillConsumption(d);
       if(box){
-        box.innerHTML = found
-          ? '<div style="margin-top:8px;padding:10px 12px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;">'+
-              '<div style="font-size:9px;color:#15803D;font-family:var(--fh);font-weight:700;">⚡ LIVE OUTSTANDING (ASSBILL)</div>'+
-              '<div style="font-size:16px;font-weight:700;color:#DC2626;">₹'+Math.round(found.value).toLocaleString()+'</div>'+
-              '<div style="font-size:9px;color:#94A3B8;margin-top:2px;">field: '+found.key+'</div></div>'
-          // No match found by name-pattern search — show the full raw response (not truncated
-          // to 300 chars like before) so the exact field name can be spotted and added above.
-          : '<div style="margin-top:8px;padding:10px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;font-size:11px;">Got a response but no recognizable outstanding field — raw: <code style="word-break:break-all;">'+JSON.stringify(d)+'</code></div>';
+        if(found){
+          // Exactly the 4 fields asked for: Total Outstanding, Last Bill Consumption,
+          // Last Pay Date, Last Pay Amount — nothing else.
+          var extras = (lastConsumption || lpDate || lpAmt)
+            ? '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;padding-top:6px;border-top:1px dashed #BBF7D0;">'+
+                (lastConsumption ? '<div><div style="font-size:8.5px;color:#15803D;font-weight:700;">LAST BILL CONSUMPTION</div><div style="font-size:12px;font-weight:700;color:#166534;">'+lastConsumption.value.toLocaleString()+' units</div></div>' : '')+
+                (lpDate ? '<div><div style="font-size:8.5px;color:#15803D;font-weight:700;">LAST PAY DATE</div><div style="font-size:12px;font-weight:700;color:#166534;">'+lpDate.value+'</div></div>' : '')+
+                (lpAmt ? '<div><div style="font-size:8.5px;color:#15803D;font-weight:700;">LAST PAY AMOUNT</div><div style="font-size:12px;font-weight:700;color:#166534;">₹'+Math.round(lpAmt.value).toLocaleString()+'</div></div>' : '')+
+              '</div>'
+            : '';
+          box.innerHTML =
+              '<div style="margin-top:8px;padding:10px 12px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;">'+
+                '<div style="font-size:9px;color:#15803D;font-family:var(--fh);font-weight:700;">⚡ LIVE OUTSTANDING (ASSBILL)</div>'+
+                '<div style="font-size:16px;font-weight:700;color:#DC2626;">₹'+Math.round(found.value).toLocaleString()+'</div>'+
+                extras+
+              '</div>';
+        } else {
+          // No match found by direct read or name-pattern search — show the full raw response
+          // so the exact field name can be spotted and added above.
+          box.innerHTML = '<div style="margin-top:8px;padding:10px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;font-size:11px;">Got a response but no recognizable outstanding field — raw: <code style="word-break:break-all;">'+JSON.stringify(d)+'</code></div>';
+        }
       }
     }).catch(function(e){
       btn.disabled = false; btn.textContent = '⚡ CHECK LIVE OUTSTANDING';
