@@ -2518,6 +2518,19 @@ function smExportXLSX(){
   a.click();
 }
 
+// Windows' "Microsoft Print to PDF" virtual printer ignores a webpage's
+// @page CSS (size/orientation) entirely and silently falls back to its own
+// default (Letter, Portrait) — Chrome then squeezes the landscape-designed
+// wide table into that narrow portrait sheet, which is what produces the
+// squished/sideways-looking PDF. The fix is picking the right print-dialog
+// options, not something this page's CSS can force — so remind every time.
+var _pdfPrintHintShown = false;
+function pdfPrintHint(){
+  if(_pdfPrintHintShown) return;
+  _pdfPrintHintShown = true;
+  alert('PRINT DIALOG khulte hi ye 2 settings check kar lo:\n\n1) Destination -> "Save as PDF" chuno (⚠ "Microsoft Print to PDF" MAT chuno — wo landscape/A4 ignore kar deta hai)\n2) Layout -> "Landscape" confirm karo\n\nWarna table tedha ya kata hua PDF banega.');
+}
+
 function smExportPDF(){
   var smDiv = document.querySelector('#panel-progress > div:last-child');
   if(!smDiv){ alert('SM report not loaded'); return; }
@@ -2541,6 +2554,7 @@ function smExportPDF(){
     clnCells[i].style.textAlign  = cs.textAlign;
   });
 
+  pdfPrintHint();
   var win = window.open('','_blank');
   win.document.write('<html><head><title>SM NonSM Summary</title><style>');
   win.document.write('*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-sizing:border-box;}');
@@ -2622,6 +2636,7 @@ function progressExportPDF(){
   hidden.forEach(function(r){ if(r._wasHidden) r.style.display='none'; });
 
   var d = new Date().toLocaleDateString('en-IN');
+  pdfPrintHint();
   var w = window.open('','_blank','width=1400,height=800');
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>SS Progress Report</title>');
   w.document.write('<style>');
@@ -4518,6 +4533,7 @@ function filtSecPDF(tblId, title){
     cleanHtml += '</tr>';
   });
   cleanHtml += '</table>';
+  pdfPrintHint();
   var w = window.open('','_blank','width=900,height=650');
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+title+'</title>');
   w.document.write('<style>*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:10px;margin:0;color:#000;}');
@@ -4591,6 +4607,7 @@ function dashSecPDF(bodyId, title){
     cleanTablesHtml += '</table>';
   });
 
+  pdfPrintHint();
   var w = window.open('','_blank','width=1100,height=750');
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+title+'</title>');
   w.document.write('<style>');
@@ -4655,6 +4672,7 @@ function dashPrintFiltered(){
     cleanHtml += '</table><br>';
   });
 
+  pdfPrintHint();
   var w = window.open('','_blank','width=1200,height=800');
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+title+'</title>');
   w.document.write('<style>*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:10px;margin:0;color:#000;}');
