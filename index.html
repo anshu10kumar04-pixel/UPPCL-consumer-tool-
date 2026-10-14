@@ -1228,6 +1228,14 @@ function esc(s){
     return c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':c==='"'?'&quot;':'&#39;';
   });
 }
+// Standing rule (27-Sep-2026, re-applied 14-Oct-2026): SUBSTATION/FEEDER
+// values carry a trailing "_<code>" (e.g. "MUNNA LAL POWER HOUSE_20049",
+// "AALHA GHAT_23351210061ALG") that should never show in any list/report.
+// Strip it for DISPLAY only — never use this on a value that's also used as
+// a data key/lookup (ssMap, onclick handlers, etc. all keep the raw value).
+function stripSSCode(name){
+  return String(name||'').replace(/_[^_]*$/,'');
+}
 function setText(id,v){ var e=gel(id); if(e) e.textContent=v; }
 function sl(m,p){ var ld=gel('loading'); if(ld)ld.style.display='flex'; setText('lt',m); var pf=gel('pf'); if(pf)pf.style.width=p+'%'; }
 function hl2(){ var ld=gel('loading'); if(ld){ld.style.display='none';ld.style.pointerEvents='none';} }
@@ -2044,9 +2052,9 @@ function buildProgressReport(){
     // SS row
     h += '<tr style="background:'+rowBg+'" id="ss-row-'+si+'">';
     h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:center;color:#374151;">'+div+'</td>';
-    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;font-weight:700;color:#1E3A5F;">';
-    h += '<span style="cursor:pointer;color:#1D4ED8;font-weight:700;margin-right:4px;" onclick="toggleFeeder('+si+')" id="ss-btn-'+si+'">➕</span>'+ss;
-    h += ' <span style="cursor:pointer;font-size:10px;padding:1px 5px;border-radius:4px;background:#E0F2FE;color:#0369A1;font-weight:700;margin-left:4px;" onclick="togglePrSM('+si+')" id="pr-sm-btn-'+si+'">SM/NSM</span>';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;font-weight:700;color:#1E3A5F;max-width:none;white-space:normal;overflow:visible;text-overflow:clip;">';
+    h += '<span style="cursor:pointer;color:#1D4ED8;font-weight:700;margin-right:4px;" onclick="toggleFeeder('+si+')" id="ss-btn-'+si+'">➕</span>'+stripSSCode(ss);
+    h += ' <span style="cursor:pointer;font-size:10px;padding:1px 5px;border-radius:4px;background:#E0F2FE;color:#0369A1;font-weight:700;margin-left:4px;white-space:nowrap;display:inline-block;" onclick="togglePrSM('+si+')" id="pr-sm-btn-'+si+'">SM/NSM</span>';
     h += '</td>';
     var gap = t.billed - t.muCnt;  // GAP = Billed - MU (metering gap: non-metered billed consumers)
     var pctBilledExProv = pct(t.billed-t.provCnt, t.billable);
@@ -2077,7 +2085,7 @@ function buildProgressReport(){
       var fpctBilledExProv = pct(f.billed-f.provCnt,f.billable);
       h += '<tr style="display:none;background:#EFF6FF;" class="feeder-row-'+si+'">';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:center;font-size:10px;color:#6B7280;"></td>';
-      h += '<td style="padding:4px 6px 4px 22px;border:1px solid #BFDBFE;font-size:10px;color:#1D4ED8;">↳ '+fd+'</td>';
+      h += '<td style="padding:4px 6px 4px 22px;border:1px solid #BFDBFE;font-size:10px;color:#1D4ED8;">↳ '+stripSSCode(fd)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.billable+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.meterBillable+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.billed+'</td>';
@@ -2910,7 +2918,7 @@ function buildYoYReport(){
       h += '<tr style="background:'+rowBg+';" id="yoy-ss-'+si+'">';
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:center;">';
       h += '<span style="cursor:pointer;color:#1D4ED8;font-weight:700;" onclick="toggleYoY('+si+')" id="yoy-btn-'+si+'">➕</span></td>';
-      h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;font-weight:700;color:#1E3A5F;">'+ss+'</td>';
+      h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;font-weight:700;color:#1E3A5F;">'+stripSSCode(ss)+'</td>';
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#1E40AF;font-weight:600;">'+fL(p.total_rev)+'</td>';
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#1E40AF;">'+p.total_cnt+'</td>';
       h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:right;color:#1D4ED8;font-weight:600;">'+fL(pd.total_rev)+'</td>';
