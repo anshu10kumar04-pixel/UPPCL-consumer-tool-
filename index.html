@@ -20,10 +20,18 @@
      (including the ~1.6MB app script below) in parallel with downloading this,
      instead of pausing HTML parsing to fetch+run it first. -->
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- PERF: Leaflet / Leaflet.markercluster were removed here — nothing in this
-     page calls the Leaflet API (the map feature opens as its own separate page),
-     so these were ~150KB of render-blocking JS/CSS fetched on every load for a
-     feature this page doesn't use. -->
+<!-- Leaflet + Leaflet.markercluster power the inline MAP tab (initMapView() calls
+     L.map(...)/L.markerClusterGroup(...) directly on this page — a prior PERF pass
+     removed these on the mistaken assumption nothing here used the Leaflet API,
+     which broke the Map tab. CSS is loaded normally (not render-blocking in any
+     meaningful way); JS is `defer`red like xlsx above so it still doesn't block
+     first paint, and initMapView() already polls until `L` is defined before
+     touching it, so load order/timing here is safe either way. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css"/>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
 <style>
 :root{
   --bg:#E0F2FE;
