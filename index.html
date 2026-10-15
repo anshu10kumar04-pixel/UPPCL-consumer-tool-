@@ -2017,10 +2017,10 @@ function buildProgressReport(){
   h += '<div style="overflow-x:auto;"><table id="progress-table" style="width:100%;border-collapse:collapse;font-size:11px;min-width:900px;">';
   h += '<thead>';
   h += '<tr style="background:#DBEAFE;">';
-  var cols = ['DIV','SUBSTATION','BILLABLE CONS','METER BILLABLE','BILLED','% Billed','% Billed (Excpt Prov)','MU CNT','% MU','GAP (Billed & MU)','CURR. ASST.','TODAY REVENUE','Upto REVENUE','TODAY Paid Cnt','Upto Paid Cnt','% Coll. effic.','Turn Up%'];
-  var colWidths = ['40px','140px','60px','60px','60px','55px','70px','60px','55px','70px','80px','90px','90px','80px','80px','65px','65px'];
+  var cols = ['SUBSTATION','BILLABLE CONS','METER BILLABLE','BILLED','% Billed','% Billed (Excpt Prov)','MU CNT','% MU','GAP (Billed & MU)','CURR. ASST.','TODAY REVENUE','Upto REVENUE','TODAY Paid Cnt','Upto Paid Cnt','% Coll. effic.','Turn Up%'];
+  var colWidths = ['230px','60px','60px','60px','55px','70px','60px','55px','70px','80px','90px','90px','80px','80px','65px','65px'];
   var colSortKeys = {
-    'DIV':'div','SUBSTATION':'name','BILLABLE CONS':'billable','METER BILLABLE':'meterBillable',
+    'SUBSTATION':'name','BILLABLE CONS':'billable','METER BILLABLE':'meterBillable',
     'BILLED':'billed','% Billed':'pctBilled','% Billed (Excpt Prov)':'pctBilledExProv',
     'MU CNT':'muCnt','% MU':'pctMU','GAP (Billed & MU)':'gap',
     'CURR. ASST.':'currAsst','TODAY REVENUE':'todayRev','Upto REVENUE':'uptoRev',
@@ -2051,8 +2051,7 @@ function buildProgressReport(){
 
     // SS row
     h += '<tr style="background:'+rowBg+'" id="ss-row-'+si+'">';
-    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;text-align:center;color:#374151;">'+div+'</td>';
-    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;font-weight:700;color:#1E3A5F;max-width:none;white-space:normal;overflow:visible;text-overflow:clip;">';
+    h += '<td style="padding:5px 6px;border:1px solid #E5E7EB;font-weight:700;color:#1E3A5F;max-width:none;white-space:nowrap;overflow:visible;text-overflow:clip;">';
     h += '<span style="cursor:pointer;color:#1D4ED8;font-weight:700;margin-right:4px;" onclick="toggleFeeder('+si+')" id="ss-btn-'+si+'">➕</span>'+stripSSCode(ss);
     h += ' <span style="cursor:pointer;font-size:10px;padding:1px 5px;border-radius:4px;background:#E0F2FE;color:#0369A1;font-weight:700;margin-left:4px;white-space:nowrap;display:inline-block;" onclick="togglePrSM('+si+')" id="pr-sm-btn-'+si+'">SM/NSM</span>';
     h += '</td>';
@@ -2084,7 +2083,6 @@ function buildProgressReport(){
       var fgap = f.billed - f.muCnt;  // GAP = Billed - MU
       var fpctBilledExProv = pct(f.billed-f.provCnt,f.billable);
       h += '<tr style="display:none;background:#EFF6FF;" class="feeder-row-'+si+'">';
-      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:center;font-size:10px;color:#6B7280;"></td>';
       h += '<td style="padding:4px 6px 4px 22px;border:1px solid #BFDBFE;font-size:10px;color:#1D4ED8;">↳ '+stripSSCode(fd)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.billable+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.meterBillable+'</td>';
@@ -2113,7 +2111,6 @@ function buildProgressReport(){
     var smTurnUp    = pct(t.smUptoPaid, t.smBilled);
     var smGap       = t.smBilled - t.smMuCnt;
     h += '<tr class="pr-sm-row-'+si+'" style="display:none;background:#EFF6FF;">';
-    h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:center;"></td>';
     h += '<td style="padding:4px 6px 4px 22px;border:1px solid #BFDBFE;font-size:11px;font-weight:700;color:#1D4ED8;">⚡ SM (Smart Meter)</td>';
     h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+t.smBillable+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:11px;">'+t.smBillable+'</td>';
@@ -2139,7 +2136,6 @@ function buildProgressReport(){
     var nsmTurnUp    = pct(t.nsmUptoPaid, t.nsmBilled);
     var nsmGap       = t.nsmBilled - t.nsmMuCnt;
     h += '<tr class="pr-sm-row-'+si+'" style="display:none;background:#FFF7ED;">';
-    h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:center;"></td>';
     h += '<td style="padding:4px 6px 4px 22px;border:1px solid #FED7AA;font-size:11px;font-weight:700;color:#C2410C;">📊 Non-SM</td>';
     h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+t.nsmBillable+'</td>';
     h += '<td style="padding:4px 6px;border:1px solid #FED7AA;text-align:right;font-size:11px;">'+t.nsmBillable+'</td>';
@@ -2162,7 +2158,7 @@ function buildProgressReport(){
 
   // Grand Total row
   h += '<tr style="background:#1E3A5F;color:#fff;font-weight:700;">';
-  h += '<td colspan="2" style="padding:6px 10px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL</td>';
+  h += '<td style="padding:6px 10px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL</td>';
   var ggap = grand.billed - grand.muCnt;  // GAP = Billed - MU
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.billable.toLocaleString()+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.meterBillable.toLocaleString()+'</td>';
