@@ -427,6 +427,9 @@ select option{background:#fff;color:#1E1B4B;}
       <div><div class="lbl">DATA SET</div><div class="sw"><select id="map-src" onchange="onMapSrcChange()">
         <option value="defaulter">DEFAULTERS</option>
         <option value="tdnp">TD NOT PAID</option>
+        <option value="dcnotpaid">SM DC BUT NOT PAID</option>
+        <option value="neverpaid">NEVER PAID (SM + Non-SM)</option>
+        <option value="longunpaid">LONG UNPAID (SM + Non-SM)</option>
         <option value="all">ALL CONSUMERS</option>
       </select></div></div>
 
@@ -926,6 +929,17 @@ select option{background:#fff;color:#1E1B4B;}
           <option value="cur">Current Month</option>
           <option value="prev">Previous Month</option>
           <option value="prev2" id="def-lp-other-opt">Other (Older/Never Paid)</option>
+        </select></div>
+      </div>
+
+      <!-- PAYMENT DURATION (Never Paid / Long Unpaid — same classification used
+           across Calling/Field Visit/Map, via defRecPayFlag) -->
+      <div><div class="lbl">PAYMENT DURATION</div>
+        <div class="sw"><select id="def-pay-duration" onchange="runDefaulterFilter()">
+          <option value="">All</option>
+          <option value="never">❌ Never Paid</option>
+          <option value="long">⏳ Long Unpaid (4+ months)</option>
+          <option value="other">Other (paid recently)</option>
         </select></div>
       </div>
 
@@ -5666,6 +5680,7 @@ function st(name){
     if(name==='map'){
       if(!DEF_ALL.length) loadDefaulters();
       if(!_tdnpLoaded) loadTdnpTab();
+      if(!_dcLoaded) loadDC();
       initMapView();
       runMapFilter();
       setTimeout(function(){ if(MAP_INSTANCE) MAP_INSTANCE.invalidateSize(); },150);
@@ -6770,6 +6785,7 @@ function loadDC(){
       });
       DC_FD=DC.slice();
       buildDCPanel();
+      if(typeof runMapFilter==='function') runMapFilter();
     })
     .catch(function(e){
       panel.innerHTML='<div style="padding:20px;text-align:center;color:#F43F5E;font-family:var(--fh);">\u26a0 Failed to load SM Unrecharge data: '+e+'<br><br>Go to \u2699\ufe0f SETTINGS \u2192 UPLOAD DISCONNECTED DATA to push this file (one click, no GitHub website needed).</div>';
@@ -7750,6 +7766,7 @@ function runDefaulterFilter(){
   var selSm    = getSelectedSmTypes();
   var selBasis  = getSelectedBillBasis();
   var lpMonthF  = gel('def-lp-month') ? gel('def-lp-month').value : '';
+  var payDurF   = gel('def-pay-duration') ? gel('def-pay-duration').value : '';
 
   // LP Month bounds
   var now = new Date();
@@ -7783,6 +7800,16 @@ function runDefaulterFilter(){
         var isPrevOrCur = (lpM===curM&&lpY===curY)||(lpM===prevM&&lpY===prevY);
         if(isPrevOrCur) return false;
       }
+    }
+    // PAYMENT DURATION filter — same NEVER_PAID/LONG_UNPAID classification used
+    // by Calling/Field Visit/Map (defRecPayFlag). 'other' = flag is null, i.e.
+    // has a last-pay date within the last ~3 months (recently paid).
+    if(payDurF){
+      var payFlag = defRecPayFlag(r);
+      var payCode = payFlag ? payFlag.code : 'OTHER';
+      if(payDurF==='never' && payCode!=='NEVER_PAID') return false;
+      if(payDurF==='long'  && payCode!=='LONG_UNPAID') return false;
+      if(payDurF==='other' && payCode!=='OTHER') return false;
     }
     if(feed.length   && feed.indexOf(r.FEEDER)<0)        return false;
     if(supply.length){
@@ -9919,6 +9946,27 @@ function getMapBasePool(){
       var lat=r.LAT, lon=r.LON;
       if((!lat||isNaN(parseFloat(lat)))&&geo){ lat=geo[0]; lon=geo[1]; }
       return {ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE,OUTSTANDING:r.OUTSTANDING,SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,TARIFF:r.TARIFF,LAT:lat,LON:lon};
+    });
+  } else if(src==='dcnotpaid'){
+    // SM Unrecharge/DC list (disconnected.json, uploaded via SETTINGS → UPLOAD
+    // DISCONNECTED DATA) minus whatever the field officer has already marked PAID
+    // in the ATR status — i.e. still-disconnected-and-not-paid smart meters.
+    return (DC||[]).filter(function(r){ return String(r.ATR_STATUS||'').trim().toUpperCase()!=='PAID'; }).map(function(r){
+      var geo=(typeof GEO_MAP!=='undefined'&&GEO_MAP)?GEO_MAP[ac(r.ACCT_ID)]:null;
+      var lat=r.LAT, lon=r.LON;
+      if((!lat||isNaN(parseFloat(lat)))&&geo){ lat=geo[0]; lon=geo[1]; }
+      return {ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE_NO,OUTSTANDING:r.OUTSTANDING,SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,TARIFF:stToTariff(r.LMV||''),LAT:lat,LON:lon};
+    });
+  } else if(src==='neverpaid' || src==='longunpaid'){
+    // Reuse the same NEVER PAID / LONG UNPAID classification already used by the
+    // Defaulter/Calling/Field Visit tabs (defRecPayFlag) — combined SM + Non-SM.
+    var wantCode = src==='neverpaid' ? 'NEVER_PAID' : 'LONG_UNPAID';
+    return (DEF_ALL||[]).filter(function(r){
+      var f = defRecPayFlag(r);
+      return f && f.code===wantCode;
+    }).map(function(r){
+      var tariff=(window._tariffLookup&&window._tariffLookup[String(r.ACCT_ID)])||stToTariff(r.SUPPLY_TYPE);
+      return {ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE,OUTSTANDING:r.OUTSTANDING,SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,TARIFF:tariff,LAT:r.LAT,LON:r.LON};
     });
   } else {
     return (D||[]).map(function(r){
