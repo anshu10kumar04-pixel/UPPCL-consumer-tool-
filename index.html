@@ -3587,7 +3587,7 @@ function buildAtrSummaryCardsHtml(dateMode){
   return html;
 }
 
-function buildDashboard(){
+function buildDashboard(forceRebuild){
   var el = gel('panel-dashboard');
   if(!el) return;
 
@@ -3652,6 +3652,34 @@ function buildDashboard(){
 
   var updInfo = '';
   try{ var m=JSON.parse(localStorage.getItem('uppcl_manifest')||'{}'); updInfo=m.updated||''; }catch(e){}
+
+  // ── Perf: everything below is a dozen+ full passes over the whole
+  // D/DEF_ALL dataset (150k+ records) plus the ATR summary build — on a
+  // phone this is what makes the Dashboard tab feel slow to open. st()
+  // calls buildDashboard() on every single tab switch with no caching, so
+  // re-opening the tab repeated the whole computation even when nothing had
+  // changed. Cache the finished HTML (+ the SS filter-dropdown list) keyed
+  // off the manifest's data-freshness timestamp and the live record counts;
+  // reuse it instantly on a plain revisit. Any real data change (resync,
+  // new Calling/Field Visit ATR, defaulter list update) changes the key and
+  // triggers a full rebuild automatically. The 🔄 REFRESH button passes
+  // forceRebuild=true to always recompute regardless of the key.
+  var _dashKey = updInfo+'|'+D.length+'|'+DEF_ALL.length+'|'+(CLATR_ALL?CLATR_ALL.length:0)+'|'+(SVATR_ALL?SVATR_ALL.length:0);
+  if(!forceRebuild && window._dashCache && window._dashCache.key===_dashKey){
+    el.innerHTML = window._dashCache.html;
+    var ssOptsElC = gel('dash-ss-opts');
+    if(ssOptsElC && window._dashCache.allSS && window._dashCache.allSS.length){
+      ssOptsElC.innerHTML = '';
+      window._dashCache.allSS.forEach(function(ss){
+        var lbl = document.createElement('label');
+        lbl.className = 'ms-option';
+        lbl.innerHTML = '<input type="checkbox" value="'+ss+'" onchange="dashSSChange()"> '+ss;
+        ssOptsElC.appendChild(lbl);
+      });
+      dashSSChange();
+    }
+    return;
+  }
 
   // ── Aggregate from D (billed/unbilled) ──────────────────────────────
   var billed=[], unbilled=[], totalOut=0, totalCA=0;
@@ -3839,7 +3867,7 @@ function buildDashboard(){
   html += '<div style="font-family:var(--fh);font-size:20px;font-weight:800;color:#1E3A5F;">📊 DIVISION DASHBOARD</div>';
   html += '<div style="display:flex;gap:8px;">';
   html += '<span style="font-size:11px;background:#EEF2FF;color:#4338CA;padding:4px 10px;border-radius:6px;font-family:var(--fh);font-weight:700;">DATA: '+(updInfo||'Latest')+'</span>';
-  html += '<button onclick="buildDashboard()" style="font-size:11px;background:#1E3A5F;color:#fff;border:none;padding:4px 12px;border-radius:6px;font-family:var(--fh);font-weight:700;cursor:pointer;">🔄 REFRESH</button>';
+  html += '<button onclick="buildDashboard(true)" style="font-size:11px;background:#1E3A5F;color:#fff;border:none;padding:4px 12px;border-radius:6px;font-family:var(--fh);font-weight:700;cursor:pointer;">🔄 REFRESH</button>';
   html += '</div></div>';
 
   // ── SS / FEEDER SELECTOR — interactive filtered report ──────────────
@@ -4110,6 +4138,7 @@ function buildDashboard(){
 
   html += '</div>'; // end container
   el.innerHTML = html;
+  window._dashCache = {key:_dashKey, html:html, allSS:dashAllSS};
 
   // Populate SS dropdown after render
   var ssOptsEl = gel('dash-ss-opts');
