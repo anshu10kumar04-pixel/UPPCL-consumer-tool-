@@ -434,7 +434,6 @@ select option{background:#fff;color:#1E1B4B;}
     <div class="fg" style="margin-bottom:12px;flex-wrap:wrap;">
       <div><div class="lbl">DATA SET</div><div class="sw"><select id="map-src" onchange="onMapSrcChange()">
         <option value="defaulter">DEFAULTERS</option>
-        <option value="tdnp">TD NOT PAID</option>
         <option value="dcnotpaid">SM DC BUT NOT PAID</option>
         <option value="neverpaid">NEVER PAID (SM + Non-SM)</option>
         <option value="longunpaid">LONG UNPAID (SM + Non-SM)</option>
@@ -486,7 +485,10 @@ select option{background:#fff;color:#1E1B4B;}
       </label>
       <span id="map-tdnp-status" style="font-size:12px;color:var(--muted);margin-left:10px;"></span>
     </div>
-    <div id="map-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;margin-bottom:10px;"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+      <div id="map-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;"></div>
+      <button class="btn btn-acc" onclick="mapExportXlsx()">⬇ DOWNLOAD LIST (EXCEL)</button>
+    </div>
     <div id="map-container" style="width:100%;height:600px;border-radius:12px;border:1.5px solid #C7D2FE;overflow:hidden;"></div>
   </div>
 
@@ -10088,6 +10090,24 @@ function runMapFilter(){
   } else {
     window._mapRetryCount=0;
   }
+}
+
+function mapExportXlsx(){
+  var pts=getMapPoints(); // full filtered list — not capped at the 8000-pin plot limit
+  if(!pts.length){ alert('No data to export — adjust the filters above first.'); return; }
+  var rows=pts.map(function(p){
+    return {
+      ACCT_ID:p.ACCT_ID||'', NAME:p.NAME||'', MOBILE:p.MOBILE||'',
+      SUBSTATION:p.SUBSTATION||'', FEEDER:p.FEEDER||'', TARIFF:p.TARIFF||'',
+      OUTSTANDING:Math.round(parseFloat(p.OUTSTANDING)||0),
+      LAT:p._lat!=null?p._lat:p.LAT, LON:p._lon!=null?p._lon:p.LON
+    };
+  });
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Map List');
+  var srcSel=gel('map-src');
+  var srcLabel=srcSel?srcSel.options[srcSel.selectedIndex].text.replace(/[^A-Za-z0-9]+/g,'_'):'Map';
+  XLSX.writeFile(wb,'Map_'+srcLabel+'_'+Date.now()+'.xlsx');
 }
 
 // ─── FIELD VISITS (read-only, fed by AppSheet via the same Apps Script sheet) ───
