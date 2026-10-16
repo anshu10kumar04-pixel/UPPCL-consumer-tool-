@@ -3769,7 +3769,7 @@ function buildDashboard(forceRebuild){
     if(ia<0) ia=99; if(ib<0) ib=99;
     return ia-ib;
   });
-  var billedTotal = D.filter(function(r){return r.SOURCE==='billed';}).length;
+  var billedTotal = billed.length; // same set already counted in the pass above — no need to re-scan D
 
   // Defaulter stats
   var defOut=0, defSsMap={};
@@ -3781,9 +3781,9 @@ function buildDashboard(forceRebuild){
     {label:'Above ₹1L',min:100000, max:Infinity,count:0,out:0}
   ];
 
-  // Build live outstanding map from D array
-  var dOutMap = {};
-  D.forEach(function(d){ dOutMap[String(d.ACCT_ID)] = parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
+  // Live outstanding map already built fresh by syncLiveOutstanding() at the top of this
+  // function — reuse it instead of re-scanning the full D array again (was a duplicate pass).
+  var dOutMap = window._dOutMap || {};
 
   // Only count consumers whose LIVE outstanding >= 5000 (dashboard threshold)
   var liveDefCount = 0;
@@ -3895,32 +3895,16 @@ function buildDashboard(forceRebuild){
   html += '</div></div>';
 
   // ── SS / FEEDER SELECTOR — interactive filtered report ──────────────
-  var feederBySS = {};
-  D.forEach(function(r){
-    var ss=r.SUBSTATION||'Unknown', fd=r.FEEDER||'Unknown';
-    if(!feederBySS[ss]) feederBySS[ss]=new Set();
-    feederBySS[ss].add(fd);
-  });
-  // store globally for the change handler
-  window._dashFeederBySS = {};
-  Object.keys(feederBySS).forEach(function(ss){ window._dashFeederBySS[ss]=Array.from(feederBySS[ss]).sort(); });
-
-  // Build division → SS cascade map
-  var _divMap = SUB_DIVISION_MAP || {};
-  var divSsMap = {};
-  D.forEach(function(r){
-    var ss=r.SUBSTATION||''; if(!ss) return;
-    var div=_divMap[ss]||'eudd1';
-    var dl=div==='eudd2'?'EUDD-II (233512)':'EUDD-I (233511)';
-    if(!divSsMap[dl]) divSsMap[dl]=new Set();
-    divSsMap[dl].add(ss);
-  });
-  window._dashDivSsMap={};
-  Object.keys(divSsMap).sort().forEach(function(d){ window._dashDivSsMap[d]=Array.from(divSsMap[d]).sort(); });
-
-
-  // Collect all bill basis values
-  var allBasisVals = [...new Set(D.map(function(r){return String(r.BILL_BASIS||'').trim().toUpperCase();}).filter(Boolean))].sort();
+  // PERF: this used to scan the full D array FOUR more times here — once to build
+  // feederBySS (whose only effect, window._dashFeederBySS, was immediately overwritten
+  // a few lines below by the identical dashSSSet/dashFeederMap computation — dead work),
+  // once to build divSsMap (window._dashDivSsMap, which nothing in the codebase ever
+  // reads — fully dead), and once for allBasisVals via D.map().filter() (two more passes
+  // for a value basisMap/basisList above already have 95% of). All three are removed;
+  // only the dashSSSet/dashFeederMap pass below (which actually feeds the SS/Feeder
+  // filter dropdowns) remains, and allBasisVals now reuses basisMap's keys instead of
+  // re-scanning D.
+  var allBasisVals = Object.keys(basisMap).filter(function(b){return b && b!=='UNKNOWN';}).sort();
 
   html += '<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:16px;overflow:hidden;">';
   html += '<div style="background:#4338CA;color:#fff;padding:12px 16px;font-family:var(--fh);font-weight:700;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="dashToggle(\'dash-filtered-body\')">🔍 FILTERED REPORT — SELECT FILTERS<span id="dash-filtered-body-arrow" style="font-size:14px;opacity:0.8;">\u25bc</span></div><div id="dash-filtered-body" style="display:block;">';
@@ -7727,14 +7711,27 @@ function buildDefAllFromD() {
 // WITHOUT gating on ">0", so a consumer whose live outstanding has genuinely dropped to 0
 // (i.e. they paid off) is correctly reflected as 0 rather than silently falling back to a
 // stale pre-payment snapshot value.
+//
+// PERF: this is called unconditionally at the top of buildDashboard() (every single
+// Dashboard tab open) AND at the top of runDefaulterFilter() (every Defaulter-tab filter
+// tweak) — both full O(D.length + DEF_ALL.length) scans over 150k+ records, even when
+// nothing about the underlying data has changed since the last sync. That repeated,
+// unconditional rescan is what made those tabs feel slow to open/use. Memoize on the same
+// freshness signal buildDashboard's own HTML cache already trusts (manifest timestamp +
+// D/DEF_ALL lengths) and skip the rescan entirely when it's unchanged.
+var _syncLiveOutKey = null;
 function syncLiveOutstanding(){
   if(!D || !D.length) return;
+  var upd=''; try{ upd=(JSON.parse(localStorage.getItem('uppcl_manifest')||'{}').updated)||''; }catch(e){}
+  var key = upd+'|'+D.length+'|'+DEF_ALL.length;
+  if(_syncLiveOutKey===key && window._dOutMap) return; // already in sync — nothing changed
   window._dOutMap = {};
   D.forEach(function(d){ window._dOutMap[String(d.ACCT_ID)] = parseFloat(d.AMOUNT_PAYABLE||d.OUTSTANDING||0)||0; });
   DEF_ALL.forEach(function(r){
     var dOut = window._dOutMap[String(r.ACCT_ID)];
     if(dOut !== undefined) r.OUTSTANDING = dOut;
   });
+  _syncLiveOutKey = key;
 }
 
 function runDefaulterFilter(){
@@ -7972,9 +7969,15 @@ function renderDefaulters(page){
     var atr=r.ATR_STATUS||'PENDING';
     var atrColors={'PAID':'#059669','LOCK':'#7C3AED','THEFT':'#DC2626','TD':'#0891B2','OTHER':'#374151','PENDING':'#9CA3AF'};
     var atrBgs={'PAID':'#D1FAE5','LOCK':'#EDE9FE','THEFT':'#FEE2E2','TD':'#CFFAFE','OTHER':'#F3F4F6','PENDING':'#F9FAFB'};
+    // Resolve the real tariff label for display — DEF_ALL only carries the raw numeric
+    // SUPPLY_TYPE code (e.g. "15"), not a tariff name. Prefer window._tariffLookup (built
+    // from the billed/unbilled D array's own TARIFF_TYPE/CATEGORY field, which is the
+    // authoritative source), then stToTariff()'s known-code map, and only show the raw
+    // code itself as a last resort when neither source recognizes it.
+    var rTariffDisp = (window._tariffLookup && window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || r.SUPPLY_TYPE || '-';
     var rowJson=encodeURIComponent(JSON.stringify({
       ACCT_ID:r.ACCT_ID,NAME:r.NAME,MOBILE:r.MOBILE,ADDRESS:r.ADDRESS,
-      SUPPLY_TYPE:r.SUPPLY_TYPE,OUTSTANDING:r.OUTSTANDING,
+      SUPPLY_TYPE:rTariffDisp,OUTSTANDING:r.OUTSTANDING,
       PAY_AMT:r.PAY_AMT,PAY_DATE:r.PAY_DATE,
       SUBSTATION:r.SUBSTATION,FEEDER:r.FEEDER,
       LAT:r.LAT,LON:r.LON,ATR_STATUS:r.ATR_STATUS||'PENDING',METER_NO:meterNo
@@ -7986,7 +7989,7 @@ function renderDefaulters(page){
       '<td>'+r.MOBILE+'</td>'+
       '<td style="font-family:var(--fh);font-size:11px;color:#1D4ED8;font-weight:700;">'+meterNo+'</td>'+
       '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD?r.LOAD+' kW':'-')+'</td>'+
-      '<td><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:#EEF2FF;color:#4338CA;">'+r.SUPPLY_TYPE+'</span></td>'+
+      '<td><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:#EEF2FF;color:#4338CA;">'+rTariffDisp+'</span></td>'+
       '<td style="text-align:center;">'+(function(){var src=String(r.SOURCE||'billed');if(src==='billed')return '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#D1FAE5;color:#059669;">✔ BILLED</span>';return '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#FEF3C7;color:#D97706;">⚡ UNBILLED</span>';})()+'</td>'+
       '<td style="font-size:11px;color:#374151;" title="'+r.ADDRESS+'">'+r.ADDRESS+'</td>'+
       (function(){
@@ -8034,6 +8037,9 @@ function openDefaulterModal(acctId, mode){
   var lat = parseFloat(defRec.LAT||0), lon = parseFloat(defRec.LON||0);
   if(lat>50){var t=lat;lat=lon;lon=t;}
   var meterNo = METER_DATA[String(acctId)] || (r?r.SERIAL_NBR:'') || defRec.METER_NO || '-';
+  // Resolve real tariff label — defRec.SUPPLY_TYPE is just the raw numeric code (e.g. "15");
+  // prefer the authoritative billed/unbilled lookup, same as the Defaulter table itself.
+  var defTariffDisp = (window._tariffLookup && window._tariffLookup[String(acctId)]) || stToTariff(defRec.SUPPLY_TYPE) || defRec.SUPPLY_TYPE || '-';
 
   // Source badge — show which dataset this came from
   var srcBadge = mode === 'calling'
@@ -8045,7 +8051,7 @@ function openDefaulterModal(acctId, mode){
     '<div class="modal-field"><div class="lbl">ACCT ID</div><div class="val" style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+defRec.ACCT_ID+'</div></div>'+
     '<div class="modal-field"><div class="lbl">MOBILE</div><div class="val">'+mobDisplay(defRec.ACCT_ID, defRec.MOBILE||defRec.MOBILE_NO)+'</div></div>'+
     '<div class="modal-field"><div class="lbl">METER NO</div><div class="val" style="font-family:var(--fh);color:#1D4ED8;font-weight:700;">'+meterNo+'</div></div>'+
-    '<div class="modal-field"><div class="lbl">TARIFF / CATEGORY</div><div class="val">'+catBadge(defRec.SUPPLY_TYPE)+'</div></div>'+
+    '<div class="modal-field"><div class="lbl">TARIFF / CATEGORY</div><div class="val">'+catBadge(defTariffDisp)+'</div></div>'+
     '<div class="modal-field"><div class="lbl">LOAD</div><div class="val" style="font-weight:700;">'+(defRec.LOAD||r&&r.LOAD||'-')+' kW</div></div>'+
     '<div class="modal-field"><div class="lbl">CONSUMER STATUS</div><div class="val">'+(defRec.SOURCE==='billed'?'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#D1FAE5;color:#065F46;">✅ BILLED</span>':(defRec.SOURCE==='unbilled'||defRec.SOURCE==='master')?'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#FEF3C7;color:#92400E;">⚠ UNBILLED</span>':'<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;background:#F3F4F6;color:#374151;">— UNKNOWN</span>')+'</div></div>'+
     '<div class="modal-field"><div class="lbl">CA (CURR ARREAR)</div><div class="val" style="font-weight:700;color:#DC2626;">'+(defRec.CA?'\u20b9'+Math.round(parseFloat(defRec.CA)||0).toLocaleString():'-')+'</div></div>'+
