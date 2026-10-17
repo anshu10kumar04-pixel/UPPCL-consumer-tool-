@@ -520,16 +520,16 @@ select option{background:#fff;color:#1E1B4B;}
           <th style="width:40px;white-space:normal;">S.NO</th>
           <th style="width:90px;white-space:normal;">ACCT<br>ID</th>
           <th style="min-width:130px;white-space:normal;">NAME</th>
-          <th style="width:50px;white-space:normal;">LOAD</th>
+          <th style="width:35px;white-space:normal;">LOAD</th>
           <th style="min-width:100px;white-space:normal;">SUBSTATION</th>
           <th style="min-width:150px;white-space:normal;">ADDRESS</th>
-          <th style="width:80px;white-space:normal;">O/S AMT</th>
+          <th style="width:80px;white-space:normal;overflow-wrap:break-word;">OUTSTANDING</th>
           <th style="width:75px;white-space:normal;">LP<br>DATE</th>
           <th style="width:70px;white-space:normal;">LP<br>AMT</th>
           <th style="min-width:120px;white-space:normal;">VISIT<br>STATUS</th>
           <th style="min-width:150px;white-space:normal;">REMARKS</th>
           <th style="width:60px;white-space:normal;">PHOTO</th>
-          <th style="width:80px;white-space:normal;">SUBMITTED</th>
+          <th style="width:95px;white-space:normal;">SUBMITTED</th>
         </tr></thead>
         <tbody id="svatr-tbody"></tbody>
       </table></div>
@@ -554,15 +554,15 @@ select option{background:#fff;color:#1E1B4B;}
           <th style="width:90px;white-space:normal;">ACCT<br>ID</th>
           <th style="min-width:130px;white-space:normal;">NAME</th>
           <th style="width:90px;white-space:normal;">MOBILE</th>
-          <th style="width:50px;white-space:normal;">LOAD</th>
+          <th style="width:35px;white-space:normal;">LOAD</th>
           <th style="min-width:100px;white-space:normal;">SUBSTATION</th>
-          <th style="width:80px;white-space:normal;">O/S AMT</th>
+          <th style="width:80px;white-space:normal;overflow-wrap:break-word;">OUTSTANDING</th>
           <th style="width:75px;white-space:normal;">LP<br>DATE</th>
           <th style="width:70px;white-space:normal;">LP<br>AMT</th>
           <th style="min-width:120px;white-space:normal;">CALL<br>OUTCOME</th>
           <th style="min-width:150px;white-space:normal;">REMARKS</th>
           <th style="min-width:110px;white-space:normal;">STAFF<br>NAME</th>
-          <th style="width:80px;white-space:normal;">SUBMITTED</th>
+          <th style="width:95px;white-space:normal;">SUBMITTED</th>
         </tr></thead>
         <tbody id="clatr-tbody"></tbody>
       </table></div>
@@ -9940,9 +9940,20 @@ function initMapView(){
   var cont=gel('map-container'); if(!cont) return;
   _mapInited=true;
   MAP_INSTANCE=L.map('map-container').setView([25.45,78.57],12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  var mapStreetLayer=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     maxZoom:19, attribution:'&copy; OpenStreetMap contributors'
-  }).addTo(MAP_INSTANCE);
+  });
+  // Free satellite basemap (no API key / billing needed) — Esri World Imagery,
+  // with a labels overlay so place/road names still show over the imagery.
+  var mapSatLayer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+    maxZoom:19, attribution:'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
+  });
+  var mapSatLabels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{
+    maxZoom:19, attribution:'Esri'
+  });
+  var mapSatGroup=L.layerGroup([mapSatLayer,mapSatLabels]);
+  mapStreetLayer.addTo(MAP_INSTANCE);
+  L.control.layers({'🗺️ Street':mapStreetLayer,'🛰️ Satellite':mapSatGroup},null,{position:'topright',collapsed:false}).addTo(MAP_INSTANCE);
   MAP_CLUSTER=L.markerClusterGroup({chunkedLoading:true,maxClusterRadius:60});
   MAP_INSTANCE.addLayer(MAP_CLUSTER);
   refreshMapMsOptions();
