@@ -9818,21 +9818,31 @@ function doSubmitSiteVisitLog(acctId, r, status, remarks, url, photoVal){
     outstanding: r.OUTSTANDING||0, lp_date: r.PAY_DATE||'', lp_amt: r.PAY_AMT||0,
     visit_status: status, remarks: remarks, photo: photoVal||''
   };
-  // PERF: mode:'no-cors' makes the response opaque, so .then() below was never
-  // real confirmation anyway (a server-side error would still resolve it) \u2014 it
-  // was only ever "the full round-trip finished", which is also what was making
-  // SAVE feel slow (Apps Script cold start + Sheet write, often several seconds).
-  // Update local state and close the modal immediately; the POST keeps running
-  // in the background with nothing lost, since the old wait never actually
-  // verified success either. A genuine network failure (offline, DNS, etc. \u2014
-  // the only thing .catch() can ever see here) still alerts so it's never
-  // silently dropped.
+  // FIX (23-Oct-2026): mode:'no-cors' made the response opaque, so .then() could
+  // never see a server-side rejection (stale/mismatched CLIENT_SHARED_KEY, Apps
+  // Script error, etc.) \u2014 only a true network-level failure ever reached .catch().
+  // Result: the UI always said "\u2705 saved" even on devices where the write was
+  // silently rejected server-side, with the ATR never landing in the sheet.
+  // Switched to the same proven pattern already used by uploadPhotoForConsumer/
+  // abApi: mode:'cors' + Content-Type 'text/plain' (stays a CORS "simple request",
+  // no preflight OPTIONS that Apps Script can't handle), so the real response is
+  // now readable. UI still updates/closes immediately for speed, but the
+  // success/failure alert now reflects what actually happened \u2014 and on failure
+  // the modal reopens prefilled (from SITEVISIT_LATEST/PHOTO_LINKS, both already
+  // updated) so nothing has to be retyped, just SAVE tapped again.
   SITEVISIT_LATEST[String(acctId)] = { FIELD_VISIT_ATR: status, REMARKS: remarks };
   closeLogModal();
   if(gel('fvv-tbody')) runFieldVisitFilter();
-  alert('\u2705 Field Visit ATR saved for '+acctId+'.');
-  fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(addKey(payload)) })
-    .catch(function(e){ alert('\u274C Field Visit ATR save for '+acctId+' may have failed (network error: '+e.message+'). Please check and retry.'); });
+  fetch(url, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(addKey(payload)) })
+    .then(function(resp){ return resp.json(); })
+    .then(function(data){
+      if(!data || data.status !== 'ok') throw new Error(data && data.message ? data.message : 'server rejected the save');
+      alert('\u2705 Field Visit ATR saved for '+acctId+'.');
+    })
+    .catch(function(e){
+      alert('\u274C Field Visit ATR save for '+acctId+' FAILED (reason: '+e.message+'). Reopening the form \u2014 please tap SAVE again.');
+      openSiteVisitLogModal(acctId);
+    });
 }
 
 function openCallingLogModal(acctId){
@@ -9873,15 +9883,24 @@ function submitCallingLog(acctId){
     outstanding: r.OUTSTANDING||0, lp_date: r.PAY_DATE||'', lp_amt: r.PAY_AMT||0,
     call_outcome: outcome, remarks: remarks, staff_name: _callGateStaff, working_ss: _callGateSS
   };
-  // PERF: same reasoning as doSubmitSiteVisitLog above \u2014 no-cors already makes
-  // .then() a fake confirmation, so close/alert immediately and let the POST
-  // finish in the background instead of making SAVE feel slow for nothing.
+  // FIX (23-Oct-2026): same reasoning as doSubmitSiteVisitLog above \u2014 mode:'cors'
+  // + Content-Type 'text/plain' now lets us read the real response, so the
+  // success/failure alert reflects truth instead of always claiming success, and
+  // a failure reopens the form prefilled (from CALLING_LATEST) so SAVE can just
+  // be tapped again.
   CALLING_LATEST[String(acctId)] = { CALL_OUTCOME: outcome, REMARKS: remarks };
   closeLogModal();
   if(gel('call-tbody')) runCallFilter();
-  alert('\u2705 Calling ATR saved for '+acctId+'.');
-  fetch(url, { method:'POST', mode:'no-cors', headers:{'Content-Type':'application/json'}, body: JSON.stringify(addKey(payload)) })
-    .catch(function(e){ alert('\u274C Calling ATR save for '+acctId+' may have failed (network error: '+e.message+'). Please check and retry.'); });
+  fetch(url, { method:'POST', mode:'cors', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(addKey(payload)) })
+    .then(function(resp){ return resp.json(); })
+    .then(function(data){
+      if(!data || data.status !== 'ok') throw new Error(data && data.message ? data.message : 'server rejected the save');
+      alert('\u2705 Calling ATR saved for '+acctId+'.');
+    })
+    .catch(function(e){
+      alert('\u274C Calling ATR save for '+acctId+' FAILED (reason: '+e.message+'). Reopening the form \u2014 please tap SAVE again.');
+      openCallingLogModal(acctId);
+    });
 }
 
 
