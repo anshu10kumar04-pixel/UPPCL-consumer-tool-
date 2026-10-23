@@ -5239,7 +5239,7 @@ function downloadAtrFromSheet(){
 
     Object.keys(mergedDef).forEach(function(acct){
       var e = mergedDef[acct];
-      var dr = DEF_ALL.find(function(r){ return String(r.ACCT_ID)===String(acct); });
+      var dr = findDefRec(acct);
       var sc = dr ? collectionProbability(dr) : '', lb = dr ? collectionLabel(sc) : {label:''};
       defRows.push({
         ACCT_ID:    acct,
@@ -7084,7 +7084,7 @@ function saveModalAtr(){
   if(atrType === 'defaulter'){
     // Save defaulter ATR
     var defComment = gel('modal-atr-comment') ? gel('modal-atr-comment').value.trim() : '';
-    var defRec = DEF_ALL.find(function(x){return String(x.ACCT_ID)===String(modalCurrentAcct);});
+    var defRec = findDefRec(modalCurrentAcct);
     if(defRec){ defRec.ATR_STATUS=newAtr; defRec.ATR_COMMENT=defComment; }
     try{var da=JSON.parse(localStorage.getItem('def_atr_data')||'{}');da[String(modalCurrentAcct)]={atr:newAtr,comment:defComment,ts:new Date().toISOString()};localStorage.setItem('def_atr_data',JSON.stringify(da));}catch(e){}
     // Sync to Google Sheet
@@ -8039,7 +8039,7 @@ function renderDefaulters(page){
 
 function openDefaulterModal(acctId, mode){
   mode = mode || 'defaulter';
-  var defRec = DEF_ALL.find(function(x){return String(x.ACCT_ID)===String(acctId);});
+  var defRec = findDefRec(acctId);
   if(!defRec){ alert('Consumer not found in defaulter data.'); return; }
   console.log('openDefaulterModal:', acctId, 'OUT:', defRec.OUTSTANDING, 'AMT:', defRec.PAY_AMT, 'DATE:', defRec.PAY_DATE);
 
@@ -8298,7 +8298,7 @@ function openDefaulterModalDirect(d){
 function openFromDefaulter(acctId){
   // ALWAYS use DEF_ALL for defaulter tab - never use EUDD/PAY_DATA
   if(DEF_ALL.length){
-    var defRec = DEF_ALL.find(function(x){return String(x.ACCT_ID)===String(acctId);});
+    var defRec = findDefRec(acctId);
     if(defRec){ openDefaulterModal(acctId); return; }
   }
   // DEF_ALL not loaded yet - show loading message
@@ -8311,7 +8311,7 @@ function openFromDefaulter(acctId){
 }
 
 function openDefaulterMap(acctId){
-  var r=DEF_ALL.find(function(x){return String(x.ACCT_ID)===String(acctId);});
+  var r=findDefRec(acctId);
   if(!r||!r.LAT||!r.LON)return;
   var lat=parseFloat(r.LAT), lon=parseFloat(r.LON);
   if(lat>50){var t=lat;lat=lon;lon=t;}
@@ -8890,8 +8890,26 @@ function savePhotoLinks(){
 }
 
 // ---- shared: call / whatsapp ----
+// PERF (23-Oct-2026): findDefRec used to do a full DEF_ALL.find() linear scan on every
+// call. That's fine for a single click, but loadFieldAtr() calls it ONCE PER ATR ROW (via
+// atrSmTag/atrPayTag) to tag SM/NSM + NP/LUP — so it was O(CLATR_ALL.length + SVATR_ALL.length)
+// full DEF_ALL scans every time the FIELD ATR tab loaded, and DEF_ALL can be 150k+ records.
+// As ATR kept growing (5000+ Calling ATR rows and counting), that's what made the tab feel
+// slower and slower to open. Fixed with a memoized ACCT_ID->record map (same memoize-on-
+// DEF_ALL.length pattern as syncLiveOutstanding's window._dOutMap above) so lookups are O(1)
+// — the map stores the SAME object references as DEF_ALL, so in-place edits (e.g. the ATR
+// mutation at the "Save defaulter ATR" call site) still land on the real DEF_ALL entries.
+var _defByAcctKey = null, _defByAcct = {};
+function buildDefByAcctMap(){
+  var key = DEF_ALL.length;
+  if(_defByAcctKey===key) return; // unchanged since last build — skip the rescan
+  _defByAcct = {};
+  DEF_ALL.forEach(function(r){ _defByAcct[String(r.ACCT_ID)] = r; });
+  _defByAcctKey = key;
+}
 function findDefRec(acctId){
-  return DEF_ALL.find(function(x){ return String(x.ACCT_ID)===String(acctId); });
+  buildDefByAcctMap();
+  return _defByAcct[String(acctId)];
 }
 function waCategoryLabel(supplyType){
   var s = String(supplyType||'').trim().toUpperCase();
