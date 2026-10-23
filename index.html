@@ -511,6 +511,7 @@ select option{background:#fff;color:#1E1B4B;}
       </div>
       <div class="fg" style="margin-bottom:10px;">
         <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="svatr-search" placeholder="Acct, Substation, Address, Remarks…" oninput="runSvAtrFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
+        <div><div class="lbl">SUBSTATION</div><select id="svatr-ss-filter" onchange="runSvAtrFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;background:#fff;"><option value="">ALL SUBSTATIONS</option></select></div>
       </div>
       <div class="btn-group" style="margin-bottom:10px;">
         <div id="svatr-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>
@@ -549,6 +550,8 @@ select option{background:#fff;color:#1E1B4B;}
       </div>
       <div class="fg" style="margin-bottom:10px;">
         <div><div class="lbl">SEARCH</div><div class="sw"><input type="text" id="clatr-search" placeholder="Acct, Substation, Address, Remarks…" oninput="runClAtrFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;"/></div></div>
+        <div><div class="lbl">SUBSTATION</div><select id="clatr-ss-filter" onchange="runClAtrFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;background:#fff;"><option value="">ALL SUBSTATIONS</option></select></div>
+        <div><div class="lbl">STAFF NAME</div><select id="clatr-staff-filter" onchange="runClAtrFilter()" style="border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 12px;width:100%;font-family:var(--fb);font-size:13px;outline:none;background:#fff;"><option value="">ALL STAFF</option></select></div>
       </div>
       <div class="btn-group" style="margin-bottom:10px;">
         <div id="clatr-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>
@@ -10359,6 +10362,7 @@ function loadFieldAtr(force){
       });
       SVATR_ALL.sort(function(a,b){ return atrTimestampMs(b.TIMESTAMP) - atrTimestampMs(a.TIMESTAMP); }); // latest ATR first
       SVATR_FD = SVATR_ALL.slice();
+      populateSvAtrFilters();
       runSvAtrFilter();
     }
 
@@ -10386,14 +10390,45 @@ function loadFieldAtr(force){
       });
       CLATR_ALL.sort(function(a,b){ return atrTimestampMs(b.TIMESTAMP) - atrTimestampMs(a.TIMESTAMP); }); // latest ATR first
       CLATR_FD = CLATR_ALL.slice();
+      populateClAtrFilters();
       runClAtrFilter();
     }
   });
 }
 
+// Fills the SUBSTATION dropdown above the SITE VISIT ATR table with the distinct,
+// sorted SUBSTATION values present in the loaded data, preserving whatever value
+// was already selected (e.g. across a refresh) if it's still a valid option.
+function populateSvAtrFilters(){
+  var sel = gel('svatr-ss-filter'); if(!sel) return;
+  var cur = sel.value;
+  var vals = Array.from(new Set(SVATR_ALL.map(function(r){ return String(r.SUBSTATION||'').trim(); }).filter(Boolean))).sort();
+  sel.innerHTML = '<option value="">ALL SUBSTATIONS</option>' + vals.map(function(v){ return '<option value="'+esc(v)+'">'+esc(v)+'</option>'; }).join('');
+  if(cur && vals.indexOf(cur)>-1) sel.value = cur;
+}
+
+// Same idea for CALLING ATR's SUBSTATION and STAFF NAME dropdowns.
+function populateClAtrFilters(){
+  var ssSel = gel('clatr-ss-filter'), stSel = gel('clatr-staff-filter');
+  if(ssSel){
+    var curSs = ssSel.value;
+    var ssVals = Array.from(new Set(CLATR_ALL.map(function(r){ return String(r.SUBSTATION||'').trim(); }).filter(Boolean))).sort();
+    ssSel.innerHTML = '<option value="">ALL SUBSTATIONS</option>' + ssVals.map(function(v){ return '<option value="'+esc(v)+'">'+esc(v)+'</option>'; }).join('');
+    if(curSs && ssVals.indexOf(curSs)>-1) ssSel.value = curSs;
+  }
+  if(stSel){
+    var curSt = stSel.value;
+    var stVals = Array.from(new Set(CLATR_ALL.map(function(r){ return String(r.STAFF_NAME||'').trim(); }).filter(Boolean))).sort();
+    stSel.innerHTML = '<option value="">ALL STAFF</option>' + stVals.map(function(v){ return '<option value="'+esc(v)+'">'+esc(v)+'</option>'; }).join('');
+    if(curSt && stVals.indexOf(curSt)>-1) stSel.value = curSt;
+  }
+}
+
 function runSvAtrFilter(){
   var q = (gel('svatr-search')?gel('svatr-search').value:'').toLowerCase();
+  var ssF = gel('svatr-ss-filter')?gel('svatr-ss-filter').value:'';
   SVATR_FD = SVATR_ALL.filter(function(r){
+    if(ssF && String(r.SUBSTATION||'')!==ssF) return false;
     if(!q) return true;
     return (r.ACCT_ID+' '+r.NAME+' '+r.SUBSTATION+' '+r.FEEDER+' '+r.ADDRESS+' '+r.REMARKS).toLowerCase().indexOf(q)>-1;
   });
@@ -10438,7 +10473,11 @@ function renderSvAtrTable(page){
 
 function runClAtrFilter(){
   var q = (gel('clatr-search')?gel('clatr-search').value:'').toLowerCase();
+  var ssF = gel('clatr-ss-filter')?gel('clatr-ss-filter').value:'';
+  var stF = gel('clatr-staff-filter')?gel('clatr-staff-filter').value:'';
   CLATR_FD = CLATR_ALL.filter(function(r){
+    if(ssF && String(r.SUBSTATION||'')!==ssF) return false;
+    if(stF && String(r.STAFF_NAME||'')!==stF) return false;
     if(!q) return true;
     return (r.ACCT_ID+' '+r.NAME+' '+r.MOBILE+' '+r.SUBSTATION+' '+r.REMARKS+' '+r.STAFF_NAME).toLowerCase().indexOf(q)>-1;
   });
