@@ -515,21 +515,26 @@ select option{background:#fff;color:#1E1B4B;}
       <div class="btn-group" style="margin-bottom:10px;">
         <div id="svatr-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>
       </div>
-      <div class="tw" style="overflow-x:auto;"><table>
+      <div class="tw" style="overflow-x:hidden;"><table style="table-layout:fixed;width:100%;font-size:11.5px;">
+        <colgroup>
+          <col style="width:3%"><col style="width:7%"><col style="width:10%"><col style="width:3%">
+          <col style="width:8%"><col style="width:18%"><col style="width:7%"><col style="width:6%">
+          <col style="width:6%"><col style="width:9%"><col style="width:13%"><col style="width:4%"><col style="width:6%">
+        </colgroup>
         <thead><tr style="vertical-align:bottom;">
-          <th style="width:40px;white-space:normal;">S.NO</th>
-          <th style="width:90px;white-space:normal;">ACCT<br>ID</th>
-          <th style="min-width:130px;white-space:normal;">NAME</th>
-          <th style="width:35px;white-space:normal;">LOAD</th>
-          <th style="min-width:100px;white-space:normal;">SUBSTATION</th>
-          <th style="min-width:150px;white-space:normal;">ADDRESS</th>
-          <th style="width:80px;white-space:normal;overflow-wrap:break-word;">OUTSTANDING</th>
-          <th style="width:75px;white-space:normal;">LP<br>DATE</th>
-          <th style="width:70px;white-space:normal;">LP<br>AMT</th>
-          <th style="min-width:120px;white-space:normal;">VISIT<br>STATUS</th>
-          <th style="min-width:150px;white-space:normal;">REMARKS</th>
-          <th style="width:60px;white-space:normal;">PHOTO</th>
-          <th style="width:95px;white-space:normal;">SUBMITTED</th>
+          <th style="white-space:normal;">S.NO</th>
+          <th style="white-space:normal;">ACCT<br>ID</th>
+          <th style="white-space:normal;">NAME</th>
+          <th style="white-space:normal;">LOAD</th>
+          <th style="white-space:normal;">SUBSTATION</th>
+          <th style="white-space:normal;">ADDRESS</th>
+          <th style="white-space:normal;overflow-wrap:break-word;">OUTSTANDING</th>
+          <th style="white-space:normal;">LP<br>DATE</th>
+          <th style="white-space:normal;">LP<br>AMT</th>
+          <th style="white-space:normal;">VISIT<br>STATUS</th>
+          <th style="white-space:normal;">REMARKS</th>
+          <th style="white-space:normal;">PHOTO</th>
+          <th style="white-space:normal;">SUBMITTED</th>
         </tr></thead>
         <tbody id="svatr-tbody"></tbody>
       </table></div>
@@ -548,21 +553,26 @@ select option{background:#fff;color:#1E1B4B;}
       <div class="btn-group" style="margin-bottom:10px;">
         <div id="clatr-count-info" style="font-size:13px;color:var(--muted);font-family:var(--fh);font-weight:600;flex:1;"></div>
       </div>
-      <div class="tw" style="overflow-x:auto;"><table>
+      <div class="tw" style="overflow-x:hidden;"><table style="table-layout:fixed;width:100%;font-size:11.5px;">
+        <colgroup>
+          <col style="width:3%"><col style="width:7%"><col style="width:10%"><col style="width:8%">
+          <col style="width:3%"><col style="width:8%"><col style="width:7%"><col style="width:6%">
+          <col style="width:6%"><col style="width:10%"><col style="width:15%"><col style="width:10%"><col style="width:7%">
+        </colgroup>
         <thead><tr style="vertical-align:bottom;">
-          <th style="width:40px;white-space:normal;">S.NO</th>
-          <th style="width:90px;white-space:normal;">ACCT<br>ID</th>
-          <th style="min-width:130px;white-space:normal;">NAME</th>
-          <th style="width:90px;white-space:normal;">MOBILE</th>
-          <th style="width:35px;white-space:normal;">LOAD</th>
-          <th style="min-width:100px;white-space:normal;">SUBSTATION</th>
-          <th style="width:80px;white-space:normal;overflow-wrap:break-word;">OUTSTANDING</th>
-          <th style="width:75px;white-space:normal;">LP<br>DATE</th>
-          <th style="width:70px;white-space:normal;">LP<br>AMT</th>
-          <th style="min-width:120px;white-space:normal;">CALL<br>OUTCOME</th>
-          <th style="min-width:150px;white-space:normal;">REMARKS</th>
-          <th style="min-width:110px;white-space:normal;">STAFF<br>NAME</th>
-          <th style="width:95px;white-space:normal;">SUBMITTED</th>
+          <th style="white-space:normal;">S.NO</th>
+          <th style="white-space:normal;">ACCT<br>ID</th>
+          <th style="white-space:normal;">NAME</th>
+          <th style="white-space:normal;">MOBILE</th>
+          <th style="white-space:normal;">LOAD</th>
+          <th style="white-space:normal;">SUBSTATION</th>
+          <th style="white-space:normal;overflow-wrap:break-word;">OUTSTANDING</th>
+          <th style="white-space:normal;">LP<br>DATE</th>
+          <th style="white-space:normal;">LP<br>AMT</th>
+          <th style="white-space:normal;">CALL<br>OUTCOME</th>
+          <th style="white-space:normal;">REMARKS</th>
+          <th style="white-space:normal;">STAFF<br>NAME</th>
+          <th style="white-space:normal;">SUBMITTED</th>
         </tr></thead>
         <tbody id="clatr-tbody"></tbody>
       </table></div>
@@ -10369,20 +10379,21 @@ function renderSvAtrTable(page){
     var photoUrl = String(r.PHOTO||'');
     var photoCell = /^https?:\/\//.test(photoUrl) ? '<span onclick="viewEncryptedPhoto(\''+photoUrl+'\')" style="cursor:pointer;" title="View Photo">📷</span>' : '<span style="opacity:0.3;">—</span>';
     var submittedCell = atrSubmittedCell(r.TIMESTAMP);
+    var ELL='overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
-      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+' '+atrSmBadgeHtml(r.ACCT_ID)+atrPayBadgeHtml(r.ACCT_ID)+'</td>'+
-      '<td style="font-size:12px;">'+(r.NAME||'-')+'</td>'+
-      '<td style="font-size:12px;">'+(r.LOAD||'-')+'</td>'+
-      '<td>'+(r.SUBSTATION||'-')+'</td>'+
-      '<td style="font-size:11px;">'+(r.ADDRESS||'-')+'</td>'+
-      '<td>'+(r.OUTSTANDING||'-')+'</td>'+
-      '<td style="font-size:11px;">'+excelDateToStr(r.LP_DATE)+'</td>'+
-      '<td style="font-size:11px;">'+(r.LP_AMT||'-')+'</td>'+
-      '<td style="font-weight:600;">'+(r.VISIT_STATUS||'-')+'</td>'+
-      '<td style="font-size:12px;">'+esc(r.REMARKS||'-')+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;'+ELL+'" title="'+esc(String(r.ACCT_ID||''))+'">'+r.ACCT_ID+' '+atrSmBadgeHtml(r.ACCT_ID)+atrPayBadgeHtml(r.ACCT_ID)+'</td>'+
+      '<td style="font-size:12px;'+ELL+'" title="'+esc(r.NAME||'')+'">'+(r.NAME||'-')+'</td>'+
+      '<td style="font-size:12px;'+ELL+'">'+(r.LOAD||'-')+'</td>'+
+      '<td style="'+ELL+'" title="'+esc(r.SUBSTATION||'')+'">'+(r.SUBSTATION||'-')+'</td>'+
+      '<td style="font-size:11px;'+ELL+'" title="'+esc(r.ADDRESS||'')+'">'+(r.ADDRESS||'-')+'</td>'+
+      '<td style="'+ELL+'">'+(r.OUTSTANDING||'-')+'</td>'+
+      '<td style="font-size:11px;'+ELL+'">'+excelDateToStr(r.LP_DATE)+'</td>'+
+      '<td style="font-size:11px;'+ELL+'">'+(r.LP_AMT||'-')+'</td>'+
+      '<td style="font-weight:600;'+ELL+'" title="'+esc(r.VISIT_STATUS||'')+'">'+(r.VISIT_STATUS||'-')+'</td>'+
+      '<td style="font-size:12px;'+ELL+'" title="'+esc(r.REMARKS||'')+'">'+esc(r.REMARKS||'-')+'</td>'+
       '<td style="text-align:center;">'+photoCell+'</td>'+
-      '<td style="font-size:11px;">'+submittedCell+'</td>'+
+      '<td style="font-size:11px;'+ELL+'">'+submittedCell+'</td>'+
     '</tr>';
   }).join('');
   rp('svatr-pg', page, Math.ceil(SVATR_FD.length/PS), renderSvAtrTable);
@@ -10420,20 +10431,21 @@ function renderClAtrTable(page){
   var slice = CLATR_FD.slice((page-1)*PS, page*PS);
   tbody.innerHTML = slice.map(function(r,i){
     var rank = (page-1)*PS+i+1;
+    var ELL='overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
-      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;">'+r.ACCT_ID+' '+atrSmBadgeHtml(r.ACCT_ID)+atrPayBadgeHtml(r.ACCT_ID)+'</td>'+
-      '<td style="font-size:12px;">'+(r.NAME||'-')+'</td>'+
-      '<td>'+(r.MOBILE||'-')+'</td>'+
-      '<td style="font-size:12px;">'+(r.LOAD||'-')+'</td>'+
-      '<td>'+(r.SUBSTATION||'-')+'</td>'+
-      '<td>'+(r.OUTSTANDING||'-')+'</td>'+
-      '<td style="font-size:11px;">'+excelDateToStr(r.LP_DATE)+'</td>'+
-      '<td style="font-size:11px;">'+(r.LP_AMT||'-')+'</td>'+
-      '<td style="font-weight:600;font-size:12px;">'+clOutcomeCell(r.CALL_OUTCOME, r.REMARKS)+'</td>'+
-      '<td style="font-size:12px;">'+esc(r.REMARKS||'-')+'</td>'+
-      '<td style="font-size:12px;">'+esc(r.STAFF_NAME||'-')+'</td>'+
-      '<td style="font-size:11px;">'+atrSubmittedCell(r.TIMESTAMP)+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;'+ELL+'" title="'+esc(String(r.ACCT_ID||''))+'">'+r.ACCT_ID+' '+atrSmBadgeHtml(r.ACCT_ID)+atrPayBadgeHtml(r.ACCT_ID)+'</td>'+
+      '<td style="font-size:12px;'+ELL+'" title="'+esc(r.NAME||'')+'">'+(r.NAME||'-')+'</td>'+
+      '<td style="'+ELL+'">'+(r.MOBILE||'-')+'</td>'+
+      '<td style="font-size:12px;'+ELL+'">'+(r.LOAD||'-')+'</td>'+
+      '<td style="'+ELL+'" title="'+esc(r.SUBSTATION||'')+'">'+(r.SUBSTATION||'-')+'</td>'+
+      '<td style="'+ELL+'">'+(r.OUTSTANDING||'-')+'</td>'+
+      '<td style="font-size:11px;'+ELL+'">'+excelDateToStr(r.LP_DATE)+'</td>'+
+      '<td style="font-size:11px;'+ELL+'">'+(r.LP_AMT||'-')+'</td>'+
+      '<td style="font-weight:600;font-size:12px;'+ELL+'" title="'+esc(CALL_OUTCOME_LABELS[r.CALL_OUTCOME]||r.CALL_OUTCOME||'')+'">'+clOutcomeCell(r.CALL_OUTCOME, r.REMARKS)+'</td>'+
+      '<td style="font-size:12px;'+ELL+'" title="'+esc(r.REMARKS||'')+'">'+esc(r.REMARKS||'-')+'</td>'+
+      '<td style="font-size:12px;'+ELL+'" title="'+esc(r.STAFF_NAME||'')+'">'+esc(r.STAFF_NAME||'-')+'</td>'+
+      '<td style="font-size:11px;'+ELL+'">'+atrSubmittedCell(r.TIMESTAMP)+'</td>'+
     '</tr>';
   }).join('');
   rp('clatr-pg', page, Math.ceil(CLATR_FD.length/PS), renderClAtrTable);
