@@ -89,16 +89,16 @@
   "sync_status": {
     "233511": {
       "master_period": "SEP_2026",
-      "billed_date": "25102026",
-      "unbilled_date": "25102026"
+      "billed_date": "26102026",
+      "unbilled_date": "26102026"
     },
     "233512": {
       "master_period": "SEP_2026",
-      "billed_date": "25102026",
-      "unbilled_date": "25102026"
+      "billed_date": "26102026",
+      "unbilled_date": "26102026"
     }
   },
-  "updated": "2026-10-25T06:19:52.395138Z",
+  "updated": "2026-10-26T03:55:39.406866Z",
   "defaulters_eudd1": [
     "defaulters/def_eudd1a.csv",
     "defaulters/def_eudd1b.csv",
