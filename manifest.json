@@ -90,15 +90,15 @@
     "233511": {
       "master_period": "SEP_2026",
       "billed_date": "01112026",
-      "unbilled_date": "31102026"
+      "unbilled_date": "01112026"
     },
     "233512": {
       "master_period": "SEP_2026",
       "billed_date": "01112026",
-      "unbilled_date": "31102026"
+      "unbilled_date": "01112026"
     }
   },
-  "updated": "2026-11-01T03:43:11.064803Z",
+  "updated": "2026-11-01T03:46:30.472167Z",
   "defaulters_eudd1": [
     "defaulters/def_eudd1a.csv",
     "defaulters/def_eudd1b.csv",
