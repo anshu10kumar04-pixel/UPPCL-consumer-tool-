@@ -947,6 +947,7 @@ select option{background:#fff;color:#1E1B4B;}
             <div class="ms-clear" onclick="clearDcStatusFilter()">Clear All</div>
           </div>
         </div>
+        <div id="dc-asof-label" style="font-size:11px;color:var(--muted);font-family:var(--fh);margin-top:3px;"></div>
       </div>
 
       <!-- BILL BASIS -->
@@ -1178,6 +1179,7 @@ function stillDcDate(acct){
   return STILL_DC_SET[k]||'';
 }
 const DC_FILE = RAW_BASE+'disconnected.json'; // hosted in same repo as index.html/manifest.json (was: separate uppcl-data repo, unreliable)
+const DC_META_FILE = RAW_BASE+'disconnected_meta.json'; // {"last_updated":"DD-Mon-YY"} — stamped by push_disconnected.py and the in-tool UPLOAD DISCONNECTED DATA button every time disconnected.json is refreshed
 const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxiqpcxjnCcGEbaPntAb4evNJsueZNqeU2O5ZM2luveOBnjbJRpZzjbMNMslVxjv7qIFg/exec';
 const DEFAULTER_FILE = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/uppcl-data/main/defaulter.csv';
 const DFP_FILE = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/uppcl-data/main/dfp.csv';
@@ -5041,6 +5043,17 @@ function processDcUpload(){
       logEl.innerHTML = '\u2705 Parsed ' + out.length + ' DC records. Uploading to GitHub\u2026';
       var content = JSON.stringify(out);
       ghPutFile('disconnected.json', content, 'Update DC (disconnected) data')
+        .then(() => {
+          // Stamp disconnected_meta.json with today's date too, so the Defaulter
+          // tab's SM DC STATUS filter can show when this list was last refreshed
+          // (matches what push_disconnected.py does for the script-based path).
+          var todayStr = (function(){
+            var d=new Date(), mons=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            var dd=('0'+d.getDate()).slice(-2), yy=String(d.getFullYear()).slice(-2);
+            return dd+'-'+mons[d.getMonth()]+'-'+yy;
+          })();
+          return ghPutFile('disconnected_meta.json', JSON.stringify({last_updated:todayStr}), 'Update DC last-updated stamp ('+todayStr+')');
+        })
         .then(() => { logEl.innerHTML = '\ud83c\udf89 DONE! ' + out.length + ' records pushed. Reload the tool to apply \u2014 SM UNRECHARGE and TD NOT PAID tabs will pick it up automatically.'; })
         .catch(err => { logEl.innerHTML = '\u274c Error: ' + err.message; });
 
@@ -6776,11 +6789,34 @@ function buildConsumerCard(r, q){
 }
 
 // ─── SM UNRECHARGE (DC) ───────────────────────────────────────────────────────
+// Updates the small "Still-DC data last updated: DD-Mon-YY" label next to the
+// Defaulter tab's SM DC STATUS filter, from window._dcLastUpdated (set by loadDC()'s
+// fetch of DC_META_FILE). Safe to call even before the label element exists.
+function updateDcAsOfLabel(){
+  var el = gel('dc-asof-label');
+  if(!el) return;
+  if(window._dcLastUpdated){
+    el.textContent = 'Still-DC data last updated: ' + window._dcLastUpdated;
+  } else {
+    el.textContent = '';
+  }
+}
+
 function loadDC(){
   if(_dcLoaded)return;
   _dcLoaded=true;
   var panel=gel('panel-dc');
   panel.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-family:var(--fh);">Loading SM Unrecharge data…</div>';
+  // Still-DC "last updated" stamp — independent small fetch so a missing/old
+  // meta file never blocks the main DC load. Shown next to the Defaulter tab's
+  // SM DC STATUS filter via updateDcAsOfLabel().
+  fetch(DC_META_FILE+'?_='+Date.now())
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(meta){
+      window._dcLastUpdated = (meta && meta.last_updated) ? meta.last_updated : '';
+      updateDcAsOfLabel();
+    })
+    .catch(function(){ window._dcLastUpdated=''; updateDcAsOfLabel(); });
   // Load disconnected.json - hosted in the SAME repo as index.html/manifest.json/geo_mapping.json,
   // pushed via the in-tool "UPLOAD DISCONNECTED DATA" button (Settings tab), same PAT-based
   // push flow already used for LAT/LONG. Cache-busted so a fresh page load always gets the latest.
