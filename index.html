@@ -936,6 +936,18 @@ select option{background:#fff;color:#1E1B4B;}
         </div>
       </div>
 
+      <!-- SM DC STATUS (Online Disconnected / Reconnected) -->
+      <div><div class="lbl">SM DC STATUS</div>
+        <div class="ms-wrap" id="def-dcstatus-wrap">
+          <button class="ms-btn" id="def-dcstatus-btn" onclick="toggleMs('def-dcstatus-dd')">ALL</button>
+          <div class="ms-dropdown" id="def-dcstatus-dd">
+            <label class="ms-option"><input type="checkbox" value="disc" onchange="runDefaulterFilter()"> 🔴 SM Disconnected</label>
+            <label class="ms-option"><input type="checkbox" value="recon" onchange="runDefaulterFilter()"> 🟢 SM Reconnected</label>
+            <div class="ms-clear" onclick="clearDcStatusFilter()">Clear All</div>
+          </div>
+        </div>
+      </div>
+
       <!-- BILL BASIS -->
       <div><div class="lbl">BILL BASIS</div>
         <div class="ms-wrap" id="def-basis-wrap">
@@ -1165,6 +1177,7 @@ function stillDcDate(acct){
   return STILL_DC_SET[k]||'';
 }
 const DC_FILE = RAW_BASE+'disconnected.json'; // hosted in same repo as index.html/manifest.json (was: separate uppcl-data repo, unreliable)
+const RECONNECT_FILE = RAW_BASE+'sm_reconnect_log.json'; // accumulating log of SM accounts that dropped off the Still-DC list after paying (built/maintained alongside disconnected.json refreshes)
 const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxiqpcxjnCcGEbaPntAb4evNJsueZNqeU2O5ZM2luveOBnjbJRpZzjbMNMslVxjv7qIFg/exec';
 const DEFAULTER_FILE = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/uppcl-data/main/defaulter.csv';
 const DFP_FILE = 'https://raw.githubusercontent.com/anshu10kumar04-pixel/uppcl-data/main/dfp.csv';
@@ -1259,6 +1272,7 @@ let D = [], PAY_DATA = {}, FD = [], METER_DATA = {}, BILLED_LOC = {};
 var D_PRI = {}, MASTER_MAP = {}, GEO_MAP = {}, LOCATION_MAP = {}, MOBILE_OVERLAY = {}; // acct_id -> meter_no / extra mobile numbers
 let MASTER_CUTOFF = null; // Date object for last day of master month
 let DC = [], DC_FD = [], ATR_DATA = {}, ATR_SCRIPT_URL = '';
+let RECONNECT_LOG = [];
 let DEF_DATA = [];
 const PS = 30;
 let dcPage = 1, defPage = 1;
@@ -1267,6 +1281,7 @@ let modalCurrentAcct = null, modalIsdc = false;
 let modalNearbyLat = null, modalNearbyLon = null;
 let _settingsBuilt = false;
 let _dcLoaded = false, _defBuilt = false;
+let _reconnectLoaded = false;
 let _searchTimer = null;
 let _defSortCol = 'OUTSTANDING', _defSortAsc = false;
 
@@ -5693,8 +5708,9 @@ function st(name){
   applyTabTheme(name);
   requestAnimationFrame(function(){
     if(name==='dc'&&!_dcLoaded) loadDC();
+    if(name==='dc'&&!_reconnectLoaded) loadReconnectLog();
     if(name==='dfp'&&!_dfpLoaded) loadDfp();
-    if(name==='defaulter') loadDefaulters();
+    if(name==='defaulter'){ loadDefaulters(); if(!_dcLoaded) loadDC(); if(!_reconnectLoaded) loadReconnectLog(); }
     if(name==='tdnp'&&!_tdnpLoaded) loadTdnpTab();
     if(name==='fieldvisits'&&!_fvLoaded) loadFieldVisits();
     if(name==='fieldatr'&&!_fieldAtrLoaded) loadFieldAtrSafe();
@@ -6808,12 +6824,43 @@ function loadDC(){
         return r;
       });
       DC_FD=DC.slice();
+      // Live Still-DC (online disconnected) lookup, keyed by zero-padded ACCT_ID \u2014
+      // used by the Defaulter tab's SM DC STATUS filter. Separate from the older
+      // baked-in STILL_DC_SET (stale snapshot from 27-Oct-26); this one always
+      // reflects whatever disconnected.json currently holds.
+      window._stillDcLiveSet = {};
+      DC.forEach(function(r){
+        var k=String(r.ACCT_ID||'').trim(); while(k.length<10&&k.length>0)k='0'+k;
+        if(k) window._stillDcLiveSet[k]=true;
+      });
       buildDCPanel();
       if(typeof runMapFilter==='function') runMapFilter();
+      if(typeof runDefaulterFilter==='function' && DEF_ALL.length) runDefaulterFilter();
     })
     .catch(function(e){
       panel.innerHTML='<div style="padding:20px;text-align:center;color:#F43F5E;font-family:var(--fh);">\u26a0 Failed to load SM Unrecharge data: '+e+'<br><br>Go to \u2699\ufe0f SETTINGS \u2192 UPLOAD DISCONNECTED DATA to push this file (one click, no GitHub website needed).</div>';
     });
+}
+
+// \u2500\u2500\u2500 SM RECONNECTED LOG \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// sm_reconnect_log.json accumulates SM accounts that dropped off the Still-DC
+// list after paying (maintained alongside disconnected.json refreshes \u2014 see
+// RECONNECT_FILE comment above). Loaded lazily, same pattern as loadDC().
+function loadReconnectLog(){
+  if(_reconnectLoaded) return;
+  _reconnectLoaded = true;
+  fetch(RECONNECT_FILE+'?_='+Date.now())
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rows){
+      RECONNECT_LOG = Array.isArray(rows) ? rows : [];
+      window._reconnectSet = {};
+      RECONNECT_LOG.forEach(function(r){
+        var k=String(r.ACCT_ID||'').trim(); while(k.length<10&&k.length>0)k='0'+k;
+        if(k) window._reconnectSet[k]=r;
+      });
+      if(typeof runDefaulterFilter==='function' && DEF_ALL.length) runDefaulterFilter();
+    })
+    .catch(function(){ RECONNECT_LOG=[]; window._reconnectSet={}; });
 }
 
 function buildDCPanel(){
@@ -7399,6 +7446,16 @@ function clearSmFilter(){
   gel('def-sm-btn').textContent='ALL METERS';
   runDefaulterFilter();
 }
+function getSelectedDcStatus(){
+  var dd=gel('def-dcstatus-dd'); if(!dd) return [];
+  return Array.from(dd.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
+}
+function clearDcStatusFilter(){
+  var dd=gel('def-dcstatus-dd'); if(!dd) return;
+  dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){cb.checked=false;});
+  gel('def-dcstatus-btn').textContent='ALL';
+  runDefaulterFilter();
+}
 function getSelectedBillBasis(){
   var dd=gel('def-basis-dd'); if(!dd) return [];
   return Array.from(dd.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
@@ -7802,6 +7859,7 @@ function runDefaulterFilter(){
   var selLoads = getSelectedLoadRanges();
   var selOutRanges = getSelectedOutstandingRanges();
   var selSm    = getSelectedSmTypes();
+  var selDcStatus = getSelectedDcStatus();
   var selBasis  = getSelectedBillBasis();
   var lpMonthF  = gel('def-lp-month') ? gel('def-lp-month').value : '';
   var payDurF   = gel('def-pay-duration') ? gel('def-pay-duration').value : '';
@@ -7873,6 +7931,21 @@ function runDefaulterFilter(){
       var wantNon = selSm.indexOf('nonsm')>=0;
       if(wantSm  && !wantNon && !isSm) return false;
       if(wantNon && !wantSm  &&  isSm) return false;
+    }
+    // SM DC STATUS filter — SM Disconnected (currently in the live Still-DC list)
+    // and/or SM Reconnected (previously Still-DC, dropped off after paying —
+    // see sm_reconnect_log.json / RECONNECT_FILE). Either checkbox matches (OR).
+    if(selDcStatus.length){
+      var kDc=String(r.ACCT_ID||'').trim(); while(kDc.length<10&&kDc.length>0)kDc='0'+kDc;
+      var mrSrc3 = String(r.MR_SOURCE_CD||'').trim().toUpperCase();
+      if(!mrSrc3 && window._smLookup) mrSrc3 = String(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
+      var serial3 = String(r.METER_NO||r.METER_SERIAL_NBR||r.SERIAL_NBR||r.MTR_SRL_NO||'').trim().toUpperCase().replace(/^'/,'');
+      var isSm3 = mrSrc3 === 'SM' || serial3.startsWith('GE');
+      var isDisc  = isSm3 && !!(window._stillDcLiveSet && window._stillDcLiveSet[kDc]);
+      var isRecon = isSm3 && !!(window._reconnectSet && window._reconnectSet[kDc]);
+      var wantDisc  = selDcStatus.indexOf('disc')>=0;
+      var wantRecon = selDcStatus.indexOf('recon')>=0;
+      if(!((wantDisc && isDisc) || (wantRecon && isRecon))) return false;
     }
     // Bill Basis filter
     if(selBasis.length){
@@ -7954,6 +8027,10 @@ function runDefaulterFilter(){
   if(gel('def-sm-btn')){
     var sc=selSm.length;
     gel('def-sm-btn').textContent=sc?(selSm.indexOf('sm')>=0&&selSm.indexOf('nonsm')>=0?'SM + NON-SM':selSm.indexOf('sm')>=0?'SMART METER':'NON-SM'):'ALL METERS';
+  }
+  if(gel('def-dcstatus-btn')){
+    var dcc=selDcStatus.length;
+    gel('def-dcstatus-btn').textContent=dcc?(dcc>1?'SM DISC + RECONNECTED':selDcStatus[0]==='disc'?'SM DISCONNECTED':'SM RECONNECTED'):'ALL';
   }
   if(gel('def-basis-btn')){
     var bc=selBasis.length;
