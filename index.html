@@ -1373,6 +1373,38 @@ function payFlagBadgeHtml(r){
   if(!f) return '';
   return ' <span style="display:inline-block;padding:1px 6px;border-radius:9px;font-size:9px;font-weight:700;background:'+f.bg+';color:'+f.color+';white-space:nowrap;">'+f.label+'</span>';
 }
+// DC / NOT DC tag — only meaningful for SM accounts (online disconnect status is
+// tracked for smart meters via the live Still-DC set, window._stillDcLiveSet,
+// built in loadDC() from disconnected.json). Shown in CALLING and FIELD VISIT
+// tables/modals alongside the SM/NON-SM badge (2026-11-05 request).
+function defRecDcTag(r){
+  if(!defRecIsSM(r)) return null;
+  var k = String((r&&r.ACCT_ID)||'').trim(); while(k.length<10 && k.length>0) k='0'+k;
+  var isDc = !!(window._stillDcLiveSet && k && window._stillDcLiveSet[k]);
+  return isDc
+    ? { label:'DC', color:'#B91C1C', bg:'#FEE2E2' }
+    : { label:'NOT DC', color:'#15803D', bg:'#DCFCE7' };
+}
+function smDcBadgeHtml(r){
+  var t = defRecDcTag(r);
+  if(!t) return '';
+  return ' <span style="display:inline-block;padding:1px 6px;border-radius:9px;font-size:9px;font-weight:700;background:'+t.bg+';color:'+t.color+';white-space:nowrap;">'+t.label+'</span>';
+}
+// BILLED / UNBILLED tag — reflects which cycle snapshot the record currently
+// comes from (r.SOURCE set by the def_eudd*.csv pipeline / parseDefFile, or
+// r.DATA_SOURCE set by the D-based buildDefAllFromD fallback path). Left blank
+// for a 'master'-sourced record since it's neither billed nor unbilled.
+function defRecSourceTag(r){
+  var src = String((r&&(r.SOURCE||r.DATA_SOURCE))||'').trim().toUpperCase();
+  if(src==='BILLED') return { label:'BILLED', color:'#1D4ED8', bg:'#DBEAFE' };
+  if(src==='UNBILLED') return { label:'UNBILLED', color:'#92400E', bg:'#FEF3C7' };
+  return null;
+}
+function sourceBadgeHtml(r){
+  var t = defRecSourceTag(r);
+  if(!t) return '';
+  return ' <span style="display:inline-block;padding:1px 6px;border-radius:9px;font-size:9px;font-weight:700;background:'+t.bg+';color:'+t.color+';white-space:nowrap;">'+t.label+'</span>';
+}
 // Google Sheets (the ATR backend) sometimes stores/returns ACCT_ID as a
 // number, which silently drops any leading zero (e.g. 0372472000 comes
 // back as 372472000) — DEF_ALL's own ACCT_ID is always the full 10-digit
@@ -9623,7 +9655,7 @@ function renderCallTable(page){
     var manualTag = r._SRC==='manual' ? ' <span title="Manually pushed" style="color:#F59E0B;font-size:10px;font-weight:700;">[M]</span>' : '';
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
-      '<td><a href="javascript:void(0)" onclick="openCallingLogModal(\''+r.ACCT_ID+'\')" title="Open consumer detail / log Calling ATR" style="font-family:var(--fh);color:#4F46E5;font-weight:700;text-decoration:none;">'+r.ACCT_ID+'</a>'+manualTag+'<br>'+smBadgeHtml(r)+payFlagBadgeHtml(r)+'</td>'+
+      '<td><a href="javascript:void(0)" onclick="openCallingLogModal(\''+r.ACCT_ID+'\')" title="Open consumer detail / log Calling ATR" style="font-family:var(--fh);color:#4F46E5;font-weight:700;text-decoration:none;">'+r.ACCT_ID+'</a>'+manualTag+'<br>'+smBadgeHtml(r)+smDcBadgeHtml(r)+sourceBadgeHtml(r)+payFlagBadgeHtml(r)+'</td>'+
       '<td style="font-weight:600;">'+(r.NAME||'-')+'</td>'+
       '<td style="max-width:180px;white-space:normal;font-size:11px;color:var(--muted);">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.MOBILE ? '<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" title="Call (number copied)" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+'</a>' : '-')+'</td>'+
@@ -9835,7 +9867,7 @@ function renderFieldVisitTable(page){
     var atrLabel = (r._ATR && r._ATR!=='PENDING') ? (LOG_ATR_LABELS[r._ATR]||r._ATR) : '⏳ PENDING';
     return '<tr>'+
       '<td style="color:var(--muted);font-size:11px;">'+rank+'</td>'+
-      '<td><a href="javascript:void(0)" onclick="openSiteVisitLogModal(\''+r.ACCT_ID+'\')" title="Open consumer detail / log Field Visit ATR" style="font-family:var(--fh);color:#4F46E5;font-weight:700;text-decoration:none;">'+r.ACCT_ID+'</a><br>'+smBadgeHtml(r)+payFlagBadgeHtml(r)+'</td>'+
+      '<td><a href="javascript:void(0)" onclick="openSiteVisitLogModal(\''+r.ACCT_ID+'\')" title="Open consumer detail / log Field Visit ATR" style="font-family:var(--fh);color:#4F46E5;font-weight:700;text-decoration:none;">'+r.ACCT_ID+'</a><br>'+smBadgeHtml(r)+smDcBadgeHtml(r)+sourceBadgeHtml(r)+payFlagBadgeHtml(r)+'</td>'+
       '<td style="font-weight:600;">'+(r.NAME||'-')+'</td>'+
       '<td style="max-width:180px;white-space:normal;font-size:11px;color:var(--muted);">'+(r.ADDRESS||'-')+'</td>'+
       '<td>'+(r.MOBILE ? '<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" title="Call (number copied)" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+'</a>' : '-')+'</td>'+
@@ -9945,7 +9977,7 @@ function openSiteVisitLogModal(acctId){
         '<span style="cursor:pointer;font-size:20px;color:var(--muted);line-height:1;" onclick="closeLogModal()">&times;</span>'+
       '</div>'+
       '<div style="font-size:13px;margin-bottom:14px;color:var(--muted);line-height:1.9;background:#FAF5FF;border-radius:8px;padding:10px 12px;">'+
-        '<b style="color:#111827;">'+(r.NAME||'-')+'</b> &bull; '+acctId+' '+smBadgeHtml(r)+'<br>'+
+        '<b style="color:#111827;">'+(r.NAME||'-')+'</b> &bull; '+acctId+' '+smBadgeHtml(r)+smDcBadgeHtml(r)+sourceBadgeHtml(r)+'<br>'+
         'Mobile: '+(r.MOBILE?'<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+' \uD83D\uDCDE</a>':'-')+' &bull; Tariff: '+(r.TARIFF||stToTariff(r.SUPPLY_TYPE)||'-')+'<br>'+
         (r.SUBSTATION||'-')+' / '+(r.FEEDER||'-')+' &bull; Meter: '+(r.METER_NO||'-')+'<br>'+
         'Outstanding: <b style="color:#F43F5E;">\u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</b>'+payFlagBadgeHtml(r)+
@@ -10029,7 +10061,7 @@ function openCallingLogModal(acctId){
         '<span style="cursor:pointer;font-size:20px;color:var(--muted);line-height:1;" onclick="closeLogModal()">&times;</span>'+
       '</div>'+
       '<div style="font-size:13px;margin-bottom:14px;color:var(--muted);line-height:1.9;background:#F0FDFF;border-radius:8px;padding:10px 12px;">'+
-        '<b style="color:#111827;">'+(r.NAME||'-')+'</b> &bull; '+acctId+' '+smBadgeHtml(r)+'<br>'+
+        '<b style="color:#111827;">'+(r.NAME||'-')+'</b> &bull; '+acctId+' '+smBadgeHtml(r)+smDcBadgeHtml(r)+sourceBadgeHtml(r)+'<br>'+
         'Mobile: '+(r.MOBILE?'<a href="tel:'+r.MOBILE+'" onclick="copyMobile(\''+r.MOBILE+'\')" style="color:#0891B2;font-weight:600;text-decoration:none;">'+r.MOBILE+' \uD83D\uDCDE</a>':'-')+' &bull; Tariff: '+(r.TARIFF||stToTariff(r.SUPPLY_TYPE)||'-')+'<br>'+
         (r.SUBSTATION||'-')+' / '+(r.FEEDER||'-')+' &bull; Meter: '+(r.METER_NO||'-')+'<br>'+
         'Outstanding: <b style="color:#F43F5E;">\u20B9'+Math.round(r.OUTSTANDING||0).toLocaleString('en-IN')+'</b>'+payFlagBadgeHtml(r)+
