@@ -2227,7 +2227,9 @@ function buildProgressReport(){
 
   // Grand Total row
   h += '<tr style="background:#1E3A5F;color:#fff;font-weight:700;">';
-  h += '<td style="padding:6px 10px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL</td>';
+  h += '<td style="padding:6px 10px;border:1px solid #374151;font-family:var(--fh);">GRAND TOTAL';
+  h += ' <span style="cursor:pointer;font-size:10px;padding:1px 5px;border-radius:4px;background:#3B82F6;color:#fff;font-weight:700;margin-left:4px;white-space:nowrap;display:inline-block;" onclick="togglePrSM(&quot;grand&quot;)" id="pr-sm-btn-grand">SM/NSM</span>';
+  h += '</td>';
   var ggap = grand.billed - grand.muCnt;  // GAP = Billed - MU
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.billable.toLocaleString()+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.meterBillable.toLocaleString()+'</td>';
@@ -2244,6 +2246,59 @@ function buildProgressReport(){
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+grand.uptoPaid.toLocaleString()+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+pct(grand.uptoRev,grand.currAsst)+'</td>';
   h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;">'+pct(grand.uptoPaid,grand.billed)+'</td>';
+  h += '</tr>';
+
+  // GRAND TOTAL SM/Non-SM bifurcation sub-rows (hidden by default, same
+  // toggle pattern as each SS row's own "SM/NSM" button — togglePrSM is
+  // generic over its `si` key, so 'grand' works with no changes to that
+  // function). grand.sm*/grand.nsm* were already being accumulated per-SS
+  // above; they just weren't rendered anywhere for the combined total.
+  var gSmPctBilled = pct(grand.smBilled, grand.smBillable);
+  var gSmPctMU     = pct(grand.smMuCnt,  grand.smBilled);
+  var gSmPctColl   = pct(grand.smUptoRev, grand.smCurrAsst);
+  var gSmTurnUp    = pct(grand.smUptoPaid, grand.smBilled);
+  var gSmGap       = grand.smBilled - grand.smMuCnt;
+  h += '<tr class="pr-sm-row-grand" style="display:none;background:#1D4ED8;color:#fff;font-weight:700;">';
+  h += '<td style="padding:5px 6px 5px 22px;border:1px solid #374151;font-size:11px;">⚡ SM (Smart Meter) — Grand Total</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+grand.smBillable.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+grand.smBillable.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+grand.smBilled.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+gSmPctBilled+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+gSmPctBilled+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+grand.smMuCnt.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+gSmPctMU+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+(gSmGap>0?gSmGap:0)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+cr2(grand.smCurrAsst)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;color:#6EE7B7;">'+cr2(grand.smTodayRev)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+cr2(grand.smUptoRev)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;color:#6EE7B7;">'+grand.smTodayPaid.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+grand.smUptoPaid.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+gSmPctColl+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+gSmTurnUp+'</td>';
+  h += '</tr>';
+
+  var gNsmPctBilled = pct(grand.nsmBilled, grand.nsmBillable);
+  var gNsmPctMU     = pct(grand.nsmMuCnt,  grand.nsmBilled);
+  var gNsmPctColl   = pct(grand.nsmUptoRev, grand.nsmCurrAsst);
+  var gNsmTurnUp    = pct(grand.nsmUptoPaid, grand.nsmBilled);
+  var gNsmGap       = grand.nsmBilled - grand.nsmMuCnt;
+  h += '<tr class="pr-sm-row-grand" style="display:none;background:#C2410C;color:#fff;font-weight:700;">';
+  h += '<td style="padding:5px 6px 5px 22px;border:1px solid #374151;font-size:11px;">📊 Non-SM — Grand Total</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+grand.nsmBillable.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+grand.nsmBillable.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+grand.nsmBilled.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+gNsmPctBilled+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+gNsmPctBilled+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+grand.nsmMuCnt.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+gNsmPctMU+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+(gNsmGap>0?gNsmGap:0)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+cr2(grand.nsmCurrAsst)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;color:#6EE7B7;">'+cr2(grand.nsmTodayRev)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+cr2(grand.nsmUptoRev)+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;color:#6EE7B7;">'+grand.nsmTodayPaid.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+grand.nsmUptoPaid.toLocaleString()+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+gNsmPctColl+'</td>';
+  h += '<td style="padding:5px 6px;border:1px solid #374151;text-align:right;font-size:11px;">'+gNsmTurnUp+'</td>';
   h += '</tr>';
 
   h += '</tbody></table></div></div>';
