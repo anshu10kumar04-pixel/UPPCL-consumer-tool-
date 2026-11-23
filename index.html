@@ -2891,6 +2891,7 @@ function buildCYAgg(dataDate){
   var ddDay=dataDate.getDate(), ddMon=dataDate.getMonth(), ddYear=dataDate.getFullYear();
   D.forEach(function(r){
     var ss=r.SUBSTATION||''; if(!ss) return;
+    if(ss.indexOf('132 KV HASARI')>=0) ss='132 KV HASARI'; // merge _26295/_26400 variants, match PY-side & PINNED_SS
     var lpDate=parseDate(r.LAST_PAY_DATE||r.PAY_DATE||'');
     var lpAmt=parseFloat(r.LAST_PAYMENT_AMOUNT||r.PAY_AMT||0)||0;
     if(!lpDate||lpDate.getFullYear()!==ddYear||lpDate.getMonth()!==ddMon) return;
@@ -2921,6 +2922,7 @@ function buildCYAgg(dataDate){
     var ca=parseFloat(r.CA||r.CURR_ASSESSMENT||0);
     if(!ca) return;
     var ss=r.SUBSTATION||''; if(!ss) return;
+    if(ss.indexOf('132 KV HASARI')>=0) ss='132 KV HASARI'; // merge _26295/_26400 variants, match PY-side & PINNED_SS
     if(!cy[ss]) cy[ss]={sm_rev:0,sm_cnt:0,nsm_rev:0,nsm_cnt:0,total_rev:0,total_cnt:0,currAsst:0,sm_currAsst:0,nsm_currAsst:0,tariff:{},sm_tariff:{},nsm_tariff:{}};
     cy[ss].currAsst=(cy[ss].currAsst||0)+ca;
     // GE meter serial = SM (Smart Meter), same detection used for revenue above
