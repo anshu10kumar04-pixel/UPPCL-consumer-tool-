@@ -1043,7 +1043,6 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:85px;white-space:normal;">METER NO</th>
         <th style="width:50px;cursor:pointer;white-space:normal;" onclick="defSort('LOAD')">LOAD <span id="dsrt-LOAD">⇅</span></th>
         <th style="width:65px;cursor:pointer;white-space:normal;" onclick="defSort('SUPPLY_TYPE')">SUPPLY <span id="dsrt-SUPPLY_TYPE">⇅</span></th>
-        <th style="width:95px;cursor:pointer;white-space:normal;" onclick="defSort('SOURCE')">STATUS <span id="dsrt-SOURCE">⇅</span></th>
         <th style="width:247px;cursor:pointer;white-space:normal;" onclick="defSort(&#39;ADDRESS&#39;)">ADDRESS <span id="dsrt-ADDRESS">⇅</span></th>
         <th style="width:60px;cursor:pointer;white-space:normal;" class="mob-hide" onclick="defSort('CA')">CURR<br>ASST. <span id="dsrt-CA">⇅</span></th>
         <th style="width:65px;cursor:pointer;white-space:normal;" onclick="defSort('PAY_AMT')">LP<br>AMT <span id="dsrt-PAY_AMT">⇅</span></th>
@@ -1053,7 +1052,6 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:55px;cursor:pointer;white-space:normal;" onclick="defSort('COLL_PROB')">AI % <span id="dsrt-COLL_PROB">⇅</span></th>
         <th style="width:85px;cursor:pointer;white-space:normal;" onclick="defSort(&#39;SUBSTATION&#39;)">SS <span id="dsrt-SUBSTATION">⇅</span></th>
         <th style="display:none">FEEDER</th>
-        <th style="width:35px;white-space:normal;">MAP</th>
       </tr></thead>
       <tbody id="def-tbody"></tbody>
     </table></div>
@@ -7973,6 +7971,9 @@ function runDefaulterFilter(){
     // OUTSTANDING is already synced to the live D value by syncLiveOutstanding() above
     var liveOut = parseFloat(r.OUTSTANDING)||0;
     if(liveOut < 2000) return false;   // baseline defaulter floor (matches backend MIN_DEFAULTER_OUTSTANDING) — also drops paid-off (0) consumers
+    // Baseline exclusion: LMV3/LMV7 never shown in Defaulter tab (2026-11-24 request)
+    var _rTariffBase = (window._tariffLookup&&window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
+    if(_rTariffBase==='LMV3' || _rTariffBase==='LMV7') return false;
     if(selOutRanges.length){
       var outMatched=selOutRanges.some(function(range){
         var parts=range.split('-');
@@ -8168,9 +8169,6 @@ function renderDefaulters(page){
     var out=Math.round(parseFloat(r.OUTSTANDING)||0);
     var outColor=out>100000?'#F43F5E':out>25000?'#EA580C':'#F59E0B';
     var paid=Math.round(r.PAY_AMT||0);
-    var lat=parseFloat(r.LAT),lon=parseFloat(r.LON);
-    if(lat>50){var t=lat;lat=lon;lon=t;}
-    var mapUrl=(lat&&lon&&lat>20&&lat<30)?'https://www.google.com/maps?q='+lat+','+lon:'';
     var meterNo=METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'-';
     // Resolve the real tariff label for display — DEF_ALL only carries the raw numeric
     // SUPPLY_TYPE code (e.g. "15"), not a tariff name. Prefer window._tariffLookup (built
@@ -8187,13 +8185,12 @@ function renderDefaulters(page){
     }));
     html+='<tr>'+
       '<td class="mob-hide" style="font-family:var(--fh);font-size:14px;font-weight:700;text-align:center;">'+rIcon+'</td>'+
-      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;cursor:pointer;" data-id="'+r.ACCT_ID+'" data-row="'+rowJson+'" onclick="openFromDefRow(this)">'+r.ACCT_ID+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;cursor:pointer;" data-id="'+r.ACCT_ID+'" data-row="'+rowJson+'" onclick="openFromDefRow(this)">'+r.ACCT_ID+'<br>'+smBadgeHtml(r)+sourceBadgeHtml(r)+'</td>'+
       '<td style="font-weight:700;">'+r.NAME+'</td>'+
       '<td>'+r.MOBILE+'</td>'+
       '<td style="font-family:var(--fh);font-size:11px;color:#1D4ED8;font-weight:700;">'+meterNo+'</td>'+
-      '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD?r.LOAD+' kW':'-')+'</td>'+
+      '<td style="font-family:var(--fh);font-weight:700;text-align:center;">'+(r.LOAD||'-')+'</td>'+
       '<td><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:#EEF2FF;color:#4338CA;">'+rTariffDisp+'</span></td>'+
-      '<td style="text-align:center;">'+(function(){var src=String(r.SOURCE||'billed');if(src==='billed')return '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#D1FAE5;color:#059669;">✔ BILLED</span>';return '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#FEF3C7;color:#D97706;">⚡ UNBILLED</span>';})()+'</td>'+
       '<td style="font-size:11px;color:#374151;" title="'+r.ADDRESS+'">'+r.ADDRESS+'</td>'+
       (function(){
         var ca = parseFloat(r.CA||r.CURR_ASSESSMENT||0);
@@ -8205,9 +8202,8 @@ function renderDefaulters(page){
       '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';font-size:13px;">₹'+out.toLocaleString()+'</td>'+
       '<td style="font-size:11px;color:'+(r.DUE_DATE&&new Date(r.DUE_DATE.replace(/-/g," "))<new Date()?'#DC2626':'#059669')+';font-weight:600;">'+( r.DUE_DATE||'—')+'</td>'+
       '<td>'+(function(){var sc=collectionProbability(r),lb=collectionLabel(sc);return '<span style="font-size:11px;font-weight:800;padding:2px 7px;border-radius:5px;background:'+lb.bg+';color:'+lb.color+';">'+sc+'%</span>';})()+'</td>'+
-      '<td>'+r.SUBSTATION+'</td>'+
+      '<td>'+String(r.SUBSTATION||'').split('_')[0]+'</td>'+
       '<td style="display:none">'+r.FEEDER+'</td>'+
-      '<td>'+(mapUrl?'<a class="ml" href="#" data-id="'+r.ACCT_ID+'" onclick="event.preventDefault();openDefaulterMap(this.dataset.id)">📍</a>':'')+'</td>'+
     '</tr>';
   });
   tbody.innerHTML=html;
