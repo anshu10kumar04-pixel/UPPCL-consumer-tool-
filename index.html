@@ -1051,9 +1051,6 @@ select option{background:#fff;color:#1E1B4B;}
         <th style="width:80px;cursor:pointer;white-space:normal;" onclick="defSort(&#39;OUTSTANDING&#39;)">O/S AMT <span id="dsrt-OUTSTANDING">⇅</span></th>
         <th style="width:70px;cursor:pointer;white-space:normal;" onclick="defSort(&#39;DUE_DATE&#39;)">DUE<br>DATE <span id="dsrt-DUE_DATE">⇅</span></th>
         <th style="width:55px;cursor:pointer;white-space:normal;" onclick="defSort('COLL_PROB')">AI % <span id="dsrt-COLL_PROB">⇅</span></th>
-        <th style="width:78px;cursor:pointer;white-space:normal;" onclick="defSort(&#39;ATR_STATUS&#39;)" class="mob-hide">ATR <span id="dsrt-ATR_STATUS">⇅</span></th>
-        <th style="width:50px;white-space:normal;">Jun<br>Paid</th>
-        <th style="width:70px;white-space:normal;">ATR<br>Comment</th>
         <th style="width:85px;cursor:pointer;white-space:normal;" onclick="defSort(&#39;SUBSTATION&#39;)">SS <span id="dsrt-SUBSTATION">⇅</span></th>
         <th style="display:none">FEEDER</th>
         <th style="width:35px;white-space:normal;">MAP</th>
@@ -8175,9 +8172,6 @@ function renderDefaulters(page){
     if(lat>50){var t=lat;lat=lon;lon=t;}
     var mapUrl=(lat&&lon&&lat>20&&lat<30)?'https://www.google.com/maps?q='+lat+','+lon:'';
     var meterNo=METER_DATA[String(r.ACCT_ID)]||r.METER_NO||'-';
-    var atr=r.ATR_STATUS||'PENDING';
-    var atrColors={'PAID':'#059669','LOCK':'#7C3AED','THEFT':'#DC2626','TD':'#0891B2','OTHER':'#374151','PENDING':'#9CA3AF'};
-    var atrBgs={'PAID':'#D1FAE5','LOCK':'#EDE9FE','THEFT':'#FEE2E2','TD':'#CFFAFE','OTHER':'#F3F4F6','PENDING':'#F9FAFB'};
     // Resolve the real tariff label for display — DEF_ALL only carries the raw numeric
     // SUPPLY_TYPE code (e.g. "15"), not a tariff name. Prefer window._tariffLookup (built
     // from the billed/unbilled D array's own TARIFF_TYPE/CATEGORY field, which is the
@@ -8211,22 +8205,6 @@ function renderDefaulters(page){
       '<td style="font-family:var(--fh);font-weight:700;color:'+outColor+';font-size:13px;">₹'+out.toLocaleString()+'</td>'+
       '<td style="font-size:11px;color:'+(r.DUE_DATE&&new Date(r.DUE_DATE.replace(/-/g," "))<new Date()?'#DC2626':'#059669')+';font-weight:600;">'+( r.DUE_DATE||'—')+'</td>'+
       '<td>'+(function(){var sc=collectionProbability(r),lb=collectionLabel(sc);return '<span style="font-size:11px;font-weight:800;padding:2px 7px;border-radius:5px;background:'+lb.bg+';color:'+lb.color+';">'+sc+'%</span>';})()+'</td>'+
-      (function(){
-        var pm = DISCOM_PAY_MAP && DISCOM_PAY_MAP[String(r.ACCT_ID).padStart(10,'0')];
-        if(pm && (pm.jun_amt>0||pm.jul_amt>0)){
-          var s='';
-          if(pm.jun_amt>0) s+='<div style="font-size:10px;color:#0891B2;">Jun: ₹'+Math.round(pm.jun_amt).toLocaleString()+'</div>';
-          if(pm.jul_amt>0) s+='<div style="font-size:10px;color:#059669;">Jul: ₹'+Math.round(pm.jul_amt).toLocaleString()+'</div>';
-          return '<td style="font-size:10px;">'+s+'</td>';
-        }
-        return '<td style="color:#9CA3AF;font-size:10px;">—</td>';
-      })()+
-      (function(){
-        var c=r.ATR_COMMENT||'';
-        if(!c){try{var da=JSON.parse(localStorage.getItem('def_atr_data')||'{}');c=(da[String(r.ACCT_ID)]||{}).comment||'';}catch(e){}}
-        return c?'<td style="font-size:10px;color:#374151;max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+c+'">'+c+'</td>':'<td style="color:#9CA3AF;font-size:10px;">—</td>';
-      })()+
-      '<td class="mob-hide"><span style="font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:'+(atrBgs[atr]||'#F9FAFB')+';color:'+(atrColors[atr]||'#9CA3AF')+';">'+atr+'</span></td>'+
       '<td>'+r.SUBSTATION+'</td>'+
       '<td style="display:none">'+r.FEEDER+'</td>'+
       '<td>'+(mapUrl?'<a class="ml" href="#" data-id="'+r.ACCT_ID+'" onclick="event.preventDefault();openDefaulterMap(this.dataset.id)">📍</a>':'')+'</td>'+
