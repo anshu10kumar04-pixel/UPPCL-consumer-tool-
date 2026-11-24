@@ -929,7 +929,8 @@ select option{background:#fff;color:#1E1B4B;}
         <div class="ms-wrap" id="def-sm-wrap">
           <button class="ms-btn" id="def-sm-btn" onclick="toggleMs('def-sm-dd')">ALL METERS</button>
           <div class="ms-dropdown" id="def-sm-dd">
-            <label class="ms-option"><input type="checkbox" value="sm" onchange="runDefaulterFilter()"> Smart Meter (GE)</label>
+            <label class="ms-option"><input type="checkbox" value="sm_dc" onchange="runDefaulterFilter()"> Smart Meter — DC</label>
+            <label class="ms-option"><input type="checkbox" value="sm_notdc" onchange="runDefaulterFilter()"> Smart Meter — Not DC</label>
             <label class="ms-option"><input type="checkbox" value="nonsm" onchange="runDefaulterFilter()"> Non-SM</label>
             <div class="ms-clear" onclick="clearSmFilter()">Clear All</div>
           </div>
@@ -8025,16 +8026,28 @@ function runDefaulterFilter(){
       });
       if(!matched) return false;
     }
-    // SM filter — use MR_SOURCE_CD directly from DEF_ALL record
+    // METER TYPE filter — Non-SM, or SM split by live Still-DC status (same
+    // DC rule as the SM DC STATUS filter below: DC = on window._stillDcLiveSet,
+    // Not DC = plain complement within SM). 2026-11-24 request: fold the SM/DC
+    // split directly into this filter instead of only the separate one below.
     if(selSm.length){
       var mrSrc = String(r.MR_SOURCE_CD||'').trim().toUpperCase();
       if(!mrSrc && window._smLookup) mrSrc = String(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
       var serial = String(r.METER_NO||r.METER_SERIAL_NBR||r.SERIAL_NBR||r.MTR_SRL_NO||'').trim().toUpperCase().replace(/^'/,'');
       var isSm = mrSrc === 'SM' || serial.startsWith('GE');
-      var wantSm  = selSm.indexOf('sm')>=0;
-      var wantNon = selSm.indexOf('nonsm')>=0;
-      if(wantSm  && !wantNon && !isSm) return false;
-      if(wantNon && !wantSm  &&  isSm) return false;
+      var wantSmDc    = selSm.indexOf('sm_dc')>=0;
+      var wantSmNotDc = selSm.indexOf('sm_notdc')>=0;
+      var wantNon     = selSm.indexOf('nonsm')>=0;
+      var mtMatch = false;
+      if(isSm){
+        var kMt=String(r.ACCT_ID||'').trim(); while(kMt.length<10&&kMt.length>0)kMt='0'+kMt;
+        var isMtDc = !!(window._stillDcLiveSet && window._stillDcLiveSet[kMt]);
+        if(wantSmDc && isMtDc) mtMatch = true;
+        if(wantSmNotDc && !isMtDc) mtMatch = true;
+      } else if(wantNon){
+        mtMatch = true;
+      }
+      if(!mtMatch) return false;
     }
     // SM DC STATUS filter — simple rule: among SM consumers, whoever IS in the
     // live Still-DC list is Disconnected, whoever is NOT is Reconnected. No
@@ -8130,7 +8143,7 @@ function runDefaulterFilter(){
   }
   if(gel('def-sm-btn')){
     var sc=selSm.length;
-    gel('def-sm-btn').textContent=sc?(selSm.indexOf('sm')>=0&&selSm.indexOf('nonsm')>=0?'SM + NON-SM':selSm.indexOf('sm')>=0?'SMART METER':'NON-SM'):'ALL METERS';
+    gel('def-sm-btn').textContent=sc?(sc+' SELECTED'):'ALL METERS';
   }
   if(gel('def-dcstatus-btn')){
     var dcc=selDcStatus.length;
