@@ -935,19 +935,6 @@ select option{background:#fff;color:#1E1B4B;}
             <div class="ms-clear" onclick="clearSmFilter()">Clear All</div>
           </div>
         </div>
-      </div>
-
-      <!-- SM DC STATUS: among SM consumers, DC = on the live Still-DC list,
-           RC = not on it (simple complement, no separate history needed) -->
-      <div><div class="lbl">SM DC STATUS</div>
-        <div class="ms-wrap" id="def-dcstatus-wrap">
-          <button class="ms-btn" id="def-dcstatus-btn" onclick="toggleMs('def-dcstatus-dd')">ALL</button>
-          <div class="ms-dropdown" id="def-dcstatus-dd">
-            <label class="ms-option"><input type="checkbox" value="disc" onchange="runDefaulterFilter()"> 🔴 SM Disconnected</label>
-            <label class="ms-option"><input type="checkbox" value="recon" onchange="runDefaulterFilter()"> 🟢 SM Reconnected (not on DC list)</label>
-            <div class="ms-clear" onclick="clearDcStatusFilter()">Clear All</div>
-          </div>
-        </div>
         <div id="dc-asof-label" style="font-size:11px;color:var(--muted);font-family:var(--fh);margin-top:3px;"></div>
       </div>
 
@@ -5134,8 +5121,9 @@ function processDcUpload(){
       ghPutFile('disconnected.json', content, 'Update DC (disconnected) data')
         .then(() => {
           // Stamp disconnected_meta.json with today's date too, so the Defaulter
-          // tab's SM DC STATUS filter can show when this list was last refreshed
-          // (matches what push_disconnected.py does for the script-based path).
+          // tab's METER TYPE filter (SM — DC / SM — Not DC) can show when this
+          // list was last refreshed (matches what push_disconnected.py does for
+          // the script-based path).
           var todayStr = (function(){
             var d=new Date(), mons=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
             var dd=('0'+d.getDate()).slice(-2), yy=String(d.getFullYear()).slice(-2);
@@ -6879,7 +6867,7 @@ function buildConsumerCard(r, q){
 
 // ─── SM UNRECHARGE (DC) ───────────────────────────────────────────────────────
 // Updates the small "Still-DC data last updated: DD-Mon-YY" label next to the
-// Defaulter tab's SM DC STATUS filter, from window._dcLastUpdated (set by loadDC()'s
+// Defaulter tab's METER TYPE filter, from window._dcLastUpdated (set by loadDC()'s
 // fetch of DC_META_FILE). Safe to call even before the label element exists.
 function updateDcAsOfLabel(){
   var el = gel('dc-asof-label');
@@ -6898,7 +6886,7 @@ function loadDC(){
   panel.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-family:var(--fh);">Loading SM Unrecharge data…</div>';
   // Still-DC "last updated" stamp — independent small fetch so a missing/old
   // meta file never blocks the main DC load. Shown next to the Defaulter tab's
-  // SM DC STATUS filter via updateDcAsOfLabel().
+  // METER TYPE filter via updateDcAsOfLabel().
   fetch(DC_META_FILE+'?_='+Date.now())
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(meta){
@@ -6947,7 +6935,7 @@ function loadDC(){
       });
       DC_FD=DC.slice();
       // Live Still-DC (online disconnected) lookup, keyed by zero-padded ACCT_ID \u2014
-      // used by the Defaulter tab's SM DC STATUS filter. Separate from the older
+      // used by the Defaulter tab's METER TYPE filter (SM DC / Not DC split). Separate from the older
       // baked-in STILL_DC_SET (stale snapshot from 27-Oct-26); this one always
       // reflects whatever disconnected.json currently holds.
       window._stillDcLiveSet = {};
@@ -7547,16 +7535,6 @@ function clearSmFilter(){
   gel('def-sm-btn').textContent='ALL METERS';
   runDefaulterFilter();
 }
-function getSelectedDcStatus(){
-  var dd=gel('def-dcstatus-dd'); if(!dd) return [];
-  return Array.from(dd.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
-}
-function clearDcStatusFilter(){
-  var dd=gel('def-dcstatus-dd'); if(!dd) return;
-  dd.querySelectorAll('input[type=checkbox]').forEach(function(cb){cb.checked=false;});
-  gel('def-dcstatus-btn').textContent='ALL';
-  runDefaulterFilter();
-}
 function getSelectedBillBasis(){
   var dd=gel('def-basis-dd'); if(!dd) return [];
   return Array.from(dd.querySelectorAll('input[type=checkbox]:checked')).map(function(cb){return cb.value;});
@@ -7961,7 +7939,6 @@ function runDefaulterFilter(){
   var selLoads = getSelectedLoadRanges();
   var selOutRanges = getSelectedOutstandingRanges();
   var selSm    = getSelectedSmTypes();
-  var selDcStatus = getSelectedDcStatus();
   var selBasis  = getSelectedBillBasis();
   var lpMonthF  = gel('def-lp-month') ? gel('def-lp-month').value : '';
   var payDurF   = gel('def-pay-duration') ? gel('def-pay-duration').value : '';
@@ -8026,10 +8003,10 @@ function runDefaulterFilter(){
       });
       if(!matched) return false;
     }
-    // METER TYPE filter — Non-SM, or SM split by live Still-DC status (same
-    // DC rule as the SM DC STATUS filter below: DC = on window._stillDcLiveSet,
-    // Not DC = plain complement within SM). 2026-11-24 request: fold the SM/DC
-    // split directly into this filter instead of only the separate one below.
+    // METER TYPE filter — Non-SM, or SM split by live Still-DC status
+    // (DC = on window._stillDcLiveSet, Not DC = plain complement within SM).
+    // 2026-11-24: SM/DC split folded directly into this filter; the separate
+    // SM DC STATUS filter that used to sit below this one was removed.
     if(selSm.length){
       var mrSrc = String(r.MR_SOURCE_CD||'').trim().toUpperCase();
       if(!mrSrc && window._smLookup) mrSrc = String(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
@@ -8048,21 +8025,6 @@ function runDefaulterFilter(){
         mtMatch = true;
       }
       if(!mtMatch) return false;
-    }
-    // SM DC STATUS filter — simple rule: among SM consumers, whoever IS in the
-    // live Still-DC list is Disconnected, whoever is NOT is Reconnected. No
-    // separate log/history needed — RC is just the complement of DC within SM.
-    if(selDcStatus.length){
-      var kDc=String(r.ACCT_ID||'').trim(); while(kDc.length<10&&kDc.length>0)kDc='0'+kDc;
-      var mrSrc3 = String(r.MR_SOURCE_CD||'').trim().toUpperCase();
-      if(!mrSrc3 && window._smLookup) mrSrc3 = String(window._smLookup[String(r.ACCT_ID)]||'').toUpperCase();
-      var serial3 = String(r.METER_NO||r.METER_SERIAL_NBR||r.SERIAL_NBR||r.MTR_SRL_NO||'').trim().toUpperCase().replace(/^'/,'');
-      var isSm3 = mrSrc3 === 'SM' || serial3.startsWith('GE');
-      var isDisc  = isSm3 && !!(window._stillDcLiveSet && window._stillDcLiveSet[kDc]);
-      var isRecon = isSm3 && !isDisc;
-      var wantDisc  = selDcStatus.indexOf('disc')>=0;
-      var wantRecon = selDcStatus.indexOf('recon')>=0;
-      if(!((wantDisc && isDisc) || (wantRecon && isRecon))) return false;
     }
     // Bill Basis filter
     if(selBasis.length){
@@ -8144,10 +8106,6 @@ function runDefaulterFilter(){
   if(gel('def-sm-btn')){
     var sc=selSm.length;
     gel('def-sm-btn').textContent=sc?(sc+' SELECTED'):'ALL METERS';
-  }
-  if(gel('def-dcstatus-btn')){
-    var dcc=selDcStatus.length;
-    gel('def-dcstatus-btn').textContent=dcc?(dcc>1?'SM DISC + RECONNECTED':selDcStatus[0]==='disc'?'SM DISCONNECTED':'SM RECONNECTED'):'ALL';
   }
   if(gel('def-basis-btn')){
     var bc=selBasis.length;
