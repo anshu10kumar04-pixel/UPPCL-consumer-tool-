@@ -962,17 +962,6 @@ select option{background:#fff;color:#1E1B4B;}
         </select></div>
       </div>
 
-      <!-- PAYMENT DURATION (Never Paid / Long Unpaid — same classification used
-           across Calling/Field Visit/Map, via defRecPayFlag) -->
-      <div><div class="lbl">PAYMENT DURATION</div>
-        <div class="sw"><select id="def-pay-duration" onchange="runDefaulterFilter()">
-          <option value="">All</option>
-          <option value="never">❌ Never Paid</option>
-          <option value="long">⏳ Long Unpaid (4+ months)</option>
-          <option value="other">Other (paid recently)</option>
-        </select></div>
-      </div>
-
       <!-- MIN OUTSTANDING -->
       <div class="ms-wrap" id="def-outstanding-wrap">
         <div class="lbl">OUTSTANDING RANGE</div>
@@ -7941,7 +7930,6 @@ function runDefaulterFilter(){
   var selSm    = getSelectedSmTypes();
   var selBasis  = getSelectedBillBasis();
   var lpMonthF  = gel('def-lp-month') ? gel('def-lp-month').value : '';
-  var payDurF   = gel('def-pay-duration') ? gel('def-pay-duration').value : '';
 
   // LP Month bounds
   var now = new Date();
@@ -7978,16 +7966,6 @@ function runDefaulterFilter(){
         var isPrevOrCur = (lpM===curM&&lpY===curY)||(lpM===prevM&&lpY===prevY);
         if(isPrevOrCur) return false;
       }
-    }
-    // PAYMENT DURATION filter — same NEVER_PAID/LONG_UNPAID classification used
-    // by Calling/Field Visit/Map (defRecPayFlag). 'other' = flag is null, i.e.
-    // has a last-pay date within the last ~3 months (recently paid).
-    if(payDurF){
-      var payFlag = defRecPayFlag(r);
-      var payCode = payFlag ? payFlag.code : 'OTHER';
-      if(payDurF==='never' && payCode!=='NEVER_PAID') return false;
-      if(payDurF==='long'  && payCode!=='LONG_UNPAID') return false;
-      if(payDurF==='other' && payCode!=='OTHER') return false;
     }
     if(feed.length   && feed.indexOf(r.FEEDER)<0)        return false;
     if(supply.length){
@@ -8161,7 +8139,7 @@ function renderDefaulters(page){
     }));
     html+='<tr>'+
       '<td class="mob-hide" style="font-family:var(--fh);font-size:14px;font-weight:700;text-align:center;">'+rIcon+'</td>'+
-      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;cursor:pointer;" data-id="'+r.ACCT_ID+'" data-row="'+rowJson+'" onclick="openFromDefRow(this)">'+r.ACCT_ID+'<br>'+smBadgeHtml(r)+sourceBadgeHtml(r)+'</td>'+
+      '<td style="font-family:var(--fh);color:#4F46E5;font-weight:700;cursor:pointer;" data-id="'+r.ACCT_ID+'" data-row="'+rowJson+'" onclick="openFromDefRow(this)">'+r.ACCT_ID+'<br>'+smBadgeHtml(r)+sourceBadgeHtml(r)+payFlagBadgeHtml(r)+'</td>'+
       '<td style="font-weight:700;">'+r.NAME+'</td>'+
       '<td>'+r.MOBILE+'</td>'+
       '<td style="font-family:var(--fh);font-size:11px;color:#1D4ED8;font-weight:700;">'+meterNo+'</td>'+
