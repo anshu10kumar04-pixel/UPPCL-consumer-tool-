@@ -1270,6 +1270,10 @@ var D_PRI = {}, MASTER_MAP = {}, GEO_MAP = {}, LOCATION_MAP = {}, MOBILE_OVERLAY
 let MASTER_CUTOFF = null; // Date object for last day of master month
 let DC = [], DC_FD = [], ATR_DATA = {}, ATR_SCRIPT_URL = '';
 let DEF_DATA = [];
+// Tariffs permanently hidden from the Defaulter tab — both the result list and
+// the SUPPLY filter dropdown (2026-11-24 request: LMV3/LMV7, later extended to
+// LMV5/LMV10 the same day).
+var DEF_HIDDEN_TARIFFS = ['LMV3','LMV5','LMV7','LMV10'];
 const PS = 30;
 let dcPage = 1, defPage = 1;
 let _lastTab = '';
@@ -7629,9 +7633,10 @@ function getAllSupplyValues(){
       if(t && t!=='-') vals.add(t);
     });
   }
-  // Filter only valid LMV/HV/EHV labels
+  // Filter only valid LMV/HV/EHV labels, excluding tariffs permanently hidden
+  // from the Defaulter tab (see DEF_HIDDEN_TARIFFS)
   return Array.from(vals).filter(function(v){
-    return v && /^(LMV|HV|EHV)\d/.test(v);
+    return v && /^(LMV|HV|EHV)\d/.test(v) && DEF_HIDDEN_TARIFFS.indexOf(v)<0;
   }).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
 }
 
@@ -7973,7 +7978,7 @@ function runDefaulterFilter(){
     if(liveOut < 2000) return false;   // baseline defaulter floor (matches backend MIN_DEFAULTER_OUTSTANDING) — also drops paid-off (0) consumers
     // Baseline exclusion: LMV3/LMV7 never shown in Defaulter tab (2026-11-24 request)
     var _rTariffBase = (window._tariffLookup&&window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
-    if(_rTariffBase==='LMV3' || _rTariffBase==='LMV7') return false;
+    if(DEF_HIDDEN_TARIFFS.indexOf(_rTariffBase)>=0) return false;
     if(selOutRanges.length){
       var outMatched=selOutRanges.some(function(range){
         var parts=range.split('-');
