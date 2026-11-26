@@ -129,6 +129,15 @@ tr:hover td{background:#EEF2FF;}
 .pgb:hover,.pgb.active{background:#4F46E5;color:#fff;border-color:#4F46E5;}
 .pgi{font-size:11px;color:var(--muted);font-family:var(--fh);}
 
+/* ── DEFAULTER TAB: compact fit-to-screen layout (minimum scrolling on a laptop) ── */
+#panel-defaulter{padding-bottom:6px;}
+#panel-defaulter .fg{gap:8px;margin-bottom:8px;}
+#panel-defaulter th{padding:6px 10px;}
+#panel-defaulter td{padding:5px 10px;font-size:11.5px;}
+#panel-defaulter table{font-size:11.5px;}
+#def-tw{overflow-y:auto;}
+#def-tw thead tr{position:sticky;top:0;z-index:3;}
+
 /* ── SEARCH TAB ── */
 .ls{display:flex;gap:10px;margin-bottom:20px;max-width:800px;margin-left:auto;margin-right:auto;width:100%;}
 .ls input{flex:1;background:#fff;border:1.5px solid #C7D2FE;border-radius:10px;padding:12px 16px;color:var(--text);font-family:var(--fh);font-size:15px;font-weight:600;letter-spacing:1px;outline:none;min-width:0;}
@@ -864,10 +873,10 @@ select option{background:#fff;color:#1E1B4B;}
 
   <!-- DEFAULTERS PANEL -->
   <div class="panel" id="panel-defaulter">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
       <div>
-        <div style="font-family:var(--fh);font-size:20px;font-weight:700;color:#F43F5E;">⚠️ TOP DEFAULTERS</div>
-        <div style="font-size:12px;color:var(--muted);">Consumers with Outstanding &gt; ₹5,000 (configurable)</div>
+        <div style="font-family:var(--fh);font-size:16px;font-weight:700;color:#F43F5E;">⚠️ TOP DEFAULTERS</div>
+        <div style="font-size:11px;color:var(--muted);">Consumers with Outstanding &gt; ₹5,000 (configurable)</div>
       </div>
     </div>
     <div class="fg" style="margin-bottom:12px;flex-wrap:wrap;">
@@ -993,25 +1002,25 @@ select option{background:#fff;color:#1E1B4B;}
       </select></div></div>
 
     </div>
-    <div class="btn-group" style="margin-bottom:12px;">
+    <div class="btn-group" style="margin-bottom:8px;">
       <div id="def-summary" style="font-family:var(--fh);font-size:13px;font-weight:600;color:var(--muted);flex:1;"></div>
       <button class="btn btn-acc" onclick="expDefaultersX()">⬇ EXPORT XLSX</button>
       <button class="btn" style="background:#059669;color:#fff;border:none;" onclick="downloadAtrFromSheet()">⬇ DOWNLOAD ATR XLSX</button>
     </div>
-    <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
-      <div style="background:#FFF1F2;border:1px solid #FECACA;border-left:4px solid #F43F5E;border-radius:10px;padding:12px 16px;min-width:120px;"><div style="font-family:var(--fh);font-size:22px;font-weight:700;color:#F43F5E;" id="def-count">0</div><div style="font-size:10px;color:#991B1B;font-weight:600;">DEFAULTERS</div></div>
-      <div style="background:#FFF7ED;border:1px solid #FED7AA;border-left:4px solid #EA580C;border-radius:10px;padding:12px 16px;min-width:120px;"><div style="font-family:var(--fh);font-size:22px;font-weight:700;color:#EA580C;" id="def-total-out">₹0</div><div style="font-size:10px;color:#9A3412;font-weight:600;">TOTAL OUTSTANDING</div></div>
-      <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-left:4px solid #2563EB;border-radius:10px;padding:12px 16px;min-width:120px;"><div style="font-family:var(--fh);font-size:22px;font-weight:700;color:#2563EB;" id="def-avg-out">₹0</div><div style="font-size:10px;color:#1E40AF;font-weight:600;">AVERAGE</div></div>
+    <div style="display:flex;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+      <div style="background:#FFF1F2;border:1px solid #FECACA;border-left:4px solid #F43F5E;border-radius:8px;padding:6px 14px;min-width:110px;"><div style="font-family:var(--fh);font-size:17px;font-weight:700;color:#F43F5E;" id="def-count">0</div><div style="font-size:9px;color:#991B1B;font-weight:600;">DEFAULTERS</div></div>
+      <div style="background:#FFF7ED;border:1px solid #FED7AA;border-left:4px solid #EA580C;border-radius:8px;padding:6px 14px;min-width:110px;"><div style="font-family:var(--fh);font-size:17px;font-weight:700;color:#EA580C;" id="def-total-out">₹0</div><div style="font-size:9px;color:#9A3412;font-weight:600;">TOTAL OUTSTANDING</div></div>
+      <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-left:4px solid #2563EB;border-radius:8px;padding:6px 14px;min-width:110px;"><div style="font-family:var(--fh);font-size:17px;font-weight:700;color:#2563EB;" id="def-avg-out">₹0</div><div style="font-size:9px;color:#1E40AF;font-weight:600;">AVERAGE</div></div>
     </div>
     <div id="def-loading-msg" style="display:none;padding:24px;text-align:center;font-family:var(--fh);color:var(--muted);">⏳ Loading defaulter data…</div>
     <!-- Search bar just above table -->
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <div style="display:flex;gap:8px;margin-bottom:6px;">
       <input type="text" id="def-search" placeholder="🔍  Search by Name, Acct ID, Mobile, Meter No, Address…"
         oninput="runDefaulterFilter()"
         style="flex:1;background:#fff;border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 16px;font-family:var(--fh);font-size:13px;font-weight:600;letter-spacing:0.5px;outline:none;color:#1E1B4B;"/>
       <button onclick="clearDefSearch()" style="background:#EEF2FF;border:1.5px solid #C7D2FE;border-radius:10px;padding:10px 16px;font-family:var(--fh);font-size:12px;font-weight:700;color:#4F46E5;cursor:pointer;white-space:nowrap;">✕ CLEAR</button>
     </div>
-    <div class="tw" style="overflow-x:auto;"><table style="table-layout:fixed;min-width:1900px;">
+    <div class="tw" id="def-tw" style="overflow-x:auto;"><table style="table-layout:fixed;min-width:1900px;">
       <thead><tr style="vertical-align:bottom;">
         <th style="width:35px;white-space:normal;" class="mob-hide">RANK</th>
         <th style="width:85px;cursor:pointer;white-space:normal;" onclick="defSort(&#39;ACCT_ID&#39;)">ACCT<br>ID <span id="dsrt-ACCT_ID">⇅</span></th>
@@ -5786,7 +5795,7 @@ function st(name){
   requestAnimationFrame(function(){
     if(name==='dc'&&!_dcLoaded) loadDC();
     if(name==='dfp'&&!_dfpLoaded) loadDfp();
-    if(name==='defaulter'){ loadDefaulters(); if(!_dcLoaded) loadDC(); }
+    if(name==='defaulter'){ loadDefaulters(); if(!_dcLoaded) loadDC(); setTimeout(fitDefTable,60); }
     if(name==='tdnp'&&!_tdnpLoaded) loadTdnpTab();
     if(name==='fieldvisits'&&!_fvLoaded) loadFieldVisits();
     if(name==='fieldatr'&&!_fieldAtrLoaded) loadFieldAtrSafe();
@@ -8109,6 +8118,17 @@ function defSort(col){
   renderDefaulters(1);
 }
 
+function fitDefTable(){
+  var tw = gel('def-tw');
+  if(!tw || tw.offsetParent===null) return; // panel not visible
+  var top = tw.getBoundingClientRect().top;
+  var pgEl = gel('def-pg');
+  var pgH = pgEl ? pgEl.offsetHeight : 0;
+  var avail = window.innerHeight - top - pgH - 14;
+  tw.style.maxHeight = Math.max(260, avail) + 'px';
+}
+window.addEventListener('resize', function(){ if(_lastTab==='defaulter') fitDefTable(); });
+
 function renderDefaulters(page){
   defPage=page;
   var tbody=gel('def-tbody'); if(!tbody)return;
@@ -8162,6 +8182,7 @@ function renderDefaulters(page){
   });
   tbody.innerHTML=html;
   rp('def-pg',page,Math.ceil(DEF_DATA.length/PS),renderDefaulters);
+  fitDefTable();
 }
 
 function openDefaulterModal(acctId, mode){
