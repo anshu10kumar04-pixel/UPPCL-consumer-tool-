@@ -130,10 +130,14 @@ tr:hover td{background:#EEF2FF;}
 .pgi{font-size:11px;color:var(--muted);font-family:var(--fh);}
 
 /* ── DEFAULTER TAB: compact fit-to-screen layout (minimum scrolling on a laptop) ── */
-#panel-defaulter{padding-bottom:6px;}
-#panel-defaulter .fg{gap:8px;margin-bottom:8px;}
+#panel-defaulter{padding-bottom:4px;}
+#panel-defaulter .fg{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:6px;}
+#panel-defaulter .lbl{margin-bottom:2px;font-size:9px;}
+#panel-defaulter .ms-btn,#panel-defaulter .sw select,#panel-defaulter .sw input{padding:6px 10px;font-size:12px;}
+#panel-defaulter #dc-asof-label{margin-top:1px;font-size:10px;}
+#panel-defaulter .pg{padding:5px 0;}
 #panel-defaulter th{padding:6px 10px;}
-#panel-defaulter td{padding:5px 10px;font-size:11.5px;}
+#panel-defaulter td{padding:4px 10px;font-size:11.5px;}
 #panel-defaulter table{font-size:11.5px;}
 #def-tw{overflow-y:auto;}
 #def-tw thead tr{position:sticky;top:0;z-index:3;}
@@ -8124,8 +8128,8 @@ function fitDefTable(){
   var top = tw.getBoundingClientRect().top;
   var pgEl = gel('def-pg');
   var pgH = pgEl ? pgEl.offsetHeight : 0;
-  var avail = window.innerHeight - top - pgH - 14;
-  tw.style.maxHeight = Math.max(260, avail) + 'px';
+  var avail = window.innerHeight - top - pgH - 10;
+  tw.style.maxHeight = Math.max(90, avail) + 'px'; // small floor only — never force page-level scroll
 }
 window.addEventListener('resize', function(){ if(_lastTab==='defaulter') fitDefTable(); });
 
