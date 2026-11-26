@@ -8127,7 +8127,7 @@ function defSort(col){
 
 // Pre-Nov-26 column widths, restored verbatim on mobile so phone view is untouched by the desktop compacting below.
 var _DEF_COLW_MOBILE = [35,85,195,85,85,50,65,247,60,65,78,80,70,55,85];
-var _DEF_COLW_DESKTOP = [30,80,128,76,60,40,58,140,54,56,65,76,60,48,70];
+var _DEF_COLW_DESKTOP_PCT = [2.9,7.7,12.3,7.3,5.8,3.8,5.6,13.4,5.2,5.4,6.2,7.3,5.8,4.6,6.7]; // same ratios as the px set, but as % so the table always fills 100% of the available width (no blank space, no overflow, on any screen)
 function applyDefResponsiveStyle(){
   var mobile = window.innerWidth<=768;
   var titleRow=gel('def-title-row'), titleText=gel('def-title-text'), subText=gel('def-subtitle-text');
@@ -8159,8 +8159,8 @@ function applyDefResponsiveStyle(){
       if(b.children[1]) b.children[1].style.fontSize='9px';
     });
     if(searchRow) searchRow.style.marginBottom='6px';
-    if(tbl){ tbl.style.minWidth=''; tbl.style.width='1045px'; }
-    ths.forEach(function(th,i){ if(_DEF_COLW_DESKTOP[i]!==undefined) th.style.width=_DEF_COLW_DESKTOP[i]+'px'; });
+    if(tbl){ tbl.style.minWidth=''; tbl.style.width='100%'; }
+    ths.forEach(function(th,i){ if(_DEF_COLW_DESKTOP_PCT[i]!==undefined) th.style.width=_DEF_COLW_DESKTOP_PCT[i]+'%'; });
   }
 }
 function fitDefTable(){
