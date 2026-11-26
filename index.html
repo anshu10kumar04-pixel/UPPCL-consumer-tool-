@@ -1267,6 +1267,12 @@ let DEF_DATA = [];
 // the SUPPLY filter dropdown (2026-11-24 request: LMV3/LMV7, later extended to
 // LMV5/LMV10 the same day).
 var DEF_HIDDEN_TARIFFS = ['LMV3','LMV5','LMV7','LMV10'];
+// Within an otherwise-shown tariff, specific raw (unresolved) Supply Type codes
+// permanently hidden from the Defaulter tab — checked against r.SUPPLY_TYPE
+// BEFORE tariffLookup resolution, so e.g. LMV4 accounts coded raw "43" are
+// excluded while LMV4 accounts coded 40/41/41A/42/42A still show normally
+// (2026-11-26 request).
+var DEF_HIDDEN_RAW_SUPPLY_CODES = ['43'];
 const PS = 30;
 let dcPage = 1, defPage = 1;
 let _lastTab = '';
@@ -7961,6 +7967,10 @@ function runDefaulterFilter(){
     // Baseline exclusion: LMV3/LMV7 never shown in Defaulter tab (2026-11-24 request)
     var _rTariffBase = (window._tariffLookup&&window._tariffLookup[String(r.ACCT_ID)]) || stToTariff(r.SUPPLY_TYPE) || '';
     if(DEF_HIDDEN_TARIFFS.indexOf(_rTariffBase)>=0) return false;
+    // Within LMV4, raw Supply Type code 43 specifically excluded (2026-11-26 request) —
+    // these resolve to LMV4 via tariffLookup same as other LMV4 codes (40/41/41A/42/42A),
+    // so this checks the ORIGINAL unresolved code, not the displayed tariff label.
+    if(DEF_HIDDEN_RAW_SUPPLY_CODES.indexOf(String(r.SUPPLY_TYPE))>=0) return false;
     if(selOutRanges.length){
       var outMatched=selOutRanges.some(function(range){
         var parts=range.split('-');
