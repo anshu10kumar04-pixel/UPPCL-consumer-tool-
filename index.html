@@ -2174,8 +2174,8 @@ function buildProgressReport(){
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+cr2(f.uptoRev)+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;color:#DC2626;">'+f.todayPaid+'</td>';
       h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+f.uptoPaid+'</td>';
-      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+pct(f.todayRev,f.currAsst)+'</td>';
-      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+pct(f.todayPaid,f.billable)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+pct(f.uptoRev,f.currAsst)+'</td>';
+      h += '<td style="padding:4px 6px;border:1px solid #BFDBFE;text-align:right;font-size:10px;">'+pct(f.uptoPaid,f.billed)+'</td>';
       h += '</tr>';
 
 
